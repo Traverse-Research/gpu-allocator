@@ -18,3 +18,6 @@ thiserror = "1.0"
 members = [
     "apps/vulkan-test"
 ]
+
+[features]
+vulkan_device_address = []
