@@ -669,6 +669,7 @@ impl std::fmt::Debug for Allocator {
 }
 
 impl Allocator {
+    /// Initializes a new memory allocator.
     pub fn new(
         device: &ash::Device,
         physical_device: ash::vk::PhysicalDevice,
@@ -686,14 +687,18 @@ impl Allocator {
             allocator: RefCell::new(allocator),
         })
     }
+
+    /// Log all allocations that have not been free'd.
     pub fn report_memory_leaks(&self, log_level: Level) {
         self.allocator.borrow_mut().report_memory_leaks(log_level);
     }
 
+    /// Attempt to allocate memory. Will return an error on failure.
     pub fn alloc(&self, desc: &AllocationCreateDesc) -> Result<SubAllocation> {
         self.allocator.borrow_mut().allocate(desc)
     }
 
+    /// Free previously allocated memory. Only error that can occur is an internal error.
     pub fn free(&self, sub_alloc: &SubAllocation) -> Result<()> {
         self.allocator.borrow_mut().free(sub_alloc)?;
         Ok(())
