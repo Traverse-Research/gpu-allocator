@@ -1,10 +1,17 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
 use super::{AllocationError, AllocationType, Result, SubAllocation, SubAllocator};
-use crate::math;
 use log::{log, Level};
 use std::collections::{HashMap, HashSet};
 
 const USE_BEST_FIT: bool = true;
+
+fn align_down(val: u64, alignment: u64) -> u64 {
+    val & !(alignment - 1u64)
+}
+
+fn align_up(val: u64, alignment: u64) -> u64 {
+    align_down(val + alignment - 1u64, alignment)
+}
 
 #[derive(Debug)]
 struct MemoryChunk {
@@ -30,9 +37,9 @@ pub(crate) struct FreeListAllocator {
 /// Test if two suballocations will overlap the same page.
 fn is_on_same_page(offset_a: u64, size_a: u64, offset_b: u64, page_size: u64) -> bool {
     let end_a = offset_a + size_a - 1;
-    let end_page_a = math::align_down(end_a, page_size);
+    let end_page_a = align_down(end_a, page_size);
     let start_b = offset_b;
-    let start_page_b = math::align_down(start_b, page_size);
+    let start_page_b = align_down(start_b, page_size);
 
     end_page_a == start_page_b
 }
@@ -163,7 +170,7 @@ impl SubAllocator for FreeListAllocator {
                 continue;
             }
 
-            let mut offset = math::align_up(current_chunk.offset, alignment);
+            let mut offset = align_up(current_chunk.offset, alignment);
 
             if let Some(prev_idx) = current_chunk.prev {
                 let previous = self.chunks.get(&prev_idx).ok_or_else(|| {
@@ -172,7 +179,7 @@ impl SubAllocator for FreeListAllocator {
                 if is_on_same_page(previous.offset, previous.size, offset, granularity)
                     && has_granularity_conflict(previous.allocation_type, allocation_type)
                 {
-                    offset = math::align_up(offset, granularity);
+                    offset = align_up(offset, granularity);
                 }
             }
 

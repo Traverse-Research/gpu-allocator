@@ -10,7 +10,6 @@ edition = "2018"
 ash = "0.31"
 backtrace = "0.3"
 log = "0.4"
-num-traits = "0.2"
 thiserror = "1.0"
 
 [workspace]

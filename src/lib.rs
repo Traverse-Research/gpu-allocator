@@ -10,10 +10,9 @@ pub use memory_location::*;
 mod result;
 pub use result::*;
 
-mod math;
-
 mod dedicated_block_allocator;
 use dedicated_block_allocator::DedicatedBlockAllocator;
+
 mod free_list_allocator;
 use free_list_allocator::FreeListAllocator;
 
