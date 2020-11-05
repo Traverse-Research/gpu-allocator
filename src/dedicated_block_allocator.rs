@@ -1,5 +1,5 @@
-use super::super::{AllocationError, Result};
-use super::{AllocationType, SubAllocation, SubAllocator};
+#![deny(unsafe_code, clippy::unwrap_used)]
+use super::{AllocationError, AllocationType, Result, SubAllocation, SubAllocator};
 use log::{log, Level};
 
 #[derive(Debug)]
