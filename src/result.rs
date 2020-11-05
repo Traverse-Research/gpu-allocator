@@ -10,8 +10,8 @@ pub enum AllocationError {
     NoCompatibleMemoryTypeFound,
     #[error("Invalid AllocationCreateDesc")]
     InvalidAllocationCreateDesc,
-    #[error(transparent)]
-    Internal(#[from] anyhow::Error),
+    #[error("Internal error {0}")]
+    Internal(String),
 }
 
 pub type Result<V, E = AllocationError> = ::std::result::Result<V, E>;
