@@ -521,7 +521,8 @@ impl GpuAllocator {
         let mut physical_device_properties2 = vk::PhysicalDeviceProperties2::default();
 
         unsafe {
-            instance.get_physical_device_properties2(physical_device, &mut physical_device_properties2)
+            instance
+                .get_physical_device_properties2(physical_device, &mut physical_device_properties2)
         };
 
         let granularity = physical_device_properties2

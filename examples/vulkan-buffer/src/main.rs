@@ -89,9 +89,7 @@ fn main() {
     };
 
     // Setting up the allocator
-    let allocator =
-        gpu_allocator::Allocator::new(&instance, &device, pdevice)
-            .unwrap();
+    let allocator = gpu_allocator::Allocator::new(&instance, &device, pdevice).unwrap();
 
     // Test allocating GPU Only memory
     {
