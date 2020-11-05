@@ -1,4 +1,4 @@
-# 🌋📒 vulkan gpu-allocator
+# 📒 gpu-allocator
 
 [![Actions Status](https://github.com/Traverse-Research/gpu-allocator/workflows/CI/badge.svg)](https://github.com/Traverse-Research/gpu-allocator/actions)
 [![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
