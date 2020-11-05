@@ -88,17 +88,11 @@ fn main() {
         unsafe { instance.create_device(pdevice, &create_info, None).unwrap() }
     };
 
-    //let queue = unsafe { device.get_device_queue(queue_family_index as u32, 0) };
-
-    //let pdevice_props = unsafe { instance.get_physical_device_properties(pdevice) };
-
     let physical_device_properties2 = vk::PhysicalDeviceProperties2::default();
     let allocator =
-        gpu_allocator::Allocator::new(&device, pdevice, &instance, physical_device_properties2).unwrap();
-        
-        
+        gpu_allocator::Allocator::new(&device, pdevice, &instance, physical_device_properties2)
+            .unwrap();
 
-    
     {
         let test_buffer_info = vk::BufferCreateInfo::builder()
             .size(512)
@@ -108,12 +102,14 @@ fn main() {
         let requirements = unsafe { device.get_buffer_memory_requirements(test_buffer) };
         let location = gpu_allocator::MemoryLocation::GpuOnly;
 
-        let allocation = allocator.alloc(&gpu_allocator::AllocationCreateDesc { 
-            requirements,
-            location,
-            is_linear_resource: true,
-            name: "test allocation"
-        }).unwrap();
+        let allocation = allocator
+            .alloc(&gpu_allocator::AllocationCreateDesc {
+                requirements,
+                location,
+                is_linear_resource: true,
+                name: "test allocation",
+            })
+            .unwrap();
 
         allocator.free(&allocation).unwrap();
 
@@ -131,12 +127,14 @@ fn main() {
         let requirements = unsafe { device.get_buffer_memory_requirements(test_buffer) };
         let location = gpu_allocator::MemoryLocation::CpuToGpu;
 
-        let allocation = allocator.alloc(&gpu_allocator::AllocationCreateDesc { 
-            requirements,
-            location,
-            is_linear_resource: true,
-            name: "test allocation"
-        }).unwrap();
+        let allocation = allocator
+            .alloc(&gpu_allocator::AllocationCreateDesc {
+                requirements,
+                location,
+                is_linear_resource: true,
+                name: "test allocation",
+            })
+            .unwrap();
 
         allocator.free(&allocation).unwrap();
 
@@ -154,12 +152,14 @@ fn main() {
         let requirements = unsafe { device.get_buffer_memory_requirements(test_buffer) };
         let location = gpu_allocator::MemoryLocation::GpuToCpu;
 
-        let allocation = allocator.alloc(&gpu_allocator::AllocationCreateDesc { 
-            requirements,
-            location,
-            is_linear_resource: true,
-            name: "test allocation"
-        }).unwrap();
+        let allocation = allocator
+            .alloc(&gpu_allocator::AllocationCreateDesc {
+                requirements,
+                location,
+                is_linear_resource: true,
+                name: "test allocation",
+            })
+            .unwrap();
 
         allocator.free(&allocation).unwrap();
 
@@ -167,5 +167,4 @@ fn main() {
 
         println!("Allocation and deallocation of GpuToCpu memory was successful.");
     }
-
 }

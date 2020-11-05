@@ -90,9 +90,7 @@ impl FreeListAllocator {
         let id = self.chunk_id_counter;
         self.chunk_id_counter += 1;
         std::num::NonZeroU64::new(id).ok_or_else(|| {
-            AllocationError::Internal(anyhow::Error::msg(
-                "New chunk id was 0, which is not allowed.",
-            ))
+            AllocationError::Internal(anyhow::anyhow!("New chunk id was 0, which is not allowed.",))
         })
     }
     /// Finds the specified chunk_id in the list of free chunks and removes if from the list
@@ -108,7 +106,7 @@ impl FreeListAllocator {
         // Gather data from right chunk and remove it
         let (right_size, right_next) = {
             let chunk = self.chunks.remove(&chunk_right).ok_or_else(|| {
-                AllocationError::Internal(anyhow::Error::msg("Chunk ID not present in chunk list."))
+                AllocationError::Internal(anyhow::anyhow!("Chunk ID not present in chunk list."))
             })?;
             self.remove_id_from_free_list(chunk.chunk_id);
 
@@ -118,7 +116,7 @@ impl FreeListAllocator {
         // Merge into left chunk
         {
             let chunk = self.chunks.get_mut(&chunk_left).ok_or_else(|| {
-                AllocationError::Internal(anyhow::Error::msg("Chunk ID not present in chunk list."))
+                AllocationError::Internal(anyhow::anyhow!("Chunk ID not present in chunk list."))
             })?;
             chunk.next = right_next;
             chunk.size += right_size;
@@ -127,7 +125,7 @@ impl FreeListAllocator {
         // Patch pointers
         if let Some(right_next) = right_next {
             let chunk = self.chunks.get_mut(&right_next).ok_or_else(|| {
-                AllocationError::Internal(anyhow::Error::msg("Chunk ID not present in chunk list."))
+                AllocationError::Internal(anyhow::anyhow!("Chunk ID not present in chunk list."))
             })?;
             chunk.prev = Some(chunk_left);
         }
@@ -158,7 +156,7 @@ impl SubAllocator for FreeListAllocator {
 
         for current_chunk_id in self.free_chunks.iter() {
             let current_chunk = self.chunks.get(&current_chunk_id).ok_or_else(|| {
-                AllocationError::Internal(anyhow::Error::msg(
+                AllocationError::Internal(anyhow::anyhow!(
                     "Chunk ID in free list is not present in chunk list.",
                 ))
             })?;
@@ -171,9 +169,7 @@ impl SubAllocator for FreeListAllocator {
 
             if let Some(prev_idx) = current_chunk.prev {
                 let previous = self.chunks.get(&prev_idx).ok_or_else(|| {
-                    AllocationError::Internal(anyhow::Error::msg(
-                        "Invalid previous chunk reference.",
-                    ))
+                    AllocationError::Internal(anyhow::anyhow!("Invalid previous chunk reference.",))
                 })?;
                 if is_on_same_page(previous.offset, previous.size, offset, granularity)
                     && has_granularity_conflict(previous.allocation_type, allocation_type)
@@ -191,7 +187,7 @@ impl SubAllocator for FreeListAllocator {
 
             if let Some(next_idx) = current_chunk.next {
                 let next = self.chunks.get(&next_idx).ok_or_else(|| {
-                    AllocationError::Internal(anyhow::Error::msg("Invalid next chunk reference."))
+                    AllocationError::Internal(anyhow::anyhow!("Invalid next chunk reference."))
                 })?;
                 if is_on_same_page(offset, size, next.offset, granularity)
                     && has_granularity_conflict(allocation_type, next.allocation_type)
@@ -225,7 +221,7 @@ impl SubAllocator for FreeListAllocator {
 
             let new_chunk = {
                 let free_chunk = self.chunks.get_mut(&first_fit_id).ok_or_else(|| {
-                    AllocationError::Internal(anyhow::Error::msg("Chunk ID must be in chunk list."))
+                    AllocationError::Internal(anyhow::anyhow!("Chunk ID must be in chunk list."))
                 })?;
                 let new_chunk = MemoryChunk {
                     chunk_id: new_chunk_id,
@@ -246,9 +242,7 @@ impl SubAllocator for FreeListAllocator {
 
             if let Some(prev_id) = new_chunk.prev {
                 let prev_chunk = self.chunks.get_mut(&prev_id).ok_or_else(|| {
-                    AllocationError::Internal(anyhow::Error::msg(
-                        "Invalid previous chunk reference.",
-                    ))
+                    AllocationError::Internal(anyhow::anyhow!("Invalid previous chunk reference.",))
                 })?;
                 prev_chunk.next = Some(new_chunk.chunk_id);
             }
@@ -258,7 +252,7 @@ impl SubAllocator for FreeListAllocator {
             new_chunk_id
         } else {
             let chunk = self.chunks.get_mut(&first_fit_id).ok_or_else(|| {
-                AllocationError::Internal(anyhow::Error::msg("Invalid chunk reference."))
+                AllocationError::Internal(anyhow::anyhow!("Invalid chunk reference."))
             })?;
 
             chunk.allocation_type = allocation_type;
@@ -277,12 +271,12 @@ impl SubAllocator for FreeListAllocator {
 
     fn free(&mut self, sub_allocation: &SubAllocation) -> Result<()> {
         let chunk_id = sub_allocation.chunk_id.ok_or_else(|| {
-            AllocationError::Internal(anyhow::Error::msg("Chunk ID must be a valid value."))
+            AllocationError::Internal(anyhow::anyhow!("Chunk ID must be a valid value."))
         })?;
 
         let (next_id, prev_id) = {
             let chunk = self.chunks.get_mut(&chunk_id).ok_or_else(|| {
-                AllocationError::Internal(anyhow::Error::msg(
+                AllocationError::Internal(anyhow::anyhow!(
                     "Attempting to free chunk that is not in chunk list.",
                 ))
             })?;

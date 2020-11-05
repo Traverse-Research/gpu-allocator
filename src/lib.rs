@@ -1,6 +1,5 @@
 use ash::vk;
 
-
 pub mod memory_location;
 pub use memory_location::MemoryLocation;
 

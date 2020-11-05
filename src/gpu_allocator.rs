@@ -131,11 +131,10 @@ impl MemoryBlock {
         dedicated: bool,
     ) -> Result<Self> {
         let device_memory = {
-            
             let alloc_info = vk::MemoryAllocateInfo::builder()
-            .allocation_size(size)
-            .memory_type_index(mem_type_index as u32);
-            
+                .allocation_size(size)
+                .memory_type_index(mem_type_index as u32);
+
             let allocation_flags = vk::MemoryAllocateFlags::DEVICE_ADDRESS;
             let mut flags_info = vk::MemoryAllocateFlagsInfo::builder().flags(allocation_flags);
             // TODO(max): Test this based on if the device has this feature enabled or not
@@ -251,7 +250,7 @@ impl MemoryType {
             };
 
             let mem_block = self.memory_blocks[block_index].as_mut().ok_or_else(|| {
-                AllocationError::Internal(anyhow::Error::msg("Memory block must be Some"))
+                AllocationError::Internal(anyhow::anyhow!("Memory block must be Some"))
             })?;
 
             let (offset, chunk_id) = mem_block.sub_allocator.allocate(
@@ -336,7 +335,7 @@ impl MemoryType {
         let mem_block = self.memory_blocks[new_block_index]
             .as_mut()
             .ok_or_else(|| {
-                AllocationError::Internal(anyhow::Error::msg("memory block must be Some"))
+                AllocationError::Internal(anyhow::anyhow!("memory block must be Some"))
             })?;
         let allocation = mem_block.sub_allocator.allocate(
             size,
@@ -350,7 +349,7 @@ impl MemoryType {
             Ok(value) => value,
             Err(err) => match err {
                 AllocationError::OutOfMemory => {
-                    return Err(AllocationError::Internal(anyhow::Error::msg(
+                    return Err(AllocationError::Internal(anyhow::anyhow!(
                         "Allocation that must succeed failed. This is a bug in the allocator.",
                     )))
                 }
@@ -380,7 +379,7 @@ impl MemoryType {
         let mem_block = self.memory_blocks[sub_allocation.memory_block_index]
             .as_mut()
             .ok_or_else(|| {
-                AllocationError::Internal(anyhow::Error::msg("Memory block must be Some."))
+                AllocationError::Internal(anyhow::anyhow!("Memory block must be Some."))
             })?;
 
         mem_block.sub_allocator.free(sub_allocation)?;
@@ -390,7 +389,7 @@ impl MemoryType {
                 if self.active_general_blocks > 1 {
                     let block = self.memory_blocks[sub_allocation.memory_block_index].take();
                     let block = block.ok_or_else(|| {
-                        AllocationError::Internal(anyhow::Error::msg("Memory block must be Some."))
+                        AllocationError::Internal(anyhow::anyhow!("Memory block must be Some."))
                     })?;
                     block.destroy(device);
 
@@ -399,7 +398,7 @@ impl MemoryType {
             } else {
                 let block = self.memory_blocks[sub_allocation.memory_block_index].take();
                 let block = block.ok_or_else(|| {
-                    AllocationError::Internal(anyhow::Error::msg("Memory block must be Some."))
+                    AllocationError::Internal(anyhow::anyhow!("Memory block must be Some."))
                 })?;
                 block.destroy(device);
             }

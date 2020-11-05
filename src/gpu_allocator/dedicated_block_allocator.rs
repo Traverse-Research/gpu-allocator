@@ -36,7 +36,7 @@ impl SubAllocator for DedicatedBlockAllocator {
         }
 
         if self.size != size {
-            return Err(AllocationError::Internal(anyhow::Error::msg(
+            return Err(AllocationError::Internal(anyhow::anyhow!(
                 "DedicatedBlockAllocator size must match allocation size.",
             )));
         }
@@ -52,7 +52,7 @@ impl SubAllocator for DedicatedBlockAllocator {
 
     fn free(&mut self, sub_allocation: &SubAllocation) -> Result<()> {
         if sub_allocation.chunk_id != std::num::NonZeroU64::new(1) {
-            Err(AllocationError::Internal(anyhow::Error::msg(
+            Err(AllocationError::Internal(anyhow::anyhow!(
                 "Chunk ID must be 1.",
             )))
         } else {
