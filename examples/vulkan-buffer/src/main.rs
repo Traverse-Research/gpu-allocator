@@ -89,9 +89,8 @@ fn main() {
     };
 
     // Setting up the allocator
-    let physical_device_properties2 = vk::PhysicalDeviceProperties2::default();
     let allocator =
-        gpu_allocator::Allocator::new(&device, pdevice, &instance, physical_device_properties2)
+        gpu_allocator::Allocator::new(&instance, &device, pdevice)
             .unwrap();
 
     // Test allocating GPU Only memory

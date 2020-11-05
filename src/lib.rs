@@ -1,5 +1,5 @@
 #![deny(clippy::unwrap_used)]
-use ash::version::{DeviceV1_0, InstanceV1_0};
+use ash::version::{DeviceV1_0, InstanceV1_0, InstanceV1_1};
 use ash::vk;
 use log::{log, Level};
 use std::cell::RefCell;
@@ -521,7 +521,7 @@ impl GpuAllocator {
         let mut physical_device_properties2 = vk::PhysicalDeviceProperties2::default();
 
         unsafe {
-            instance.get_physical_device_properties2(pdevice, &mut physical_device_properties2)
+            instance.get_physical_device_properties2(physical_device, &mut physical_device_properties2)
         };
 
         let granularity = physical_device_properties2
@@ -693,11 +693,11 @@ impl std::fmt::Debug for Allocator {
 impl Allocator {
     /// Initializes a new memory allocator.
     pub fn new(
+        instance: &ash::Instance,
         device: &ash::Device,
         physical_device: ash::vk::PhysicalDevice,
-        instance: &ash::Instance,
     ) -> Result<Self> {
-        let allocator = GpuAllocator::new(device, physical_device, instance)?;
+        let allocator = GpuAllocator::new(instance, device, physical_device)?;
 
         Ok(Self {
             allocator: RefCell::new(allocator),
