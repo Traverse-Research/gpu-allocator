@@ -1,7 +1,7 @@
 [package]
 name = "gpu-allocator"
 version = "0.1.0"
-authors = ["Max Oomen <max@traverseresearch.nl>"]
+authors = ["Traverse Research <info@traverseresearch.nl>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -16,7 +16,7 @@ thiserror = "1.0"
 
 [workspace]
 members = [
-    "apps/vulkan-test"
+    "examples/vulkan-buffer"
 ]
 
 [features]
