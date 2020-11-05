@@ -60,6 +60,7 @@ trait SubAllocator: std::fmt::Debug {
     fn available_memory(&self) -> u64 {
         self.size() - self.allocated()
     }
+
     /// Helper function: reports if the suballocator is empty (meaning, having no allocations).
     #[must_use]
     fn is_empty(&self) -> bool {
@@ -436,7 +437,6 @@ fn find_memorytype_index(
         .map(|(index, _memory_type)| index as _)
 }
 
-
 struct GpuAllocator {
     memory_types: Vec<MemoryType>,
     device: ash::Device,
@@ -446,10 +446,9 @@ struct GpuAllocator {
 
 impl GpuAllocator {
     fn new(
+        instance: &ash::Instance,
         device: &ash::Device,
         physical_device: ash::vk::PhysicalDevice,
-        instance: &ash::Instance,
-        physical_device_properties2: vk::PhysicalDeviceProperties2,
     ) -> Result<Self> {
         let mem_props = unsafe { instance.get_physical_device_memory_properties(physical_device) };
 
@@ -518,6 +517,12 @@ impl GpuAllocator {
                 log!(Level::Warn, "There is a memory type that is host visible, but not host coherent. It's time to upgrade our memory allocator to take advantage of this type of memory :)");
             }
         }
+
+        let mut physical_device_properties2 = vk::PhysicalDeviceProperties2::default();
+
+        unsafe {
+            instance.get_physical_device_properties2(pdevice, &mut physical_device_properties2)
+        };
 
         let granularity = physical_device_properties2
             .properties
@@ -681,7 +686,7 @@ pub struct Allocator {
 
 impl std::fmt::Debug for Allocator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Breda GPU Allocator")
+        write!(f, "GPU Memory Allocator")
     }
 }
 
@@ -691,14 +696,8 @@ impl Allocator {
         device: &ash::Device,
         physical_device: ash::vk::PhysicalDevice,
         instance: &ash::Instance,
-        physical_device_properties2: vk::PhysicalDeviceProperties2,
     ) -> Result<Self> {
-        let allocator = GpuAllocator::new(
-            device,
-            physical_device,
-            instance,
-            physical_device_properties2,
-        )?;
+        let allocator = GpuAllocator::new(device, physical_device, instance)?;
 
         Ok(Self {
             allocator: RefCell::new(allocator),
