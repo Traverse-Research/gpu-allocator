@@ -88,11 +88,13 @@ fn main() {
         unsafe { instance.create_device(pdevice, &create_info, None).unwrap() }
     };
 
+    // Setting up the allocator
     let physical_device_properties2 = vk::PhysicalDeviceProperties2::default();
     let allocator =
         gpu_allocator::Allocator::new(&device, pdevice, &instance, physical_device_properties2)
             .unwrap();
 
+    // Test allocating GPU Only memory
     {
         let test_buffer_info = vk::BufferCreateInfo::builder()
             .size(512)
@@ -118,6 +120,7 @@ fn main() {
         println!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
+    // Test allocating CPU to GPU memory
     {
         let test_buffer_info = vk::BufferCreateInfo::builder()
             .size(512)
@@ -143,6 +146,7 @@ fn main() {
         println!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
+    // Test allocating GPU to CPU memory
     {
         let test_buffer_info = vk::BufferCreateInfo::builder()
             .size(512)
