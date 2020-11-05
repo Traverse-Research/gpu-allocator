@@ -1,5 +1,5 @@
 [package]
-name = "gpu-allocator"
+name = "vulkan-test"
 version = "0.1.0"
 authors = ["Max Oomen <max@traverseresearch.nl>"]
 edition = "2018"
@@ -7,14 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0"
+winit = "0.19.5"
+image = "0.10.4"
+gpu-allocator = { path = "../.." }
 ash = "0.31"
-backtrace = "0.3"
-log = "0.4"
-num-traits = "0.2"
-thiserror = "1.0"
-
-[workspace]
-members = [
-    "apps/vulkan-test"
-]
