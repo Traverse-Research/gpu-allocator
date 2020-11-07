@@ -11,13 +11,12 @@
 //! let buffer = unsafe { device.create_buffer(&vk_info, None) }.unwrap();
 //! let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
 //!
-//! let location = MemoryLocation::CpuToGpu;
 //! let allocation = allocator
 //!     .allocate(&AllocationCreateDesc {
 //!         requirements,
-//!         location,
+//!         location: MemoryLocation::CpuToGpu,
 //!         linear: true,
-//!         name: "test allocation",
+//!         name: "Example allocation",
 //!     })
 //!     .unwrap();
 //!
