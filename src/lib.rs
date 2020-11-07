@@ -7,8 +7,8 @@
 //! use ash::vk;
 //!
 //! let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
-//!     instance: instance.clone(),
-//!     device: device.clone(),
+//!     instance,
+//!     device,
 //!     physical_device,
 //!     debug_settings: Default::default(),
 //! });
