@@ -40,8 +40,7 @@
 //! allocator.free(allocation)?;
 //! unsafe { device.destroy_buffer(buffer, None) };
 //! ```
-
-#![deny(clippy::unwrap_used)]
+#![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 use ash::version::{DeviceV1_0, InstanceV1_0, InstanceV1_1};
 use ash::vk;
 use log::{log, Level};
@@ -174,7 +173,15 @@ pub struct SubAllocation {
 unsafe impl Send for SubAllocation {}
 
 impl SubAllocation {
-    pub fn memory(&self) -> vk::DeviceMemory {
+    /// Returns the `vk::DeviceMemory` object that is backing this allocation.
+    /// This memory object can be shared with multiple other allocations and shouldn't be free'd (or allocated from)
+    /// without this library, because that will lead to undefined behavior.
+    ///
+    /// # Safety
+    /// The result of this function can safely be used to pass into `bind_buffer_memory` (`vkBindBufferMemory`),
+    /// `bind_texture_memory` (`vkBindTextureMemory`) etc. It's exposed for this reason. Keep in mind to also
+    /// pass `Self::offset()` along to those.
+    pub unsafe fn memory(&self) -> vk::DeviceMemory {
         self.device_memory
     }
 

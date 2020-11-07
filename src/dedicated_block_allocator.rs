@@ -87,9 +87,11 @@ impl SubAllocator for DedicatedBlockAllocator {
             backtrace
         )
     }
+
     fn size(&self) -> u64 {
         self.size
     }
+
     fn allocated(&self) -> u64 {
         self.allocated
     }
