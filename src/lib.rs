@@ -1,3 +1,37 @@
+//! This crate provides a fully written in Rust memory allocator for Vulkan, and will provide one for DirectX 12 in the future.
+//!
+//! ## Simple Vulkan example
+//!
+//! ```rust
+//! let vk_info = vk::BufferCreateInfo::builder()
+//!     .size(512)
+//!     .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
+//!     .sharing_mode(vk::SharingMode::EXCLUSIVE);
+//!
+//! let buffer = unsafe { device.create_buffer(&vk_info, None) }.unwrap();
+//! let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+//!
+//! let location = MemoryLocation::CpuToGpu;
+//! let allocation = allocator
+//!     .allocate(&AllocationCreateDesc {
+//!         requirements,
+//!         location,
+//!         linear: true,
+//!         name: "test allocation",
+//!     })
+//!     .unwrap();
+//!
+//! unsafe {
+//!     device
+//!         .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+//!         .unwrap()
+//! };
+//!
+//! allocator.free(allocation).unwrap();
+//! unsafe { device.destroy_buffer(buffer, None) };
+//! println!("Allocation and deallocation of CpuToGpu memory was successful.");
+//! ```
+
 #![deny(clippy::unwrap_used)]
 use ash::version::{DeviceV1_0, InstanceV1_0, InstanceV1_1};
 use ash::vk;
@@ -14,17 +48,26 @@ use free_list_allocator::FreeListAllocator;
 
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
-    pub requirements: vk::MemoryRequirements,
-    pub location: MemoryLocation,
-    pub linear: bool,
+    /// Name of the allocation, for tracking and debugging purposes
     pub name: &'a str,
+    /// Vulkan memory requirements for an allocation
+    pub requirements: vk::MemoryRequirements,
+    /// Location where the memory allocation should be stored
+    pub location: MemoryLocation,
+    /// If the resource is linear (buffer / linear texture) or a regular (tiled) texture.
+    pub linear: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MemoryLocation {
+    /// The allocated resource is stored at an unknown memory location; let the driver decide what's the best location
     Unknown,
+    /// Store the allocation in GPU only accesible memory - typically this is the faster GPU resource and this should be
+    /// where most of the allocations live.
     GpuOnly,
+    /// Memory useful for uploading data to the GPU and potentially for constant buffers
     CpuToGpu,
+    /// Memory useful for CPU readback of data
     GpuToCpu,
 }
 
