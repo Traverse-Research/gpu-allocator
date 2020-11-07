@@ -16,16 +16,55 @@ use free_list_allocator::FreeListAllocator;
 pub struct AllocationCreateDesc<'a> {
     pub requirements: vk::MemoryRequirements,
     pub location: MemoryLocation,
-    pub is_linear_resource: bool,
+    pub linear: bool,
     pub name: &'a str,
 }
 
-const LOG_MEMORY_INFORMATION: bool = false;
-const LOG_LEAKS_ON_SHUTDOWN: bool = true;
-const STORE_STACK_TRACES: bool = true;
-const LOG_ALLOCATIONS: bool = false;
-const LOG_FREES: bool = false;
-const LOG_STACK_TRACES: bool = false; // When LOG_ALLOCATIONS or LOG_FREES is enabled, enabling this flag will also log stack traces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MemoryLocation {
+    Unknown,
+    GpuOnly,
+    CpuToGpu,
+    GpuToCpu,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct AllocatorDebugSettings {
+    /// Logs out debugging information about the various heaps the current device has on startup
+    log_memory_information: bool,
+    /// Logs out all memory leaks on shutdown with log level Warn
+    log_leaks_on_shutdown: bool,
+    /// Stores a copy of the full backtrace for every allocation made, this makes it easier to debug leaks
+    /// or other memory allocations, but storing stack traces has a RAM overhead so should be disabled
+    /// in shipping applications.
+    store_stack_traces: bool,
+    /// Log out every allocation as it's being made with log level Debug, rather spammy so off by default
+    log_allocations: bool,
+    /// Log out every free that is being called with log level Debug, rather spammy so off by default
+    log_frees: bool,
+    /// Log out stack traces when either `log_allocations` or `log_frees` is enabled.
+    log_stack_traces: bool,
+}
+
+impl Default for AllocatorDebugSettings {
+    fn default() -> Self {
+        Self {
+            log_memory_information: false,
+            log_leaks_on_shutdown: true,
+            store_stack_traces: true,
+            log_allocations: false,
+            log_frees: false,
+            log_stack_traces: false,
+        }
+    }
+}
+
+pub struct VulkanAllocatorCreateDesc {
+    pub instance: ash::Instance,
+    pub device: ash::Device,
+    pub physical_device: ash::vk::PhysicalDevice,
+    pub debug_settings: AllocatorDebugSettings,
+}
 
 trait SubAllocator: std::fmt::Debug {
     fn allocate(
@@ -115,11 +154,12 @@ impl Default for SubAllocation {
     }
 }
 
-#[derive(PartialOrd, PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Copy, Clone, Debug)]
+#[repr(u8)]
 enum AllocationType {
-    Free = 0,
-    Linear = 1,
-    NonLinear = 2,
+    Free,
+    Linear,
+    NonLinear,
 }
 
 #[derive(Debug)]
@@ -217,7 +257,7 @@ impl MemoryType {
         granularity: u64,
         backtrace: Option<&str>,
     ) -> Result<SubAllocation> {
-        let allocation_type = if desc.is_linear_resource {
+        let allocation_type = if desc.linear {
             AllocationType::Linear
         } else {
             AllocationType::NonLinear
@@ -415,14 +455,6 @@ impl MemoryType {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MemoryLocation {
-    Unknown,
-    GpuOnly,
-    CpuToGpu,
-    GpuToCpu,
-}
-
 fn find_memorytype_index(
     memory_req: &vk::MemoryRequirements,
     memory_prop: &vk::PhysicalDeviceMemoryProperties,
@@ -443,17 +475,17 @@ pub struct VulkanAllocator {
     device: ash::Device,
     physical_mem_props: vk::PhysicalDeviceMemoryProperties,
     buffer_image_granularity: u64,
+    debug_settings: AllocatorDebugSettings,
 }
 
 impl VulkanAllocator {
-    pub fn new(
-        instance: &ash::Instance,
-        device: &ash::Device,
-        physical_device: ash::vk::PhysicalDevice,
-    ) -> Self {
-        let mem_props = unsafe { instance.get_physical_device_memory_properties(physical_device) };
+    pub fn new(desc: &VulkanAllocatorCreateDesc) -> Self {
+        let mem_props = unsafe {
+            desc.instance
+                .get_physical_device_memory_properties(desc.physical_device)
+        };
 
-        if LOG_MEMORY_INFORMATION {
+        if desc.debug_settings.log_memory_information {
             log!(
                 Level::Debug,
                 "memory type count: {}",
@@ -522,8 +554,10 @@ impl VulkanAllocator {
         let mut physical_device_properties2 = vk::PhysicalDeviceProperties2::default();
 
         unsafe {
-            instance
-                .get_physical_device_properties2(physical_device, &mut physical_device_properties2)
+            desc.instance.get_physical_device_properties2(
+                desc.physical_device,
+                &mut physical_device_properties2,
+            )
         };
 
         let granularity = physical_device_properties2
@@ -533,9 +567,10 @@ impl VulkanAllocator {
 
         Self {
             memory_types,
-            device: device.clone(),
+            device: desc.device.clone(),
             physical_mem_props: mem_props,
             buffer_image_granularity: granularity,
+            debug_settings: desc.debug_settings,
         }
     }
 
@@ -543,13 +578,13 @@ impl VulkanAllocator {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
-        let backtrace = if STORE_STACK_TRACES {
+        let backtrace = if self.debug_settings.store_stack_traces {
             Some(format!("{:?}", backtrace::Backtrace::new()))
         } else {
             None
         };
 
-        if LOG_ALLOCATIONS {
+        if self.debug_settings.log_allocations {
             log!(
                 Level::Debug,
                 "Allocating \"{}\" of {} bytes with an alignment of {}.",
@@ -557,7 +592,7 @@ impl VulkanAllocator {
                 size,
                 alignment
             );
-            if LOG_STACK_TRACES {
+            if self.debug_settings.log_stack_traces {
                 let backtrace = backtrace
                     .clone()
                     .unwrap_or(format!("{:?}", backtrace::Backtrace::new()));
@@ -651,10 +686,10 @@ impl VulkanAllocator {
     }
 
     pub fn free(&mut self, sub_allocation: SubAllocation) -> Result<()> {
-        if LOG_FREES {
+        if self.debug_settings.log_frees {
             let name = sub_allocation.name.as_deref().unwrap_or("<null>");
             log!(Level::Debug, "Free'ing \"{}\".", name);
-            if LOG_STACK_TRACES {
+            if self.debug_settings.log_stack_traces {
                 let backtrace = format!("{:?}", backtrace::Backtrace::new());
                 log!(Level::Debug, "Free stack trace: {}", backtrace);
             }
@@ -684,7 +719,7 @@ impl VulkanAllocator {
 
 impl Drop for VulkanAllocator {
     fn drop(&mut self) {
-        if LOG_LEAKS_ON_SHUTDOWN {
+        if self.debug_settings.log_leaks_on_shutdown {
             self.report_memory_leaks(Level::Warn);
         }
     }

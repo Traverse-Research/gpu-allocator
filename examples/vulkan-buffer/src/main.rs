@@ -4,6 +4,10 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 
+use gpu_allocator::{
+    AllocationCreateDesc, MemoryLocation, VulkanAllocator, VulkanAllocatorCreateDesc,
+};
+
 fn main() {
     let entry = ash::Entry::new().unwrap();
 
@@ -89,7 +93,12 @@ fn main() {
     };
 
     // Setting up the allocator
-    let allocator = gpu_allocator::Allocator::new(&instance, &device, pdevice).unwrap();
+    let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
+        instance: instance.clone(),
+        device: device.clone(),
+        physical_device: pdevice,
+        debug_settings: Default::default(),
+    });
 
     // Test allocating GPU Only memory
     {
@@ -99,18 +108,18 @@ fn main() {
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
         let test_buffer = unsafe { device.create_buffer(&test_buffer_info, None) }.unwrap();
         let requirements = unsafe { device.get_buffer_memory_requirements(test_buffer) };
-        let location = gpu_allocator::MemoryLocation::GpuOnly;
+        let location = MemoryLocation::GpuOnly;
 
         let allocation = allocator
-            .alloc(&gpu_allocator::AllocationCreateDesc {
+            .allocate(&AllocationCreateDesc {
                 requirements,
                 location,
-                is_linear_resource: true,
+                linear: true,
                 name: "test allocation",
             })
             .unwrap();
 
-        allocator.free(&allocation).unwrap();
+        allocator.free(allocation).unwrap();
 
         unsafe { device.destroy_buffer(test_buffer, None) };
 
@@ -125,18 +134,18 @@ fn main() {
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
         let test_buffer = unsafe { device.create_buffer(&test_buffer_info, None) }.unwrap();
         let requirements = unsafe { device.get_buffer_memory_requirements(test_buffer) };
-        let location = gpu_allocator::MemoryLocation::CpuToGpu;
+        let location = MemoryLocation::CpuToGpu;
 
         let allocation = allocator
-            .alloc(&gpu_allocator::AllocationCreateDesc {
+            .allocate(&AllocationCreateDesc {
                 requirements,
                 location,
-                is_linear_resource: true,
+                linear: true,
                 name: "test allocation",
             })
             .unwrap();
 
-        allocator.free(&allocation).unwrap();
+        allocator.free(allocation).unwrap();
 
         unsafe { device.destroy_buffer(test_buffer, None) };
 
@@ -151,18 +160,18 @@ fn main() {
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
         let test_buffer = unsafe { device.create_buffer(&test_buffer_info, None) }.unwrap();
         let requirements = unsafe { device.get_buffer_memory_requirements(test_buffer) };
-        let location = gpu_allocator::MemoryLocation::GpuToCpu;
+        let location = MemoryLocation::GpuToCpu;
 
         let allocation = allocator
-            .alloc(&gpu_allocator::AllocationCreateDesc {
+            .allocate(&AllocationCreateDesc {
                 requirements,
                 location,
-                is_linear_resource: true,
+                linear: true,
                 name: "test allocation",
             })
             .unwrap();
 
-        allocator.free(&allocation).unwrap();
+        allocator.free(allocation).unwrap();
 
         unsafe { device.destroy_buffer(test_buffer, None) };
 
