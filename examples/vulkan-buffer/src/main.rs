@@ -94,7 +94,7 @@ fn main() {
 
     // Setting up the allocator
     let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
-        instance: instance.clone(),
+        instance,
         device: device.clone(),
         physical_device: pdevice,
         debug_settings: Default::default(),
