@@ -1,6 +1,20 @@
 //! This crate provides a fully written in Rust memory allocator for Vulkan, and will provide one for DirectX 12 in the future.
 //!
-//! ## Simple Vulkan example
+//! ## Setting up the Vulkan memory allocator
+//!
+//! ```rust
+//! use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
+//! use ash::vk;
+//!
+//! let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
+//!     instance: instance.clone(),
+//!     device: device.clone(),
+//!     physical_device,
+//!     debug_settings: Default::default(),
+//! });
+//! ```
+//!
+//! ## Simple Vulkan allocation example
 //!
 //! ```rust
 //! // Setup vulkan info
