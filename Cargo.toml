@@ -3,8 +3,17 @@ name = "gpu-allocator"
 version = "0.1.0"
 authors = ["Traverse Research <opensource@traverseresearch.nl>"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
+description = "Memory allocator for GPU memory in Vulkan and in the future DirectX 12"
+categories = ["rendering", "rendering::graphics-api"]
+homepage = "https://github.com/Traverse-Research/gpu-allocator"
+repository = "https://github.com/Traverse-Research/gpu-allocator"
+keywords = ["vulkan", "memory", "allocator"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+include = [
+    "src/*.rs",
+    "Cargo.toml",
+]
 
 [dependencies]
 ash = "0.31"
