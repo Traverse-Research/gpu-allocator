@@ -3,32 +3,28 @@
 //! ## Simple Vulkan example
 //!
 //! ```rust
+//! // Setup vulkan info
 //! let vk_info = vk::BufferCreateInfo::builder()
 //!     .size(512)
-//!     .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
-//!     .sharing_mode(vk::SharingMode::EXCLUSIVE);
+//!     .usage(vk::BufferUsageFlags::STORAGE_BUFFER);
 //!
-//! let buffer = unsafe { device.create_buffer(&vk_info, None) }.unwrap();
+//! let buffer = unsafe { device.create_buffer(&vk_info, None) }?;
 //! let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
 //!
 //! let allocation = allocator
 //!     .allocate(&AllocationCreateDesc {
+//!         name: "Example allocation",
 //!         requirements,
 //!         location: MemoryLocation::CpuToGpu,
-//!         linear: true,
-//!         name: "Example allocation",
-//!     })
-//!     .unwrap();
+//!         linear: true, // Buffers are always linear
+//!     })?;
 //!
-//! unsafe {
-//!     device
-//!         .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
-//!         .unwrap()
-//! };
+//! // Bind memory to the buffer
+//! unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset())? };
 //!
-//! allocator.free(allocation).unwrap();
+//! // Cleanup
+//! allocator.free(allocation)?;
 //! unsafe { device.destroy_buffer(buffer, None) };
-//! println!("Allocation and deallocation of CpuToGpu memory was successful.");
 //! ```
 
 #![deny(clippy::unwrap_used)]
