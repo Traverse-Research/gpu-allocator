@@ -31,19 +31,19 @@ pub enum MemoryLocation {
 #[derive(Copy, Clone, Debug)]
 pub struct AllocatorDebugSettings {
     /// Logs out debugging information about the various heaps the current device has on startup
-    log_memory_information: bool,
+    pub log_memory_information: bool,
     /// Logs out all memory leaks on shutdown with log level Warn
-    log_leaks_on_shutdown: bool,
+    pub log_leaks_on_shutdown: bool,
     /// Stores a copy of the full backtrace for every allocation made, this makes it easier to debug leaks
     /// or other memory allocations, but storing stack traces has a RAM overhead so should be disabled
     /// in shipping applications.
-    store_stack_traces: bool,
+    pub store_stack_traces: bool,
     /// Log out every allocation as it's being made with log level Debug, rather spammy so off by default
-    log_allocations: bool,
+    pub log_allocations: bool,
     /// Log out every free that is being called with log level Debug, rather spammy so off by default
-    log_frees: bool,
+    pub log_frees: bool,
     /// Log out stack traces when either `log_allocations` or `log_frees` is enabled.
-    log_stack_traces: bool,
+    pub log_stack_traces: bool,
 }
 
 impl Default for AllocatorDebugSettings {
