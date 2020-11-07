@@ -16,6 +16,7 @@ gpu-allocator = "0.1"
 ```rust
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
+
 let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
     instance,
     device,
@@ -30,8 +31,11 @@ let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
 let vk_info = vk::BufferCreateInfo::builder()
     .size(512)
     .usage(vk::BufferUsageFlags::STORAGE_BUFFER);
+
 let buffer = unsafe { device.create_buffer(&vk_info, None) }?;
 let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+
+
 let allocation = allocator
     .allocate(&AllocationCreateDesc {
         name: "Example allocation",
