@@ -2,7 +2,6 @@
 use ash::version::{DeviceV1_0, InstanceV1_0, InstanceV1_1};
 use ash::vk;
 use log::{log, Level};
-use std::cell::RefCell;
 
 mod result;
 pub use result::*;
@@ -39,7 +38,7 @@ trait SubAllocator: std::fmt::Debug {
         backtrace: Option<&str>,
     ) -> Result<(u64, std::num::NonZeroU64)>;
 
-    fn free(&mut self, sub_allocation: &SubAllocation) -> Result<()>;
+    fn free(&mut self, sub_allocation: SubAllocation) -> Result<()>;
 
     fn report_memory_leaks(
         &self,
@@ -383,8 +382,10 @@ impl MemoryType {
         })
     }
 
-    fn free(&mut self, sub_allocation: &SubAllocation, device: &ash::Device) -> Result<()> {
-        let mem_block = self.memory_blocks[sub_allocation.memory_block_index]
+    fn free(&mut self, sub_allocation: SubAllocation, device: &ash::Device) -> Result<()> {
+        let block_idx = sub_allocation.memory_block_index;
+
+        let mem_block = self.memory_blocks[block_idx]
             .as_mut()
             .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
 
@@ -393,7 +394,7 @@ impl MemoryType {
         if mem_block.sub_allocator.is_empty() {
             if mem_block.sub_allocator.supports_general_allocations() {
                 if self.active_general_blocks > 1 {
-                    let block = self.memory_blocks[sub_allocation.memory_block_index].take();
+                    let block = self.memory_blocks[block_idx].take();
                     let block = block.ok_or_else(|| {
                         AllocationError::Internal("Memory block must be Some.".into())
                     })?;
@@ -402,7 +403,7 @@ impl MemoryType {
                     self.active_general_blocks -= 1;
                 }
             } else {
-                let block = self.memory_blocks[sub_allocation.memory_block_index].take();
+                let block = self.memory_blocks[block_idx].take();
                 let block = block.ok_or_else(|| {
                     AllocationError::Internal("Memory block must be Some.".into())
                 })?;
@@ -437,19 +438,19 @@ fn find_memorytype_index(
         .map(|(index, _memory_type)| index as _)
 }
 
-struct GpuAllocator {
+pub struct VulkanAllocator {
     memory_types: Vec<MemoryType>,
     device: ash::Device,
     physical_mem_props: vk::PhysicalDeviceMemoryProperties,
     buffer_image_granularity: u64,
 }
 
-impl GpuAllocator {
-    fn new(
+impl VulkanAllocator {
+    pub fn new(
         instance: &ash::Instance,
         device: &ash::Device,
         physical_device: ash::vk::PhysicalDevice,
-    ) -> Result<Self> {
+    ) -> Self {
         let mem_props = unsafe { instance.get_physical_device_memory_properties(physical_device) };
 
         if LOG_MEMORY_INFORMATION {
@@ -530,15 +531,15 @@ impl GpuAllocator {
             .limits
             .buffer_image_granularity;
 
-        Ok(Self {
+        Self {
             memory_types,
             device: device.clone(),
             physical_mem_props: mem_props,
             buffer_image_granularity: granularity,
-        })
+        }
     }
 
-    fn allocate(&mut self, desc: &AllocationCreateDesc) -> Result<SubAllocation> {
+    pub fn allocate(&mut self, desc: &AllocationCreateDesc) -> Result<SubAllocation> {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
@@ -649,7 +650,7 @@ impl GpuAllocator {
         }
     }
 
-    fn free(&mut self, sub_allocation: &SubAllocation) -> Result<()> {
+    pub fn free(&mut self, sub_allocation: SubAllocation) -> Result<()> {
         if LOG_FREES {
             let name = sub_allocation.name.as_deref().unwrap_or("<null>");
             log!(Level::Debug, "Free'ing \"{}\".", name);
@@ -668,7 +669,7 @@ impl GpuAllocator {
         Ok(())
     }
 
-    fn report_memory_leaks(&self, log_level: Level) {
+    pub fn report_memory_leaks(&self, log_level: Level) {
         for (mem_type_i, mem_type) in self.memory_types.iter().enumerate() {
             for (block_i, mem_block) in mem_type.memory_blocks.iter().enumerate() {
                 if let Some(mem_block) = mem_block {
@@ -681,48 +682,7 @@ impl GpuAllocator {
     }
 }
 
-pub struct Allocator {
-    allocator: RefCell<GpuAllocator>,
-}
-
-impl std::fmt::Debug for Allocator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GPU Memory Allocator")
-    }
-}
-
-impl Allocator {
-    /// Initializes a new memory allocator.
-    pub fn new(
-        instance: &ash::Instance,
-        device: &ash::Device,
-        physical_device: ash::vk::PhysicalDevice,
-    ) -> Result<Self> {
-        let allocator = GpuAllocator::new(instance, device, physical_device)?;
-
-        Ok(Self {
-            allocator: RefCell::new(allocator),
-        })
-    }
-
-    /// Log all allocations that have not been free'd.
-    pub fn report_memory_leaks(&self, log_level: Level) {
-        self.allocator.borrow_mut().report_memory_leaks(log_level);
-    }
-
-    /// Attempt to allocate memory. Will return an error on failure.
-    pub fn alloc(&self, desc: &AllocationCreateDesc) -> Result<SubAllocation> {
-        self.allocator.borrow_mut().allocate(desc)
-    }
-
-    /// Free previously allocated memory. Only error that can occur is an internal error.
-    pub fn free(&self, sub_alloc: &SubAllocation) -> Result<()> {
-        self.allocator.borrow_mut().free(sub_alloc)?;
-        Ok(())
-    }
-}
-
-impl Drop for Allocator {
+impl Drop for VulkanAllocator {
     fn drop(&mut self) {
         if LOG_LEAKS_ON_SHUTDOWN {
             self.report_memory_leaks(Level::Warn);

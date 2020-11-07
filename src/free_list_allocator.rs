@@ -275,7 +275,7 @@ impl SubAllocator for FreeListAllocator {
         Ok((best_offset, chunk_id))
     }
 
-    fn free(&mut self, sub_allocation: &SubAllocation) -> Result<()> {
+    fn free(&mut self, sub_allocation: SubAllocation) -> Result<()> {
         let chunk_id = sub_allocation
             .chunk_id
             .ok_or_else(|| AllocationError::Internal("Chunk ID must be a valid value.".into()))?;

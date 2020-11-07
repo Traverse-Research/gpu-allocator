@@ -50,7 +50,7 @@ impl SubAllocator for DedicatedBlockAllocator {
         Ok((0, dummy_id))
     }
 
-    fn free(&mut self, sub_allocation: &SubAllocation) -> Result<()> {
+    fn free(&mut self, sub_allocation: SubAllocation) -> Result<()> {
         if sub_allocation.chunk_id != std::num::NonZeroU64::new(1) {
             Err(AllocationError::Internal("Chunk ID must be 1.".into()))
         } else {
