@@ -119,6 +119,12 @@ fn main() {
             })
             .unwrap();
 
+        unsafe {
+            device
+                .bind_buffer_memory(test_buffer, allocation.memory(), allocation.offset())
+                .unwrap()
+        };
+
         allocator.free(allocation).unwrap();
 
         unsafe { device.destroy_buffer(test_buffer, None) };
@@ -145,6 +151,12 @@ fn main() {
             })
             .unwrap();
 
+        unsafe {
+            device
+                .bind_buffer_memory(test_buffer, allocation.memory(), allocation.offset())
+                .unwrap()
+        };
+
         allocator.free(allocation).unwrap();
 
         unsafe { device.destroy_buffer(test_buffer, None) };
@@ -170,6 +182,12 @@ fn main() {
                 name: "test allocation",
             })
             .unwrap();
+
+        unsafe {
+            device
+                .bind_buffer_memory(test_buffer, allocation.memory(), allocation.offset())
+                .unwrap()
+        };
 
         allocator.free(allocation).unwrap();
 

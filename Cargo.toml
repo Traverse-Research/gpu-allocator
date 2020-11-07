@@ -21,10 +21,9 @@ backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
 
-[workspace]
-members = [
-    "examples/vulkan-buffer"
-]
+[[example]]
+name = "vulkan-buffer"
+path = "examples/vulkan-buffer/src/main.rs"
 
 [features]
 vulkan_device_address = []
