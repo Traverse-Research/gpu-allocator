@@ -79,6 +79,8 @@ impl FreeListAllocator {
         Self {
             size,
             allocated: 0,
+            // 0 is not allowed as a chunk ID, 1 is used by the initial chunk, next chunk is going to be 2.
+            // The system well take the counter as the ID, and the increment the counter.
             chunk_id_counter: 2,
             chunks,
             free_chunks,
