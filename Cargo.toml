@@ -9,6 +9,7 @@ categories = ["rendering", "rendering::graphics-api"]
 homepage = "https://github.com/Traverse-Research/gpu-allocator"
 repository = "https://github.com/Traverse-Research/gpu-allocator"
 keywords = ["vulkan", "memory", "allocator"]
+documentation = "https://docs.rs/gpu-allocator/"
 
 include = [
     "src/*.rs",
