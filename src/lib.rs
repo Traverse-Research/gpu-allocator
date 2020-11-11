@@ -41,7 +41,7 @@
 //! unsafe { device.destroy_buffer(buffer, None) };
 //! ```
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
-use ash::version::{DeviceV1_0, InstanceV1_0, InstanceV1_1};
+use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use log::{log, Level};
 
@@ -610,19 +610,12 @@ impl VulkanAllocator {
             }
         }
 
-        let mut physical_device_properties2 = vk::PhysicalDeviceProperties2::default();
-
-        unsafe {
-            desc.instance.get_physical_device_properties2(
-                desc.physical_device,
-                &mut physical_device_properties2,
-            )
+        let physical_device_properties = unsafe {
+            desc.instance
+                .get_physical_device_properties(desc.physical_device)
         };
 
-        let granularity = physical_device_properties2
-            .properties
-            .limits
-            .buffer_image_granularity;
+        let granularity = physical_device_properties.limits.buffer_image_granularity;
 
         Self {
             memory_types,
