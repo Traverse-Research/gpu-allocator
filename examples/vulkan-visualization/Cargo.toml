@@ -9,3 +9,5 @@ edition = "2018"
 [dependencies]
 gpu-allocator = { path = "../..", features = ["visualizer"] }
 ash = "0.31"
+ash-window = "0.5"
+winit = "0.23"
