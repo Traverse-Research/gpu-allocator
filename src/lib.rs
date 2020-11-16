@@ -54,6 +54,9 @@ use dedicated_block_allocator::DedicatedBlockAllocator;
 mod free_list_allocator;
 use free_list_allocator::FreeListAllocator;
 
+#[cfg(feature = "visualizer")]
+pub mod visualizer;
+
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
     /// Name of the allocation, for tracking and debugging purposes
@@ -117,7 +120,12 @@ pub struct VulkanAllocatorCreateDesc {
     pub debug_settings: AllocatorDebugSettings,
 }
 
-trait SubAllocator: std::fmt::Debug {
+#[cfg(feature = "visualizer")]
+trait SubAllocatorBase: visualizer::SubAllocatorVisualizer {}
+#[cfg(not(feature = "visualizer"))]
+trait SubAllocatorBase {}
+
+trait SubAllocator: SubAllocatorBase + std::fmt::Debug {
     fn allocate(
         &mut self,
         size: u64,

@@ -1,5 +1,7 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
-use super::{AllocationError, AllocationType, Result, SubAllocation, SubAllocator};
+use super::{
+    AllocationError, AllocationType, Result, SubAllocation, SubAllocator, SubAllocatorBase,
+};
 use log::{log, Level};
 use std::collections::{HashMap, HashSet};
 
@@ -14,13 +16,13 @@ fn align_up(val: u64, alignment: u64) -> u64 {
 }
 
 #[derive(Debug)]
-struct MemoryChunk {
-    chunk_id: std::num::NonZeroU64,
-    size: u64,
-    offset: u64,
-    allocation_type: AllocationType,
-    name: Option<String>,
-    backtrace: Option<String>, // Only used if STORE_STACK_TRACES is true
+pub(crate) struct MemoryChunk {
+    pub(crate) chunk_id: std::num::NonZeroU64,
+    pub(crate) size: u64,
+    pub(crate) offset: u64,
+    pub(crate) allocation_type: AllocationType,
+    pub(crate) name: Option<String>,
+    pub(crate) backtrace: Option<String>, // Only used if STORE_STACK_TRACES is true
     next: Option<std::num::NonZeroU64>,
     prev: Option<std::num::NonZeroU64>,
 }
@@ -29,8 +31,8 @@ struct MemoryChunk {
 pub(crate) struct FreeListAllocator {
     size: u64,
     allocated: u64,
-    chunk_id_counter: u64,
-    chunks: HashMap<std::num::NonZeroU64, MemoryChunk>,
+    pub(crate) chunk_id_counter: u64,
+    pub(crate) chunks: HashMap<std::num::NonZeroU64, MemoryChunk>,
     free_chunks: HashSet<std::num::NonZeroU64>,
 }
 
@@ -141,6 +143,7 @@ impl FreeListAllocator {
     }
 }
 
+impl SubAllocatorBase for FreeListAllocator {}
 impl SubAllocator for FreeListAllocator {
     fn allocate(
         &mut self,

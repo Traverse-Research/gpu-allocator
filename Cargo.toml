@@ -21,10 +21,17 @@ ash = "0.31"
 backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
+imgui = { version = "0.6", optional = true }
 
 [[example]]
 name = "vulkan-buffer"
 path = "examples/vulkan-buffer/src/main.rs"
 
+[workspace]
+members = [
+    "examples/vulkan-visualization",
+]
+
 [features]
 vulkan_device_address = []
+visualizer = [ "imgui" ]
