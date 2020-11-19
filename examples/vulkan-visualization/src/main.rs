@@ -16,11 +16,52 @@ pub struct ImGuiRenderer {
     //pipeline: Arc<dyn Pipeline>,
     //sampler: Arc<dyn Sampler>,
     //font_atlas: Arc<dyn Texture>,
-    pipeline: ash::vk::Pipeline,
+    pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
 }
 
 impl ImGuiRenderer {
     fn new(device: &ash::Device) -> Result<Self, vk::Result> {
+        let bindings = [
+            vk::DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::VERTEX)
+                .build(),
+            vk::DescriptorSetLayoutBinding::builder()
+                .binding(1)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::VERTEX)
+                .build(),
+            vk::DescriptorSetLayoutBinding::builder()
+                .binding(2)
+                .descriptor_type(vk::DescriptorType::SAMPLER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+                .build(),
+            vk::DescriptorSetLayoutBinding::builder()
+                .binding(3)
+                .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+                .build(),
+        ];
+
+        let set_layout_infos = [vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build()];
+        let set_layouts = set_layout_infos
+            .iter()
+            .map(|info| unsafe { device.create_descriptor_set_layout(info, None) }.unwrap())
+            .collect::<Vec<_>>();
+
+        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&set_layouts)
+            .build();
+        let pipeline_layout = unsafe { device.create_pipeline_layout(&layout_info, None) }.unwrap();
+
         let vs_module = {
             #[allow(clippy::cast_ptr_alignment)]
             let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
@@ -57,16 +98,94 @@ impl ImGuiRenderer {
                 .build(),
         ];
 
-        let create_info = vk::GraphicsPipelineCreateInfo::builder()
+        let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder();
+        let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
+            .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+        //let viewport_state = vk::PipelineViewportStateCreateInfo::builder()
+        //    .viewport_count(1)
+        //    .viewports(vk::Viewport::builder().)
+        let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
+            .depth_clamp_enable(true)
+            .rasterizer_discard_enable(true)
+            .polygon_mode(vk::PolygonMode::FILL)
+            .cull_mode(vk::CullModeFlags::NONE)
+            .front_face(vk::FrontFace::CLOCKWISE)
+            .depth_bias_enable(false);
+        let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
+            .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+            .sample_shading_enable(false)
+            .sample_mask(&[!0u32])
+            .alpha_to_coverage_enable(false)
+            .alpha_to_one_enable(false);
+        let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+            .depth_test_enable(false)
+            .depth_write_enable(false)
+            .depth_compare_op(vk::CompareOp::ALWAYS)
+            .depth_bounds_test_enable(false)
+            .stencil_test_enable(false);
+        let attachments = [vk::PipelineColorBlendAttachmentState::builder()
+            .blend_enable(false).build()]; //TODO(max)
+        let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
+            .logic_op_enable(true)
+            .logic_op(vk::LogicOp::SET)
+            .attachments(&attachments)
+            .blend_constants([1.0, 1.0, 1.0, 1.0]);
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&[vk::DynamicState::VIEWPORT]);
+
+     
+
+
+        let attachments = vk::AttachmentDescription::builder()
+            .format(vk::Format::B8G8R8A8_UNORM)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::LOAD)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+        let subpass_begin_info = vk::SubpassBeginInfo::builder()
+            .contents(vk::SubpassContents::INLINE)
+            .build();
+
+        let subpass_description = vk::SubpassDescription::builder()
+            
+
+        let render_pass_create_info = vk::RenderPassCreateInfo::builder()
+            .attachments(&[attachments])
+            .subpasses()
+            .build();
+        let render_pass = unsafe { device.create_render_pass(&render_pass_create_info, None) }.unwrap();
+
+        let pipeline_create_info = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&stages)
+            .vertex_input_state(&vertex_input_state)
+            .input_assembly_state(&input_assembly_state)
+            .rasterization_state(&rasterization_state)
+            .multisample_state(&multisample_state)
+            .depth_stencil_state(&depth_stencil_state)
+            .color_blend_state(&color_blend_state)
+            .dynamic_state(&dynamic_state)
+            .layout(pipeline_layout)
+            .render_pass(render_pass)
+            .subpass(0)
             .build();
 
         let pipeline = unsafe {
-            device.create_graphics_pipelines(vk::PipelineCache::null(), &[create_info], None)
+            device.create_graphics_pipelines(
+                vk::PipelineCache::null(),
+                &[pipeline_create_info],
+                None,
+            )
         }
         .unwrap()[0];
 
-        Ok(Self { pipeline })
+        Ok(Self {
+            pipeline_layout,
+            pipeline,
+        })
     }
 }
 
