@@ -11,3 +11,4 @@ gpu-allocator = { path = "../..", features = ["visualizer"] }
 ash = "0.31"
 ash-window = "0.5"
 winit = "0.23"
+imgui = "0.6.0"
