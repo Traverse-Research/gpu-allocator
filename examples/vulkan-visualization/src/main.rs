@@ -14,11 +14,17 @@ pub struct ImGuiRenderer {
     //size: (u32, u32),
     sampler: vk::Sampler,
 
-    
+    vb_capacity: u64,
+    ib_capacity: u64,
+    vb_allocation: gpu_allocator::SubAllocation,
+    ib_allocation: gpu_allocator::SubAllocation,
+    vertex_buffer: vk::Buffer,
+    index_buffer: vk::Buffer,
+
     font_image: vk::Image,
     font_image_memory: gpu_allocator::SubAllocation,
     font_image_view: vk::ImageView,
-    
+
     pipeline_layout: vk::PipelineLayout,
     render_pass: vk::RenderPass,
     pipeline: vk::Pipeline,
@@ -37,24 +43,18 @@ impl ImGuiRenderer {
             let bindings = [
                 vk::DescriptorSetLayoutBinding::builder()
                     .binding(0)
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .descriptor_count(1)
-                    .stage_flags(vk::ShaderStageFlags::VERTEX)
-                    .build(),
-                vk::DescriptorSetLayoutBinding::builder()
-                    .binding(1)
                     .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                     .descriptor_count(1)
                     .stage_flags(vk::ShaderStageFlags::VERTEX)
                     .build(),
                 vk::DescriptorSetLayoutBinding::builder()
-                    .binding(2)
+                    .binding(1)
                     .descriptor_type(vk::DescriptorType::SAMPLER)
                     .descriptor_count(1)
                     .stage_flags(vk::ShaderStageFlags::FRAGMENT)
                     .build(),
                 vk::DescriptorSetLayoutBinding::builder()
-                    .binding(3)
+                    .binding(2)
                     .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
                     .descriptor_count(1)
                     .stage_flags(vk::ShaderStageFlags::FRAGMENT)
@@ -104,24 +104,40 @@ impl ImGuiRenderer {
 
         let pipeline = {
             let vs_module = {
+                let vs = include_str!("./shaders/imgui.vs.hlsl");
+                let vs = hassle_rs::compile_hlsl(
+                    "imgui.vs.hlsl",
+                    vs,
+                    "main",
+                    "vs_5_0",
+                    &["-WX", "-spirv", "-fvk-use-scalar-layout"],
+                    &[],
+                )
+                .unwrap();
+
                 #[allow(clippy::cast_ptr_alignment)]
                 let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
-                    assert_eq!(shaders::IMGUI_VS.len() % 4, 0);
-                    std::slice::from_raw_parts(
-                        shaders::IMGUI_VS.as_ptr() as *const u32,
-                        shaders::IMGUI_VS.len() / 4,
-                    )
+                    assert_eq!(vs.len() % 4, 0);
+                    std::slice::from_raw_parts(vs.as_ptr() as *const u32, vs.len() / 4)
                 });
                 unsafe { device.create_shader_module(&shader_info, None) }?
             };
             let ps_module = {
+                let ps = include_str!("./shaders/imgui.ps.hlsl");
+                let ps = hassle_rs::compile_hlsl(
+                    "imgui.ps.hlsl",
+                    ps,
+                    "main",
+                    "ps_5_0",
+                    &["-WX", "-spirv", "-fvk-use-scalar-layout"],
+                    &[],
+                )
+                .unwrap();
+
                 #[allow(clippy::cast_ptr_alignment)]
                 let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
-                    assert_eq!(shaders::IMGUI_PS.len() % 4, 0);
-                    std::slice::from_raw_parts(
-                        shaders::IMGUI_PS.as_ptr() as *const u32,
-                        shaders::IMGUI_PS.len() / 4,
-                    )
+                    assert_eq!(ps.len() % 4, 0);
+                    std::slice::from_raw_parts(ps.as_ptr() as *const u32, ps.len() / 4)
                 });
                 unsafe { device.create_shader_module(&shader_info, None) }?
             };
@@ -139,7 +155,34 @@ impl ImGuiRenderer {
                     .build(),
             ];
 
-            let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder();
+            let vertex_binding_descriptions = [vk::VertexInputBindingDescription {
+                binding: 0,
+                stride: std::mem::size_of::<imgui::DrawVert>() as u32,
+                input_rate: vk::VertexInputRate::VERTEX,
+            }];
+            let vertex_attribute_descriptions = [
+                vk::VertexInputAttributeDescription {
+                    location: 0,
+                    binding: 0,
+                    format: vk::Format::R32G32_SFLOAT,
+                    offset: 0,
+                },
+                vk::VertexInputAttributeDescription {
+                    location: 1,
+                    binding: 0,
+                    format: vk::Format::R32G32_SFLOAT,
+                    offset: 8,
+                },
+                vk::VertexInputAttributeDescription {
+                    location: 2,
+                    binding: 0,
+                    format: vk::Format::R8G8B8A8_UNORM,
+                    offset: 16,
+                },
+            ];
+            let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
+                .vertex_binding_descriptions(&vertex_binding_descriptions)
+                .vertex_attribute_descriptions(&vertex_attribute_descriptions);
             let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
                 .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
             //let viewport_state = vk::PipelineViewportStateCreateInfo::builder()
@@ -432,9 +475,68 @@ impl ImGuiRenderer {
             unsafe { device.create_sampler(&create_info, None) }?
         };
 
+        let (vertex_buffer, vb_allocation, vb_capacity) = {
+            let capacity = 1024 * 1024;
 
+            let create_info = vk::BufferCreateInfo::builder()
+                .size(capacity)
+                .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .build();
+
+            let buffer = unsafe { device.create_buffer(&create_info, None) }?;
+
+            let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+
+            let allocation = allocator
+                .allocate(&AllocationCreateDesc {
+                    name: "ImGui Vertex buffer",
+                    requirements,
+                    location: MemoryLocation::CpuToGpu,
+                    linear: true,
+                })
+                .unwrap();
+
+            unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset()) }?;
+
+            (buffer, allocation, capacity)
+        };
+        let (index_buffer, ib_allocation, ib_capacity) = {
+            let capacity = 1024 * 1024;
+
+            let create_info = vk::BufferCreateInfo::builder()
+                .size(capacity)
+                .usage(vk::BufferUsageFlags::INDEX_BUFFER)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .build();
+
+            let buffer = unsafe { device.create_buffer(&create_info, None) }?;
+
+            let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+
+            let allocation = allocator
+                .allocate(&AllocationCreateDesc {
+                    name: "ImGui Index buffer",
+                    requirements,
+                    location: MemoryLocation::CpuToGpu,
+                    linear: true,
+                })
+                .unwrap();
+
+            unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset()) }?;
+
+            (buffer, allocation, capacity)
+        };
 
         Ok(Self {
+            vb_capacity,
+            vb_allocation,
+            vertex_buffer,
+
+            ib_capacity,
+            ib_allocation,
+            index_buffer,
+
             sampler,
 
             font_image,
@@ -713,8 +815,8 @@ fn main() {
 
         let device_memory_properties =
             unsafe { instance.get_physical_device_memory_properties(pdevice) };
-        
-            // Setting up the allocator
+
+        // Setting up the allocator
         let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
             instance,
             device: device.clone(),
@@ -769,7 +871,7 @@ fn main() {
         let setup_commands_reuse_fence =
             unsafe { device.create_fence(&fence_create_info, None) }.unwrap();
 
-            /*
+        /*
         record_and_submit_command_buffer(
             &device,
             setup_command_buffer,
@@ -928,6 +1030,7 @@ fn main() {
         }
 
         let mut imgui = imgui::Context::create();
+        imgui.io_mut().display_size = [window_width as f32, window_height as f32];
 
         let imgui_renderer = ImGuiRenderer::new(
             &mut imgui,
@@ -938,19 +1041,20 @@ fn main() {
             present_queue,
         )?;
 
+        let frame_buffers = present_image_views
+            .iter()
+            .map(|&view| {
+                let create_info = vk::FramebufferCreateInfo::builder()
+                    .render_pass(imgui_renderer.render_pass)
+                    .attachments(&[view])
+                    .width(window_width)
+                    .height(window_height)
+                    .layers(1)
+                    .build();
 
-
-        let frame_buffers = present_image_views.iter().map(|&view| {
-            let create_info = vk::FramebufferCreateInfo::builder()
-                .render_pass(imgui_renderer.render_pass)
-                .attachments(&[view])
-                .width(window_width)
-                .height(window_height)
-                .layers(1)
-                .build();
-
-            unsafe { device.create_framebuffer(&create_info, None) }.unwrap()
-        }).collect::<Vec<_>>();
+                unsafe { device.create_framebuffer(&create_info, None) }.unwrap()
+            })
+            .collect::<Vec<_>>();
 
         loop {
             let event = event_recv.recv().unwrap();
@@ -986,11 +1090,11 @@ fn main() {
             }
             .unwrap();
 
-            let clear_values = [
-                vk::ClearValue {
-                    color: vk::ClearColorValue { float32: [ 0.0, 0.0, 0.0, 0.0] },
-                }
-            ];
+            let clear_values = [vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 0.0],
+                },
+            }];
 
             let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
                 .render_pass(imgui_renderer.render_pass)
@@ -1000,6 +1104,18 @@ fn main() {
                     extent: surface_resolution,
                 })
                 .clear_values(&clear_values);
+
+            let ui = imgui.frame();
+            let imgui_draw_data = ui.render();
+
+            //let descriptor_pool = {
+            //    let create_info = vk::DescriptorPoolCreateInfo::builder()
+            //        .max_sets(1)
+            //        .pool_sizes(&[vk::DescriptorPoolSize::builder().ty(vk::DescriptorType::SAMPLED_IMAGE)])
+            //    unsafe { device.create_descriptor_pool(create_info, allocation_callbacks) };
+            //
+            //}
+
             record_and_submit_command_buffer(
                 &device,
                 draw_command_buffer,
@@ -1008,8 +1124,130 @@ fn main() {
                 &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
                 &[present_complete_semaphore],
                 &[rendering_complete_semaphore],
-                |device, buffer| {
+                |device, cmd| {
+                    unsafe {
+                        device.cmd_bind_vertex_buffers(
+                            cmd,
+                            0,
+                            &[imgui_renderer.vertex_buffer],
+                            &[0],
+                        )
+                    };
+                    unsafe {
+                        device.cmd_bind_index_buffer(
+                            cmd,
+                            imgui_renderer.index_buffer,
+                            0,
+                            vk::IndexType::UINT16,
+                        )
+                    };
 
+                    unsafe {
+                        device.cmd_bind_pipeline(
+                            cmd,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            imgui_renderer.pipeline,
+                        )
+                    };
+                    unsafe {
+                        device.cmd_bind_descriptor_sets(
+                            cmd,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            imgui_renderer.pipeline_layout,
+                            0,
+                            &[],
+                            &[],
+                        )
+                    };
+                    unsafe {
+                        device.cmd_begin_render_pass(
+                            cmd,
+                            &render_pass_begin_info,
+                            vk::SubpassContents::INLINE,
+                        )
+                    };
+
+                    let (vtx_count, idx_count) = imgui_draw_data.draw_lists().fold(
+                        (0, 0),
+                        |(vtx_count, idx_count), draw_list| {
+                            (
+                                vtx_count + draw_list.vtx_buffer().len(),
+                                idx_count + draw_list.idx_buffer().len(),
+                            )
+                        },
+                    );
+
+                    let vtx_size = (vtx_count * std::mem::size_of::<imgui::DrawVert>()) as u64;
+                    if vtx_size > imgui_renderer.vb_capacity {
+                        // reallocate vertex buffer
+                    }
+                    let idx_size = (idx_count * std::mem::size_of::<imgui::DrawIdx>()) as u64;
+                    if idx_size > imgui_renderer.ib_capacity {
+                        // reallocate index buffer
+                    }
+
+                    let mut vb_offset = 0;
+                    let mut ib_offset = 0;
+
+                    for draw_list in imgui_draw_data.draw_lists() {
+                        {
+                            let vertices = draw_list.vtx_buffer();
+                            let dst_ptr = imgui_renderer.vb_allocation.mapped_ptr() as *mut u8;
+                            let dst_ptr = unsafe { dst_ptr.add(vb_offset) } as *mut imgui::DrawVert;
+                            let size = vertices.len() * std::mem::size_of::<imgui::DrawVert>();
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst_ptr, size)
+                            };
+                            vb_offset += size;
+                        }
+
+                        {
+                            let indices = draw_list.idx_buffer();
+                            let dst_ptr = imgui_renderer.ib_allocation.mapped_ptr() as *mut u8;
+                            let dst_ptr = unsafe { dst_ptr.add(ib_offset) } as *mut imgui::DrawIdx;
+                            let size = indices.len() * std::mem::size_of::<imgui::DrawIdx>();
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(indices.as_ptr(), dst_ptr, size)
+                            };
+                            ib_offset += size;
+                        }
+
+                        for command in draw_list.commands() {
+                            match command {
+                                imgui::DrawCmd::Elements { count, cmd_params } => {
+                                    let scissor_rect = vk::Rect2D {
+                                        offset: vk::Offset2D {
+                                            x: cmd_params.clip_rect[0] as i32,
+                                            y: cmd_params.clip_rect[1] as i32,
+                                        },
+                                        extent: vk::Extent2D {
+                                            width: (cmd_params.clip_rect[2]
+                                                - cmd_params.clip_rect[0])
+                                                as u32,
+                                            height: (cmd_params.clip_rect[3]
+                                                - cmd_params.clip_rect[1])
+                                                as u32,
+                                        },
+                                    };
+                                    unsafe { device.cmd_set_scissor(cmd, 0, &[scissor_rect]) };
+
+                                    unsafe {
+                                        device.cmd_draw_indexed(
+                                            cmd,
+                                            count as u32,
+                                            1,
+                                            cmd_params.idx_offset as u32,
+                                            cmd_params.vtx_offset as i32,
+                                            0,
+                                        )
+                                    };
+                                }
+                                _ => todo!(),
+                            }
+                        }
+                    }
+
+                    unsafe { device.cmd_end_render_pass(cmd) };
                 },
             );
 
@@ -1025,7 +1263,6 @@ fn main() {
             //);
 
             //device.queue_submit(present_queue, submits, draw_commands_reuse_fence);
-
         }
 
         Ok(())
