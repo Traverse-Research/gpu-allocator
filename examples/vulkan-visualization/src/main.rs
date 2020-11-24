@@ -5,7 +5,7 @@ use std::default::Default;
 use std::ffi::CString;
 
 use gpu_allocator::{
-    AllocationCreateDesc, MemoryLocation, VulkanAllocator, VulkanAllocatorCreateDesc, SubAllocation
+    AllocationCreateDesc, MemoryLocation, SubAllocation, VulkanAllocator, VulkanAllocatorCreateDesc,
 };
 
 #[repr(C)]
@@ -164,8 +164,6 @@ impl ImGuiRenderer {
         };
 
         let pipeline = {
-
-
             let stages = [
                 vk::PipelineShaderStageCreateInfo::builder()
                     .stage(vk::ShaderStageFlags::VERTEX)
@@ -574,7 +572,6 @@ impl ImGuiRenderer {
             (buffer, allocation)
         };
 
-
         let descriptor_sets = {
             let alloc_info = vk::DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(descriptor_pool)
@@ -596,9 +593,7 @@ impl ImGuiRenderer {
                     .dst_set(descriptor_sets[0])
                     .dst_binding(1)
                     .descriptor_type(vk::DescriptorType::SAMPLER)
-                    .image_info(&[vk::DescriptorImageInfo::builder()
-                        .sampler(sampler)
-                        .build()])
+                    .image_info(&[vk::DescriptorImageInfo::builder().sampler(sampler).build()])
                     .build(),
                 vk::WriteDescriptorSet::builder()
                     .dst_set(descriptor_sets[0])
@@ -632,7 +627,7 @@ impl ImGuiRenderer {
             font_image,
             font_image_memory,
             font_image_view,
-            
+
             descriptor_sets,
 
             vs_module,
@@ -652,7 +647,7 @@ impl ImGuiRenderer {
         window_height: u32,
         framebuffer: vk::Framebuffer,
         cmd: vk::CommandBuffer,
-    ) {    
+    ) {
         // Update constant buffer
         {
             let left = imgui_draw_data.display_pos[0];
@@ -682,7 +677,10 @@ impl ImGuiRenderer {
             .framebuffer(framebuffer)
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
-                extent: vk::Extent2D { width: window_width, height: window_height },
+                extent: vk::Extent2D {
+                    width: window_width,
+                    height: window_height,
+                },
             })
             .clear_values(&[vk::ClearValue {
                 color: vk::ClearColorValue {
@@ -691,20 +689,10 @@ impl ImGuiRenderer {
             }])
             .build();
         unsafe {
-            device.cmd_begin_render_pass(
-                cmd,
-                &render_pass_begin_info,
-                vk::SubpassContents::INLINE,
-            )
+            device.cmd_begin_render_pass(cmd, &render_pass_begin_info, vk::SubpassContents::INLINE)
         };
 
-        unsafe {
-            device.cmd_bind_pipeline(
-                cmd,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline,
-            )
-        };
+        unsafe { device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, self.pipeline) };
 
         let viewport = vk::Viewport::builder()
             .x(0.0)
@@ -735,15 +723,15 @@ impl ImGuiRenderer {
             )
         };
 
-        let (vtx_count, idx_count) = imgui_draw_data.draw_lists().fold(
-            (0, 0),
-            |(vtx_count, idx_count), draw_list| {
-                (
-                    vtx_count + draw_list.vtx_buffer().len(),
-                    idx_count + draw_list.idx_buffer().len(),
-                )
-            },
-        );
+        let (vtx_count, idx_count) =
+            imgui_draw_data
+                .draw_lists()
+                .fold((0, 0), |(vtx_count, idx_count), draw_list| {
+                    (
+                        vtx_count + draw_list.vtx_buffer().len(),
+                        idx_count + draw_list.idx_buffer().len(),
+                    )
+                });
 
         let vtx_size = (vtx_count * std::mem::size_of::<imgui::DrawVert>()) as u64;
         if vtx_size > self.vb_capacity {
@@ -779,31 +767,19 @@ impl ImGuiRenderer {
 
             {
                 let vertices = draw_list.vtx_buffer();
-                let dst_ptr =
-                    self.vb_allocation.mapped_ptr() as *mut imgui::DrawVert;
+                let dst_ptr = self.vb_allocation.mapped_ptr() as *mut imgui::DrawVert;
                 let dst_ptr = unsafe { dst_ptr.offset(vb_offset) };
                 unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        vertices.as_ptr(),
-                        dst_ptr,
-                        vertices.len(),
-                    )
+                    std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst_ptr, vertices.len())
                 };
                 vb_offset += vertices.len() as isize;
             }
 
             {
                 let indices = draw_list.idx_buffer();
-                let dst_ptr =
-                    self.ib_allocation.mapped_ptr() as *mut imgui::DrawIdx;
+                let dst_ptr = self.ib_allocation.mapped_ptr() as *mut imgui::DrawIdx;
                 let dst_ptr = unsafe { dst_ptr.offset(ib_offset) };
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        indices.as_ptr(),
-                        dst_ptr,
-                        indices.len(),
-                    )
-                };
+                unsafe { std::ptr::copy_nonoverlapping(indices.as_ptr(), dst_ptr, indices.len()) };
                 ib_offset += indices.len() as isize;
             }
 
@@ -816,12 +792,8 @@ impl ImGuiRenderer {
                                 y: cmd_params.clip_rect[1] as i32,
                             },
                             extent: vk::Extent2D {
-                                width: (cmd_params.clip_rect[2]
-                                    - cmd_params.clip_rect[0])
-                                    as u32,
-                                height: (cmd_params.clip_rect[3]
-                                    - cmd_params.clip_rect[1])
-                                    as u32,
+                                width: (cmd_params.clip_rect[2] - cmd_params.clip_rect[0]) as u32,
+                                height: (cmd_params.clip_rect[3] - cmd_params.clip_rect[1]) as u32,
                             },
                         };
                         unsafe { device.cmd_set_scissor(cmd, 0, &[scissor_rect]) };
@@ -850,8 +822,7 @@ impl ImGuiRenderer {
         device: &ash::Device,
         descriptor_pool: vk::DescriptorPool,
         allocator: &mut VulkanAllocator,
-    )
-    {
+    ) {
         //unsafe { device.free_descriptor_sets(descriptor_pool, &self.descriptor_sets) };
 
         unsafe { device.destroy_buffer(self.constant_buffer, None) };
@@ -863,10 +834,15 @@ impl ImGuiRenderer {
         unsafe { device.destroy_buffer(self.vertex_buffer, None) };
         allocator.free(self.vb_allocation).unwrap();
 
-
-        unsafe { device.destroy_sampler(self.sampler, None); }
-        unsafe { device.destroy_image_view(self.font_image_view, None); }
-        unsafe { device.destroy_image(self.font_image, None); }
+        unsafe {
+            device.destroy_sampler(self.sampler, None);
+        }
+        unsafe {
+            device.destroy_image_view(self.font_image_view, None);
+        }
+        unsafe {
+            device.destroy_image(self.font_image, None);
+        }
         allocator.free(self.font_image_memory).unwrap();
 
         unsafe { device.destroy_shader_module(self.ps_module, None) };
@@ -876,7 +852,9 @@ impl ImGuiRenderer {
 
         unsafe { device.destroy_render_pass(self.render_pass, None) };
 
-        unsafe { device.destroy_pipeline_layout(self.pipeline_layout, None); }
+        unsafe {
+            device.destroy_pipeline_layout(self.pipeline_layout, None);
+        }
 
         for &layout in self.descriptor_set_layouts.iter() {
             unsafe { device.destroy_descriptor_set_layout(layout, None) };
@@ -1366,7 +1344,6 @@ fn main() {
             }
             .unwrap();
 
-
             let ui = imgui.frame();
 
             visualizer.render(&ui);
@@ -1387,8 +1364,9 @@ fn main() {
                         window_width,
                         window_height,
                         framebuffers[present_index as usize],
-                        cmd);
-                }
+                        cmd,
+                    );
+                },
             );
 
             let present_create_info = vk::PresentInfoKHR::builder()
@@ -1402,11 +1380,12 @@ fn main() {
 
         unsafe { device.queue_wait_idle(present_queue) }?;
 
-
         drop(visualizer);
 
         for fb in framebuffers {
-            unsafe { device.destroy_framebuffer(fb, None); }
+            unsafe {
+                device.destroy_framebuffer(fb, None);
+            }
         }
 
         imgui_renderer.destroy(&device, descriptor_pool, &mut allocator);
@@ -1424,7 +1403,9 @@ fn main() {
         unsafe { device.destroy_command_pool(command_pool, None) };
         unsafe { swapchain_loader.destroy_swapchain(swapchain, None) };
         unsafe { device.destroy_device(None) };
-        unsafe { surface_loader.destroy_surface(surface, None) ;}
+        unsafe {
+            surface_loader.destroy_surface(surface, None);
+        }
         unsafe { instance.destroy_instance(None) };
         Ok(())
     });
