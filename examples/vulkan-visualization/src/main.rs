@@ -10,6 +10,12 @@ use gpu_allocator::{
     AllocationCreateDesc, MemoryLocation, VulkanAllocator, VulkanAllocatorCreateDesc,
 };
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct ImGuiCBuffer {
+    scale: [f32; 2],
+    translation: [f32; 2],
+}
 pub struct ImGuiRenderer {
     //size: (u32, u32),
     sampler: vk::Sampler,
@@ -21,10 +27,14 @@ pub struct ImGuiRenderer {
     vertex_buffer: vk::Buffer,
     index_buffer: vk::Buffer,
 
+    cb_allocation: gpu_allocator::SubAllocation,
+    constant_buffer: vk::Buffer,
+
     font_image: vk::Image,
     font_image_memory: gpu_allocator::SubAllocation,
     font_image_view: vk::ImageView,
 
+    descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
     pipeline_layout: vk::PipelineLayout,
     render_pass: vk::RenderPass,
     pipeline: vk::Pipeline,
@@ -39,7 +49,7 @@ impl ImGuiRenderer {
         cmd_reuse_fence: vk::Fence,
         queue: vk::Queue,
     ) -> Result<Self, vk::Result> {
-        let pipeline_layout = {
+        let (pipeline_layout, descriptor_set_layouts) = {
             let bindings = [
                 vk::DescriptorSetLayoutBinding::builder()
                     .binding(0)
@@ -66,25 +76,24 @@ impl ImGuiRenderer {
                 .build()];
             let set_layouts = set_layout_infos
                 .iter()
-                .map(|info| unsafe { device.create_descriptor_set_layout(info, None) }.unwrap())
-                .collect::<Vec<_>>();
+                .map(|info| Ok(unsafe { device.create_descriptor_set_layout(info, None) }?))
+                .collect::<Result<Vec<_>, vk::Result>>()?;
 
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&set_layouts)
                 .build();
-            unsafe { device.create_pipeline_layout(&layout_info, None) }.unwrap()
+            let pipeline_layout = unsafe { device.create_pipeline_layout(&layout_info, None) }?;
+
+            (pipeline_layout, set_layouts)
         };
 
         let render_pass = {
             let attachments = vk::AttachmentDescription::builder()
                 .format(vk::Format::B8G8R8A8_UNORM)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .load_op(vk::AttachmentLoadOp::LOAD)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
                 .store_op(vk::AttachmentStoreOp::STORE)
-                .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-                .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-                .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
                 .build();
 
             let subpass_description = vk::SubpassDescription::builder()
@@ -95,9 +104,20 @@ impl ImGuiRenderer {
                     .build()])
                 .build();
 
+            let dependencies = vk::SubpassDependency::builder()
+                .src_subpass(vk::SUBPASS_EXTERNAL)
+                .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+                .dst_access_mask(
+                    vk::AccessFlags::COLOR_ATTACHMENT_READ
+                        | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                )
+                .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+                .build();
+
             let render_pass_create_info = vk::RenderPassCreateInfo::builder()
                 .attachments(&[attachments])
                 .subpasses(&[subpass_description])
+                .dependencies(&[dependencies])
                 .build();
             unsafe { device.create_render_pass(&render_pass_create_info, None) }.unwrap()
         };
@@ -185,44 +205,54 @@ impl ImGuiRenderer {
                 .vertex_attribute_descriptions(&vertex_attribute_descriptions);
             let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
                 .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
-            //let viewport_state = vk::PipelineViewportStateCreateInfo::builder()
-            //    .viewport_count(1)
-            //    .viewports(vk::Viewport::builder().)
+            let viewport_state = vk::PipelineViewportStateCreateInfo::builder()
+                .viewport_count(1)
+                .scissor_count(1);
             let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
-                .depth_clamp_enable(false)
-                .rasterizer_discard_enable(true)
                 .polygon_mode(vk::PolygonMode::FILL)
                 .cull_mode(vk::CullModeFlags::NONE)
                 .front_face(vk::FrontFace::CLOCKWISE)
                 .depth_bias_enable(false)
                 .line_width(1.0);
             let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
-                .rasterization_samples(vk::SampleCountFlags::TYPE_1)
-                .sample_shading_enable(false)
-                .sample_mask(&[!0u32])
-                .alpha_to_coverage_enable(false)
-                .alpha_to_one_enable(false);
+                .rasterization_samples(vk::SampleCountFlags::TYPE_1);
+            let noop_stencil_state = vk::StencilOpState {
+                fail_op: vk::StencilOp::KEEP,
+                pass_op: vk::StencilOp::KEEP,
+                depth_fail_op: vk::StencilOp::KEEP,
+                compare_op: vk::CompareOp::ALWAYS,
+                ..Default::default()
+            };
             let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
                 .depth_test_enable(false)
                 .depth_write_enable(false)
                 .depth_compare_op(vk::CompareOp::ALWAYS)
                 .depth_bounds_test_enable(false)
-                .stencil_test_enable(false);
+                .stencil_test_enable(false)
+                .front(noop_stencil_state)
+                .back(noop_stencil_state)
+                .max_depth_bounds(1.0);
             let attachments = [vk::PipelineColorBlendAttachmentState::builder()
-                .blend_enable(false)
-                .build()]; //TODO(max)
+                .blend_enable(true)
+                .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+                .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                .color_blend_op(vk::BlendOp::ADD)
+                .src_alpha_blend_factor(vk::BlendFactor::ZERO)
+                .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+                .alpha_blend_op(vk::BlendOp::ADD)
+                .color_write_mask(vk::ColorComponentFlags::all())
+                .build()];
             let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
-                .logic_op_enable(true)
-                .logic_op(vk::LogicOp::SET)
-                .attachments(&attachments)
-                .blend_constants([1.0, 1.0, 1.0, 1.0]);
+                .logic_op(vk::LogicOp::CLEAR)
+                .attachments(&attachments);
             let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
-                .dynamic_states(&[vk::DynamicState::VIEWPORT]);
+                .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
 
             let pipeline_create_info = vk::GraphicsPipelineCreateInfo::builder()
                 .stages(&stages)
                 .vertex_input_state(&vertex_input_state)
                 .input_assembly_state(&input_assembly_state)
+                .viewport_state(&viewport_state)
                 .rasterization_state(&rasterization_state)
                 .multisample_state(&multisample_state)
                 .depth_stencil_state(&depth_stencil_state)
@@ -242,8 +272,6 @@ impl ImGuiRenderer {
             }
             .unwrap()[0]
         };
-
-        //do a thing?
 
         let (font_image, font_image_memory, font_image_view) = {
             println!("fonts");
@@ -527,6 +555,30 @@ impl ImGuiRenderer {
 
             (buffer, allocation, capacity)
         };
+        let (constant_buffer, cb_allocation) = {
+            let create_info = vk::BufferCreateInfo::builder()
+                .size(std::mem::size_of::<ImGuiCBuffer>() as u64)
+                .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .build();
+
+            let buffer = unsafe { device.create_buffer(&create_info, None) }?;
+
+            let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+
+            let allocation = allocator
+                .allocate(&AllocationCreateDesc {
+                    name: "ImGui Constant buffer",
+                    requirements,
+                    location: MemoryLocation::CpuToGpu,
+                    linear: true,
+                })
+                .unwrap();
+
+            unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset()) }?;
+
+            (buffer, allocation)
+        };
 
         Ok(Self {
             vb_capacity,
@@ -537,12 +589,16 @@ impl ImGuiRenderer {
             ib_allocation,
             index_buffer,
 
+            cb_allocation,
+            constant_buffer,
+
             sampler,
 
             font_image,
             font_image_memory,
             font_image_view,
 
+            descriptor_set_layouts,
             pipeline_layout,
             render_pass,
             pipeline,
@@ -593,6 +649,120 @@ fn record_and_submit_command_buffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuff
         )
     }
     .unwrap();
+}
+
+fn handle_imgui_event(
+    io: &mut imgui::Io,
+    window: &winit::window::Window,
+    event: &winit::event::Event<()>,
+) -> bool {
+    use winit::event::{
+        DeviceEvent, ElementState, Event, KeyboardInput, MouseButton, MouseScrollDelta, TouchPhase,
+        VirtualKeyCode, WindowEvent,
+    };
+
+    match event {
+        Event::WindowEvent { event, window_id } if *window_id == window.id() => match *event {
+            WindowEvent::Resized(physical_size) => {
+                io.display_size = [physical_size.width as f32, physical_size.height as f32];
+                false
+            }
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        virtual_keycode: Some(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => {
+                let pressed = state == ElementState::Pressed;
+                io.keys_down[key as usize] = pressed;
+                match key {
+                    VirtualKeyCode::LShift | VirtualKeyCode::RShift => io.key_shift = pressed,
+                    VirtualKeyCode::LControl | VirtualKeyCode::RControl => io.key_ctrl = pressed,
+                    VirtualKeyCode::LAlt | VirtualKeyCode::RAlt => io.key_alt = pressed,
+                    VirtualKeyCode::LWin | VirtualKeyCode::RWin => io.key_super = pressed,
+                    _ => (),
+                }
+
+                io.want_capture_keyboard
+            }
+            WindowEvent::ReceivedCharacter(ch) => {
+                io.add_input_character(ch);
+
+                io.want_capture_keyboard
+            }
+
+            WindowEvent::CursorMoved { position, .. } => {
+                io.mouse_pos = [position.x as f32, position.y as f32];
+
+                io.want_capture_mouse
+            }
+            WindowEvent::MouseWheel {
+                delta,
+                phase: TouchPhase::Moved,
+                ..
+            } => {
+                match delta {
+                    MouseScrollDelta::LineDelta(h, v) => {
+                        io.mouse_wheel_h = h;
+                        io.mouse_wheel = v;
+                    }
+                    MouseScrollDelta::PixelDelta(pos) => {
+                        match pos.x.partial_cmp(&0.0) {
+                            Some(std::cmp::Ordering::Greater) => io.mouse_wheel_h += 1.0,
+                            Some(std::cmp::Ordering::Less) => io.mouse_wheel_h -= 1.0,
+                            _ => (),
+                        }
+                        match pos.y.partial_cmp(&0.0) {
+                            Some(std::cmp::Ordering::Greater) => io.mouse_wheel += 1.0,
+                            Some(std::cmp::Ordering::Less) => io.mouse_wheel -= 1.0,
+                            _ => (),
+                        }
+                    }
+                }
+
+                io.want_capture_mouse
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                let pressed = state == ElementState::Pressed;
+                match button {
+                    MouseButton::Left => io.mouse_down[0] = pressed,
+                    MouseButton::Right => io.mouse_down[1] = pressed,
+                    MouseButton::Middle => io.mouse_down[2] = pressed,
+                    MouseButton::Other(idx @ 0..=4) => io.mouse_down[idx as usize] = pressed,
+                    _ => (),
+                }
+
+                io.want_capture_mouse
+            }
+            _ => false,
+        },
+        // Track key release events outside our window. If we don't do this,
+        // we might never see the release event if some other window gets focus.
+        Event::DeviceEvent {
+            event:
+                DeviceEvent::Key(KeyboardInput {
+                    state: ElementState::Released,
+                    virtual_keycode: Some(key),
+                    ..
+                }),
+            ..
+        } => {
+            io.keys_down[*key as usize] = false;
+            match *key {
+                VirtualKeyCode::LShift | VirtualKeyCode::RShift => io.key_shift = false,
+                VirtualKeyCode::LControl | VirtualKeyCode::RControl => io.key_ctrl = false,
+                VirtualKeyCode::LAlt | VirtualKeyCode::RAlt => io.key_alt = false,
+                VirtualKeyCode::LWin | VirtualKeyCode::RWin => io.key_super = false,
+                _ => (),
+            }
+
+            io.want_capture_keyboard
+        }
+        _ => false,
+    }
 }
 fn main() {
     let entry = ash::Entry::new().unwrap();
@@ -824,107 +994,12 @@ fn main() {
             debug_settings: Default::default(),
         });
 
-        /*
-        let depth_image_create_info = vk::ImageCreateInfo::builder()
-            .image_type(vk::ImageType::TYPE_2D)
-            .format(vk::Format::D16_UNORM)
-            .extent(vk::Extent3D {
-                width: surface_resolution.width,
-                height: surface_resolution.height,
-                depth: 1,
-            })
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE);
-        let depth_image = unsafe { device.create_image(&depth_image_create_info, None) }.unwrap();
-        let depth_image_memory_requirements =
-            unsafe { device.get_image_memory_requirements(depth_image) };
-
-
-
-        let depth_image_allocation = allocator
-            .allocate(&AllocationCreateDesc {
-                name: "swapchain image",
-                requirements: depth_image_memory_requirements,
-                location: MemoryLocation::GpuOnly,
-                linear: false,
-            })
-            .unwrap();
-
-        unsafe {
-            device.bind_image_memory(
-                depth_image,
-                depth_image_allocation.memory(),
-                depth_image_allocation.offset(),
-            )
-        }
-        .unwrap();
-        */
-
         let fence_create_info =
             vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
         let draw_commands_reuse_fence =
             unsafe { device.create_fence(&fence_create_info, None) }.unwrap();
         let setup_commands_reuse_fence =
             unsafe { device.create_fence(&fence_create_info, None) }.unwrap();
-
-        /*
-        record_and_submit_command_buffer(
-            &device,
-            setup_command_buffer,
-            setup_commands_reuse_fence,
-            present_queue,
-            &[],
-            &[],
-            &[],
-            |device, cmd| {
-                let layout_transition_barriers = vk::ImageMemoryBarrier::builder()
-                    .image(depth_image)
-                    .dst_access_mask(
-                        vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                            | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                    )
-                    .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                    .old_layout(vk::ImageLayout::UNDEFINED)
-                    .subresource_range(
-                        vk::ImageSubresourceRange::builder()
-                            .aspect_mask(vk::ImageAspectFlags::DEPTH)
-                            .layer_count(1)
-                            .level_count(1)
-                            .build(),
-                    );
-
-                unsafe {
-                    device.cmd_pipeline_barrier(
-                        cmd,
-                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                        vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[layout_transition_barriers.build()],
-                    )
-                };
-            },
-        );
-        */
-
-        //let depth_image_view_info = vk::ImageViewCreateInfo::builder()
-        //    .subresource_range(
-        //        vk::ImageSubresourceRange::builder()
-        //            .aspect_mask(vk::ImageAspectFlags::DEPTH)
-        //            .level_count(1)
-        //            .layer_count(1)
-        //            .build(),
-        //    )
-        //    .image(depth_image)
-        //    .format(depth_image_create_info.format)
-        //    .view_type(vk::ImageViewType::TYPE_2D);
-        //let depth_image_view =
-        //    unsafe { device.create_image_view(&depth_image_view_info, None) }.unwrap();
 
         let semaphore_create_info = vk::SemaphoreCreateInfo::default();
 
@@ -1032,6 +1107,27 @@ fn main() {
         let mut imgui = imgui::Context::create();
         imgui.io_mut().display_size = [window_width as f32, window_height as f32];
 
+        let descriptor_pool = {
+            let pool_sizes = [
+                vk::DescriptorPoolSize::builder()
+                    .ty(vk::DescriptorType::UNIFORM_BUFFER)
+                    .descriptor_count(1)
+                    .build(),
+                vk::DescriptorPoolSize::builder()
+                    .ty(vk::DescriptorType::SAMPLED_IMAGE)
+                    .descriptor_count(1)
+                    .build(),
+                vk::DescriptorPoolSize::builder()
+                    .ty(vk::DescriptorType::SAMPLER)
+                    .descriptor_count(1)
+                    .build(),
+            ];
+            let create_info = vk::DescriptorPoolCreateInfo::builder()
+                .max_sets(1)
+                .pool_sizes(&pool_sizes);
+            unsafe { device.create_descriptor_pool(&create_info, None) }?
+        };
+
         let imgui_renderer = ImGuiRenderer::new(
             &mut imgui,
             &device,
@@ -1041,7 +1137,46 @@ fn main() {
             present_queue,
         )?;
 
-        let frame_buffers = present_image_views
+        let descriptor_sets = {
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&imgui_renderer.descriptor_set_layouts);
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }?
+        };
+
+        let write_desc_sets = [
+            vk::WriteDescriptorSet::builder()
+                .dst_set(descriptor_sets[0])
+                .dst_binding(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(&[vk::DescriptorBufferInfo::builder()
+                    .buffer(imgui_renderer.constant_buffer)
+                    .offset(0)
+                    .range(std::mem::size_of::<ImGuiCBuffer>() as u64)
+                    .build()])
+                .build(),
+            vk::WriteDescriptorSet::builder()
+                .dst_set(descriptor_sets[0])
+                .dst_binding(1)
+                .descriptor_type(vk::DescriptorType::SAMPLER)
+                .image_info(&[vk::DescriptorImageInfo::builder()
+                    .sampler(imgui_renderer.sampler)
+                    .build()])
+                .build(),
+            vk::WriteDescriptorSet::builder()
+                .dst_set(descriptor_sets[0])
+                .dst_binding(2)
+                .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                .image_info(&[vk::DescriptorImageInfo::builder()
+                    .image_view(imgui_renderer.font_image_view)
+                    //.sampler(imgui_renderer.sampler)
+                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .build()])
+                .build(),
+        ];
+        unsafe { device.update_descriptor_sets(&write_desc_sets, &[]) };
+
+        let framebuffers = present_image_views
             .iter()
             .map(|&view| {
                 let create_info = vk::FramebufferCreateInfo::builder()
@@ -1056,8 +1191,11 @@ fn main() {
             })
             .collect::<Vec<_>>();
 
+        let mut visualizer = gpu_allocator::visualizer::AllocatorVisualizer::new(&allocator);
+
         loop {
             let event = event_recv.recv().unwrap();
+            handle_imgui_event(imgui.io_mut(), &window, &event);
 
             let mut should_quit = false;
             match event {
@@ -1092,29 +1230,40 @@ fn main() {
 
             let clear_values = [vk::ClearValue {
                 color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 0.0],
+                    float32: [1.0, 0.5, 1.0, 0.0],
                 },
             }];
 
-            let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                .render_pass(imgui_renderer.render_pass)
-                .framebuffer(frame_buffers[present_index as usize])
-                .render_area(vk::Rect2D {
-                    offset: vk::Offset2D { x: 0, y: 0 },
-                    extent: surface_resolution,
-                })
-                .clear_values(&clear_values);
-
             let ui = imgui.frame();
+            let mut open = true;
+            //ui.show_demo_window(&mut open);
+            visualizer.render(&ui);
+
             let imgui_draw_data = ui.render();
 
-            //let descriptor_pool = {
-            //    let create_info = vk::DescriptorPoolCreateInfo::builder()
-            //        .max_sets(1)
-            //        .pool_sizes(&[vk::DescriptorPoolSize::builder().ty(vk::DescriptorType::SAMPLED_IMAGE)])
-            //    unsafe { device.create_descriptor_pool(create_info, allocation_callbacks) };
-            //
-            //}
+            // Update constant buffer
+            {
+                let left = imgui_draw_data.display_pos[0];
+                let right = imgui_draw_data.display_pos[0] + imgui_draw_data.display_size[0];
+                let top = imgui_draw_data.display_pos[1];
+                let bottom = imgui_draw_data.display_pos[1] + imgui_draw_data.display_size[1];
+
+                let cbuffer_data = ImGuiCBuffer {
+                    scale: [(2.0 / (right - left)), (2.0 / (bottom - top))],
+                    translation: [
+                        (right + left) / (left - right),
+                        (top + bottom) / (top - bottom),
+                    ],
+                };
+
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        &cbuffer_data as *const _,
+                        imgui_renderer.cb_allocation.mapped_ptr() as *mut ImGuiCBuffer,
+                        1,
+                    )
+                };
+            }
 
             record_and_submit_command_buffer(
                 &device,
@@ -1125,20 +1274,20 @@ fn main() {
                 &[present_complete_semaphore],
                 &[rendering_complete_semaphore],
                 |device, cmd| {
+                    let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+                        .render_pass(imgui_renderer.render_pass)
+                        .framebuffer(framebuffers[present_index as usize])
+                        .render_area(vk::Rect2D {
+                            offset: vk::Offset2D { x: 0, y: 0 },
+                            extent: surface_resolution,
+                        })
+                        .clear_values(&clear_values)
+                        .build();
                     unsafe {
-                        device.cmd_bind_vertex_buffers(
+                        device.cmd_begin_render_pass(
                             cmd,
-                            0,
-                            &[imgui_renderer.vertex_buffer],
-                            &[0],
-                        )
-                    };
-                    unsafe {
-                        device.cmd_bind_index_buffer(
-                            cmd,
-                            imgui_renderer.index_buffer,
-                            0,
-                            vk::IndexType::UINT16,
+                            &render_pass_begin_info,
+                            vk::SubpassContents::INLINE,
                         )
                     };
 
@@ -1149,21 +1298,33 @@ fn main() {
                             imgui_renderer.pipeline,
                         )
                     };
+
+                    let viewport = vk::Viewport::builder()
+                        .x(0.0)
+                        .y(0.0)
+                        .width(window_width as f32)
+                        .height(window_height as f32)
+                        .build();
+                    unsafe { device.cmd_set_viewport(cmd, 0, &[viewport]) };
+                    {
+                        let scissor_rect = vk::Rect2D {
+                            offset: vk::Offset2D { x: 0, y: 0 },
+                            extent: vk::Extent2D {
+                                width: window_width,
+                                height: window_height,
+                            },
+                        };
+                        unsafe { device.cmd_set_scissor(cmd, 0, &[scissor_rect]) };
+                    }
+
                     unsafe {
                         device.cmd_bind_descriptor_sets(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
                             imgui_renderer.pipeline_layout,
                             0,
+                            &descriptor_sets,
                             &[],
-                            &[],
-                        )
-                    };
-                    unsafe {
-                        device.cmd_begin_render_pass(
-                            cmd,
-                            &render_pass_begin_info,
-                            vk::SubpassContents::INLINE,
                         )
                     };
 
@@ -1176,40 +1337,69 @@ fn main() {
                             )
                         },
                     );
+                    //println!("vtx_count: {}", vtx_count);
+                    //println!("idx_count: {}", idx_count);
 
                     let vtx_size = (vtx_count * std::mem::size_of::<imgui::DrawVert>()) as u64;
                     if vtx_size > imgui_renderer.vb_capacity {
                         // reallocate vertex buffer
+                        todo!();
                     }
                     let idx_size = (idx_count * std::mem::size_of::<imgui::DrawIdx>()) as u64;
                     if idx_size > imgui_renderer.ib_capacity {
                         // reallocate index buffer
+                        todo!();
                     }
 
                     let mut vb_offset = 0;
                     let mut ib_offset = 0;
 
                     for draw_list in imgui_draw_data.draw_lists() {
+                        unsafe {
+                            device.cmd_bind_vertex_buffers(
+                                cmd,
+                                0,
+                                &[imgui_renderer.vertex_buffer],
+                                &[vb_offset as u64 * std::mem::size_of::<imgui::DrawVert>() as u64],
+                            )
+                        };
+                        unsafe {
+                            device.cmd_bind_index_buffer(
+                                cmd,
+                                imgui_renderer.index_buffer,
+                                ib_offset as u64 * std::mem::size_of::<imgui::DrawIdx>() as u64,
+                                vk::IndexType::UINT16,
+                            )
+                        };
+
                         {
                             let vertices = draw_list.vtx_buffer();
-                            let dst_ptr = imgui_renderer.vb_allocation.mapped_ptr() as *mut u8;
-                            let dst_ptr = unsafe { dst_ptr.add(vb_offset) } as *mut imgui::DrawVert;
-                            let size = vertices.len() * std::mem::size_of::<imgui::DrawVert>();
+                            let dst_ptr =
+                                imgui_renderer.vb_allocation.mapped_ptr() as *mut imgui::DrawVert;
+                            let dst_ptr = unsafe { dst_ptr.offset(vb_offset) };
                             unsafe {
-                                std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst_ptr, size)
+                                std::ptr::copy_nonoverlapping(
+                                    vertices.as_ptr(),
+                                    dst_ptr,
+                                    vertices.len(),
+                                )
                             };
-                            vb_offset += size;
+                            vb_offset += vertices.len() as isize;
                         }
 
                         {
                             let indices = draw_list.idx_buffer();
-                            let dst_ptr = imgui_renderer.ib_allocation.mapped_ptr() as *mut u8;
-                            let dst_ptr = unsafe { dst_ptr.add(ib_offset) } as *mut imgui::DrawIdx;
-                            let size = indices.len() * std::mem::size_of::<imgui::DrawIdx>();
+                            let dst_ptr =
+                                imgui_renderer.ib_allocation.mapped_ptr() as *mut imgui::DrawIdx;
+                            let dst_ptr = unsafe { dst_ptr.offset(ib_offset) };
                             unsafe {
-                                std::ptr::copy_nonoverlapping(indices.as_ptr(), dst_ptr, size)
+                                std::ptr::copy_nonoverlapping(
+                                    indices.as_ptr(),
+                                    dst_ptr,
+                                    indices.len(),
+                                )
                             };
-                            ib_offset += size;
+                            ib_offset += indices.len() as isize;
                         }
 
                         for command in draw_list.commands() {
@@ -1251,18 +1441,13 @@ fn main() {
                 },
             );
 
-            //record_and_submit_command_buffer(
-            //    &device,
-            //    cmd,
-            //    cmd_reuse_fence,
-            //    queue,
-            //    &[],
-            //    &[],
-            //    &[],
-            //    |device, cmd| {},
-            //);
+            let present_create_info = vk::PresentInfoKHR::builder()
+                .wait_semaphores(&[rendering_complete_semaphore])
+                .swapchains(&[swapchain])
+                .image_indices(&[present_index])
+                .build();
 
-            //device.queue_submit(present_queue, submits, draw_commands_reuse_fence);
+            unsafe { swapchain_loader.queue_present(present_queue, &present_create_info) }?;
         }
 
         Ok(())
