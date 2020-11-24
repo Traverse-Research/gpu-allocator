@@ -196,8 +196,7 @@ fn main() {
         println!("Allocation and deallocation of GpuToCpu memory was successful.");
     }
 
-
-    drop(allocator);
+    drop(allocator); // Explicitly drop before destruction of device and instance.
     unsafe { device.destroy_device(None) };
     unsafe { instance.destroy_instance(None) };
 }
