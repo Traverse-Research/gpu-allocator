@@ -774,5 +774,15 @@ impl Drop for VulkanAllocator {
         if self.debug_settings.log_leaks_on_shutdown {
             self.report_memory_leaks(Level::Warn);
         }
+
+        // Free all remaining memory blocks
+        for mem_type in self.memory_types.iter_mut() {
+            for mem_block in mem_type.memory_blocks.iter_mut() {
+                let block = mem_block.take();
+                if let Some(block) = block {
+                    block.destroy(&self.device);
+                }
+            }
+        }
     }
 }
