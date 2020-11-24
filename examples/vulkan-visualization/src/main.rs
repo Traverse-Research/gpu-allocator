@@ -817,14 +817,7 @@ impl ImGuiRenderer {
         unsafe { device.cmd_end_render_pass(cmd) };
     }
 
-    fn destroy(
-        self,
-        device: &ash::Device,
-        descriptor_pool: vk::DescriptorPool,
-        allocator: &mut VulkanAllocator,
-    ) {
-        //unsafe { device.free_descriptor_sets(descriptor_pool, &self.descriptor_sets) };
-
+    fn destroy(self, device: &ash::Device, allocator: &mut VulkanAllocator) {
         unsafe { device.destroy_buffer(self.constant_buffer, None) };
         allocator.free(self.cb_allocation).unwrap();
 
@@ -1388,7 +1381,7 @@ fn main() {
             }
         }
 
-        imgui_renderer.destroy(&device, descriptor_pool, &mut allocator);
+        imgui_renderer.destroy(&device, &mut allocator);
 
         unsafe { device.destroy_descriptor_pool(descriptor_pool, None) };
         unsafe { device.destroy_semaphore(rendering_complete_semaphore, None) };
