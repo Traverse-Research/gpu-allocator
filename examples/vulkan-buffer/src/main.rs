@@ -94,7 +94,7 @@ fn main() {
 
     // Setting up the allocator
     let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
-        instance,
+        instance: instance.clone(),
         device: device.clone(),
         physical_device: pdevice,
         debug_settings: Default::default(),
@@ -195,4 +195,8 @@ fn main() {
 
         println!("Allocation and deallocation of GpuToCpu memory was successful.");
     }
+
+    drop(allocator); // Explicitly drop before destruction of device and instance.
+    unsafe { device.destroy_device(None) };
+    unsafe { instance.destroy_instance(None) };
 }
