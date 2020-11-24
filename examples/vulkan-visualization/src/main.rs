@@ -36,6 +36,8 @@ pub struct ImGuiRenderer {
 
     descriptor_sets: Vec<vk::DescriptorSet>,
 
+    vs_module: vk::ShaderModule,
+    ps_module: vk::ShaderModule,
     descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
     pipeline_layout: vk::PipelineLayout,
     render_pass: vk::RenderPass,
@@ -125,45 +127,47 @@ impl ImGuiRenderer {
             unsafe { device.create_render_pass(&render_pass_create_info, None) }.unwrap()
         };
 
+        let vs_module = {
+            let vs = include_str!("./shaders/imgui.vs.hlsl");
+            let vs = hassle_rs::compile_hlsl(
+                "imgui.vs.hlsl",
+                vs,
+                "main",
+                "vs_5_0",
+                &["-WX", "-spirv", "-fvk-use-scalar-layout"],
+                &[],
+            )
+            .unwrap();
+
+            #[allow(clippy::cast_ptr_alignment)]
+            let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
+                assert_eq!(vs.len() % 4, 0);
+                std::slice::from_raw_parts(vs.as_ptr() as *const u32, vs.len() / 4)
+            });
+            unsafe { device.create_shader_module(&shader_info, None) }?
+        };
+        let ps_module = {
+            let ps = include_str!("./shaders/imgui.ps.hlsl");
+            let ps = hassle_rs::compile_hlsl(
+                "imgui.ps.hlsl",
+                ps,
+                "main",
+                "ps_5_0",
+                &["-WX", "-spirv", "-fvk-use-scalar-layout"],
+                &[],
+            )
+            .unwrap();
+
+            #[allow(clippy::cast_ptr_alignment)]
+            let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
+                assert_eq!(ps.len() % 4, 0);
+                std::slice::from_raw_parts(ps.as_ptr() as *const u32, ps.len() / 4)
+            });
+            unsafe { device.create_shader_module(&shader_info, None) }?
+        };
+
         let pipeline = {
-            let vs_module = {
-                let vs = include_str!("./shaders/imgui.vs.hlsl");
-                let vs = hassle_rs::compile_hlsl(
-                    "imgui.vs.hlsl",
-                    vs,
-                    "main",
-                    "vs_5_0",
-                    &["-WX", "-spirv", "-fvk-use-scalar-layout"],
-                    &[],
-                )
-                .unwrap();
 
-                #[allow(clippy::cast_ptr_alignment)]
-                let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
-                    assert_eq!(vs.len() % 4, 0);
-                    std::slice::from_raw_parts(vs.as_ptr() as *const u32, vs.len() / 4)
-                });
-                unsafe { device.create_shader_module(&shader_info, None) }?
-            };
-            let ps_module = {
-                let ps = include_str!("./shaders/imgui.ps.hlsl");
-                let ps = hassle_rs::compile_hlsl(
-                    "imgui.ps.hlsl",
-                    ps,
-                    "main",
-                    "ps_5_0",
-                    &["-WX", "-spirv", "-fvk-use-scalar-layout"],
-                    &[],
-                )
-                .unwrap();
-
-                #[allow(clippy::cast_ptr_alignment)]
-                let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
-                    assert_eq!(ps.len() % 4, 0);
-                    std::slice::from_raw_parts(ps.as_ptr() as *const u32, ps.len() / 4)
-                });
-                unsafe { device.create_shader_module(&shader_info, None) }?
-            };
 
             let stages = [
                 vk::PipelineShaderStageCreateInfo::builder()
@@ -644,6 +648,8 @@ impl ImGuiRenderer {
             
             descriptor_sets,
 
+            vs_module,
+            ps_module,
             descriptor_set_layouts,
             pipeline_layout,
             render_pass,
@@ -850,6 +856,44 @@ impl ImGuiRenderer {
         }
 
         unsafe { device.cmd_end_render_pass(cmd) };
+    }
+
+    fn destroy(
+        self,
+        device: &ash::Device,
+        descriptor_pool: vk::DescriptorPool,
+        allocator: &mut VulkanAllocator,
+    )
+    {
+        //unsafe { device.free_descriptor_sets(descriptor_pool, &self.descriptor_sets) };
+
+        unsafe { device.destroy_buffer(self.constant_buffer, None) };
+        allocator.free(self.cb_allocation).unwrap();
+
+        unsafe { device.destroy_buffer(self.index_buffer, None) };
+        allocator.free(self.ib_allocation).unwrap();
+
+        unsafe { device.destroy_buffer(self.vertex_buffer, None) };
+        allocator.free(self.vb_allocation).unwrap();
+
+
+        unsafe { device.destroy_sampler(self.sampler, None); }
+        unsafe { device.destroy_image_view(self.font_image_view, None); }
+        unsafe { device.destroy_image(self.font_image, None); }
+        allocator.free(self.font_image_memory).unwrap();
+
+        unsafe { device.destroy_shader_module(self.ps_module, None) };
+        unsafe { device.destroy_shader_module(self.vs_module, None) };
+
+        unsafe { device.destroy_pipeline(self.pipeline, None) };
+
+        unsafe { device.destroy_render_pass(self.render_pass, None) };
+
+        unsafe { device.destroy_pipeline_layout(self.pipeline_layout, None); }
+
+        for &layout in self.descriptor_set_layouts.iter() {
+            unsafe { device.destroy_descriptor_set_layout(layout, None) };
+        }
     }
 }
 
@@ -1193,11 +1237,11 @@ fn main() {
         let pool_create_info = vk::CommandPoolCreateInfo::builder()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue_family_index as u32);
-        let pool = unsafe { device.create_command_pool(&pool_create_info, None) }.unwrap();
+        let command_pool = unsafe { device.create_command_pool(&pool_create_info, None) }.unwrap();
 
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
             .command_buffer_count(2)
-            .command_pool(pool)
+            .command_pool(command_pool)
             .level(vk::CommandBufferLevel::PRIMARY);
 
         let command_buffers =
@@ -1232,7 +1276,7 @@ fn main() {
 
         // Setting up the allocator
         let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
-            instance,
+            instance: instance.clone(),
             device: device.clone(),
             physical_device: pdevice,
             debug_settings: Default::default(),
@@ -1372,6 +1416,32 @@ fn main() {
             unsafe { swapchain_loader.queue_present(present_queue, &present_create_info) }?;
         }
 
+        unsafe { device.queue_wait_idle(present_queue) }?;
+
+
+        drop(visualizer);
+
+        for fb in framebuffers {
+            unsafe { device.destroy_framebuffer(fb, None); }
+        }
+
+        imgui_renderer.destroy(&device, descriptor_pool, &mut allocator);
+
+        unsafe { device.destroy_descriptor_pool(descriptor_pool, None) };
+        unsafe { device.destroy_semaphore(rendering_complete_semaphore, None) };
+        unsafe { device.destroy_semaphore(present_complete_semaphore, None) };
+        unsafe { device.destroy_fence(setup_commands_reuse_fence, None) };
+        unsafe { device.destroy_fence(draw_commands_reuse_fence, None) };
+        drop(allocator);
+        for view in present_image_views {
+            unsafe { device.destroy_image_view(view, None) };
+        }
+        unsafe { device.free_command_buffers(command_pool, &command_buffers) };
+        unsafe { device.destroy_command_pool(command_pool, None) };
+        unsafe { swapchain_loader.destroy_swapchain(swapchain, None) };
+        unsafe { device.destroy_device(None) };
+        unsafe { surface_loader.destroy_surface(surface, None) ;}
+        unsafe { instance.destroy_instance(None) };
         Ok(())
     });
 
