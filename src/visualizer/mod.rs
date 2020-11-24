@@ -9,6 +9,24 @@ use std::borrow::Borrow;
 
 // Default value for block visualizer granularity.
 const DEFAULT_BYTES_PER_UNIT: i32 = 1024;
+
+#[derive(Clone)]
+pub struct ColorScheme {
+    free_color: ImColor,
+    linear_color: ImColor,
+    non_linear_color: ImColor,
+}
+
+impl Default for ColorScheme {
+    fn default() -> Self {
+        Self {
+            free_color: 0xff9f_9f9f.into(),       // gray
+            linear_color: 0xfffa_ce5b.into(),     // blue
+            non_linear_color: 0xffb8_a9fa.into(), // pink
+        }
+    }
+}
+
 struct AllocatorVisualizerBlockWindow {
     memory_type_index: usize,
     block_index: usize,
@@ -29,6 +47,7 @@ pub struct AllocatorVisualizer<'a> {
     allocator: &'a VulkanAllocator,
     selected_blocks: Vec<AllocatorVisualizerBlockWindow>,
     focus: Option<usize>,
+    color_scheme: ColorScheme,
 }
 
 pub(crate) trait SubAllocatorVisualizer {
@@ -38,7 +57,14 @@ pub(crate) trait SubAllocatorVisualizer {
     fn draw_base_info(&self, ui: &imgui::Ui) {
         ui.text("No sub allocator information available");
     }
-    fn draw_visualization(&self, _ui: &imgui::Ui, _bytes_per_unit: i32, _show_backtraces: bool) {}
+    fn draw_visualization(
+        &self,
+        _color_scheme: &ColorScheme,
+        _ui: &imgui::Ui,
+        _bytes_per_unit: i32,
+        _show_backtraces: bool,
+    ) {
+    }
 }
 
 impl SubAllocatorVisualizer for free_list_allocator::FreeListAllocator {
@@ -52,7 +78,13 @@ impl SubAllocatorVisualizer for free_list_allocator::FreeListAllocator {
         ui.text(&format!("chunk id counter: {}", self.chunk_id_counter));
     }
 
-    fn draw_visualization(&self, ui: &imgui::Ui, bytes_per_unit: i32, show_backtraces: bool) {
+    fn draw_visualization(
+        &self,
+        color_scheme: &ColorScheme,
+        ui: &imgui::Ui,
+        bytes_per_unit: i32,
+        show_backtraces: bool,
+    ) {
         let draw_list = ui.get_window_draw_list();
         let window_size = ui.window_size();
         let base_pos = ui.cursor_screen_pos();
@@ -75,9 +107,9 @@ impl SubAllocatorVisualizer for free_list_allocator::FreeListAllocator {
         for chunk in sorted_chunks.iter() {
             // Select a color based on the memory type.
             let color = match chunk.allocation_type {
-                AllocationType::Free => 0xff9f_9f9f,      // gray
-                AllocationType::Linear => 0xfffa_ce5b,    // blue
-                AllocationType::NonLinear => 0xffb8_a9fa, // pink
+                AllocationType::Free => color_scheme.free_color,
+                AllocationType::Linear => color_scheme.linear_color,
+                AllocationType::NonLinear => color_scheme.non_linear_color,
             };
             // Draw one or multiple bars based on the size of the chunk.
             let mut bytes_to_draw = chunk.size as f32;
@@ -213,10 +245,15 @@ impl<'a> AllocatorVisualizer<'a> {
             allocator,
             selected_blocks: Vec::default(),
             focus: None,
+            color_scheme: ColorScheme::default(),
         }
     }
 
-    pub(crate) fn render_main_window(&mut self, ui: &imgui::Ui, alloc: &VulkanAllocator) {
+    pub fn set_color_scheme(&mut self, color_scheme: ColorScheme) {
+        self.color_scheme = color_scheme;
+    }
+
+    fn render_main_window(&mut self, ui: &imgui::Ui, alloc: &VulkanAllocator) {
         imgui::Window::new(imgui::im_str!("Allocator visualiziation"))
             .collapsed(true, Condition::FirstUseEver)
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
@@ -361,13 +398,14 @@ impl<'a> AllocatorVisualizer<'a> {
             });
     }
 
-    pub(crate) fn render_memory_block_windows(&mut self, ui: &imgui::Ui, alloc: &VulkanAllocator) {
+    fn render_memory_block_windows(&mut self, ui: &imgui::Ui, alloc: &VulkanAllocator) {
         use imgui::*;
         // Copy here to workaround the borrow checker.
         let focus_opt = self.focus;
         // Keep track of a list of windows that are signaled by imgui to be closed.
         let mut windows_to_close = Vec::default();
         // Draw each window.
+        let color_scheme = &self.color_scheme;
         for (window_i, window) in self.selected_blocks.iter_mut().enumerate() {
             // Determine if this window needs focus.
             let focus = if let Some(focus_i) = focus_opt {
@@ -426,6 +464,7 @@ impl<'a> AllocatorVisualizer<'a> {
                     .scroll_bar(true)
                     .build(ui, || {
                         memblock.sub_allocator.draw_visualization(
+                            &color_scheme,
                             ui,
                             window.bytes_per_unit,
                             window.show_backtraces,
