@@ -4,8 +4,6 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 
-mod shaders;
-
 use gpu_allocator::{
     AllocationCreateDesc, MemoryLocation, VulkanAllocator, VulkanAllocatorCreateDesc,
 };
@@ -17,7 +15,6 @@ struct ImGuiCBuffer {
     translation: [f32; 2],
 }
 pub struct ImGuiRenderer {
-    //size: (u32, u32),
     sampler: vk::Sampler,
 
     vb_capacity: u64,
@@ -281,12 +278,10 @@ impl ImGuiRenderer {
         };
 
         let (font_image, font_image_memory, font_image_view) = {
-            println!("fonts");
             let mut fonts = imgui.fonts();
             let font_atlas = fonts.build_rgba32_texture();
 
             // Create image
-            println!("Create image");
             let image_usage = vk::ImageUsageFlags::SAMPLED
                 | vk::ImageUsageFlags::TRANSFER_DST
                 | vk::ImageUsageFlags::TRANSFER_SRC;
@@ -307,7 +302,6 @@ impl ImGuiRenderer {
             let image = unsafe { device.create_image(&create_info, None) }?;
 
             // Allocate and bind memory to image
-            println!("Allocate and bind memory to image");
             let requirements = unsafe { device.get_image_memory_requirements(image) };
             let allocation = allocator
                 .allocate(&gpu_allocator::AllocationCreateDesc {
@@ -321,7 +315,6 @@ impl ImGuiRenderer {
                 .unwrap();
 
             // Create image view
-            println!("Create image view");
             let view_create_info = vk::ImageViewCreateInfo::builder()
                 .image(image)
                 .view_type(vk::ImageViewType::TYPE_2D)
@@ -345,7 +338,6 @@ impl ImGuiRenderer {
             let image_view = unsafe { device.create_image_view(&view_create_info, None) }?;
 
             // Create upload buffer
-            println!("Create upload buffer");
             let (upload_buffer, upload_buffer_memory) = {
                 let create_info = vk::BufferCreateInfo::builder()
                     .size((font_atlas.width * font_atlas.height * 4) as u64)
@@ -376,7 +368,6 @@ impl ImGuiRenderer {
             };
 
             // Copy font data to upload buffer
-            println!("Copy font data to upload buffer");
             unsafe {
                 let dst = upload_buffer_memory.mapped_ptr();
                 std::ptr::copy_nonoverlapping(
@@ -386,7 +377,6 @@ impl ImGuiRenderer {
                 );
             }
 
-            println!("doing cmd buffer things");
             // Copy upload buffer to image
             record_and_submit_command_buffer(
                 device,
@@ -397,7 +387,6 @@ impl ImGuiRenderer {
                 &[],
                 &[],
                 |device, cmd| {
-                    println!("transition into copy");
                     {
                         let layout_transition_barriers = vk::ImageMemoryBarrier::builder()
                             .image(image)
@@ -425,7 +414,6 @@ impl ImGuiRenderer {
                         };
                     }
 
-                    println!("copy");
                     let regions = [vk::BufferImageCopy::builder()
                         .buffer_offset(0)
                         .buffer_row_length(font_atlas.width)
@@ -455,7 +443,6 @@ impl ImGuiRenderer {
                         )
                     };
 
-                    println!("transition into sampling");
                     {
                         let layout_transition_barriers = vk::ImageMemoryBarrier::builder()
                             .image(image)
@@ -1180,11 +1167,9 @@ fn main() {
         let surface_format =
             unsafe { surface_loader.get_physical_device_surface_formats(pdevice, surface) }
                 .unwrap()[0];
-        dbg!(&surface_format);
         let surface_capabilities =
             unsafe { surface_loader.get_physical_device_surface_capabilities(pdevice, surface) }
                 .unwrap();
-        dbg!(&surface_capabilities);
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
         if surface_capabilities.max_image_count > 0
             && desired_image_count > surface_capabilities.max_image_count
@@ -1230,7 +1215,6 @@ fn main() {
             .clipped(true)
             .image_array_layers(1);
 
-        dbg!(&swapchain_create_info.clone());
         let swapchain =
             unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }.unwrap();
 
