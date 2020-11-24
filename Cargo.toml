@@ -23,14 +23,22 @@ log = "0.4"
 thiserror = "1.0"
 imgui = { version = "0.6", optional = true }
 
+[dev-dependencies]
+ash-window = "0.5"
+winit = "0.23"
+imgui = "0.6.0"
+hassle-rs = "0.4.0"
+
+
 [[example]]
 name = "vulkan-buffer"
 path = "examples/vulkan-buffer/src/main.rs"
 
-[workspace]
-members = [
-    "examples/vulkan-visualization",
-]
+[[example]]
+name = "vulkan-visualization"
+path = "examples/vulkan-visualization/src/main.rs"
+required-features = ["visualizer"]
+
 
 [features]
 vulkan_device_address = []

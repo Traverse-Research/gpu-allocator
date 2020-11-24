@@ -5,7 +5,7 @@ use std::default::Default;
 use std::ffi::CString;
 
 use gpu_allocator::{
-    AllocationCreateDesc, MemoryLocation, VulkanAllocator, VulkanAllocatorCreateDesc,
+    AllocationCreateDesc, MemoryLocation, VulkanAllocator, VulkanAllocatorCreateDesc, SubAllocation
 };
 
 #[repr(C)]
@@ -19,16 +19,16 @@ pub struct ImGuiRenderer {
 
     vb_capacity: u64,
     ib_capacity: u64,
-    vb_allocation: gpu_allocator::SubAllocation,
-    ib_allocation: gpu_allocator::SubAllocation,
+    vb_allocation: SubAllocation,
+    ib_allocation: SubAllocation,
     vertex_buffer: vk::Buffer,
     index_buffer: vk::Buffer,
 
-    cb_allocation: gpu_allocator::SubAllocation,
+    cb_allocation: SubAllocation,
     constant_buffer: vk::Buffer,
 
     font_image: vk::Image,
-    font_image_memory: gpu_allocator::SubAllocation,
+    font_image_memory: SubAllocation,
     font_image_view: vk::ImageView,
 
     descriptor_sets: Vec<vk::DescriptorSet>,
@@ -304,10 +304,10 @@ impl ImGuiRenderer {
             // Allocate and bind memory to image
             let requirements = unsafe { device.get_image_memory_requirements(image) };
             let allocation = allocator
-                .allocate(&gpu_allocator::AllocationCreateDesc {
+                .allocate(&AllocationCreateDesc {
                     name: "ImGui font image",
                     requirements,
-                    location: gpu_allocator::MemoryLocation::GpuOnly,
+                    location: MemoryLocation::GpuOnly,
                     linear: false,
                 })
                 .unwrap();
@@ -348,7 +348,7 @@ impl ImGuiRenderer {
                 let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
 
                 let buffer_memory = allocator
-                    .allocate(&gpu_allocator::AllocationCreateDesc {
+                    .allocate(&AllocationCreateDesc {
                         name: "ImGui font image upload buffer",
                         requirements,
                         location: MemoryLocation::CpuToGpu,
