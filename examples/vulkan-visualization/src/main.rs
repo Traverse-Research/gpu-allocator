@@ -125,16 +125,7 @@ impl ImGuiRenderer {
         };
 
         let vs_module = {
-            let vs = include_str!("./shaders/imgui.vs.hlsl");
-            let vs = hassle_rs::compile_hlsl(
-                "imgui.vs.hlsl",
-                vs,
-                "main",
-                "vs_5_0",
-                &["-WX", "-spirv", "-fvk-use-scalar-layout"],
-                &[],
-            )
-            .unwrap();
+            let vs = include_bytes!("./spirv/imgui.vs.spv");
 
             #[allow(clippy::cast_ptr_alignment)]
             let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
@@ -144,16 +135,7 @@ impl ImGuiRenderer {
             unsafe { device.create_shader_module(&shader_info, None) }?
         };
         let ps_module = {
-            let ps = include_str!("./shaders/imgui.ps.hlsl");
-            let ps = hassle_rs::compile_hlsl(
-                "imgui.ps.hlsl",
-                ps,
-                "main",
-                "ps_5_0",
-                &["-WX", "-spirv", "-fvk-use-scalar-layout"],
-                &[],
-            )
-            .unwrap();
+            let ps = include_bytes!("./spirv/imgui.ps.spv");
 
             #[allow(clippy::cast_ptr_alignment)]
             let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
@@ -1134,7 +1116,6 @@ fn main() {
 
         let present_queue = unsafe { device.get_device_queue(queue_family_index as u32, 0) };
 
-        //create queue and swapchain and surface?
         let surface_format =
             unsafe { surface_loader.get_physical_device_surface_formats(pdevice, surface) }
                 .unwrap()[0];

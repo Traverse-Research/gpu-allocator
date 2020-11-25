@@ -26,8 +26,6 @@ imgui = { version = "0.6", optional = true }
 [dev-dependencies]
 ash-window = "0.5"
 winit = "0.23"
-imgui = "0.6.0"
-hassle-rs = "0.4.0"
 
 
 [[example]]

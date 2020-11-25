@@ -10,6 +10,5 @@ struct VertexInput
 
 float4 main(VertexInput input) : SV_Target0
 {
-    //return input.color;
     return input.color * g_texture.Sample(g_sampler, input.texCoord);
 }
