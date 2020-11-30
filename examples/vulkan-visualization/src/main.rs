@@ -44,7 +44,7 @@ fn main() {
                 .engine_version(0)
                 .api_version(vk::make_version(1, 0, 0));
 
-            let layer_names: &[CString] = &[];
+            let layer_names: &[CString] = &[CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
             let layers_names_raw: Vec<*const i8> = layer_names
                 .iter()
                 .map(|raw_name| raw_name.as_ptr())
@@ -336,9 +336,14 @@ fn main() {
             }
             .unwrap();
 
+            // Start ImGui frame
             let ui = imgui.frame();
 
+            // Submit visualizer ImGui commands
             visualizer.render(&ui);
+
+            // Finish ImGui Frame
+            let imgui_draw_data = ui.render();
 
             record_and_submit_command_buffer(
                 &device,
@@ -349,7 +354,7 @@ fn main() {
                 &[present_complete_semaphore],
                 &[rendering_complete_semaphore],
                 |device, cmd| {
-                    let imgui_draw_data = ui.render();
+                    // Render ImGui to swapchain image
                     imgui_renderer.render(
                         imgui_draw_data,
                         &device,
@@ -358,6 +363,37 @@ fn main() {
                         framebuffers[present_index as usize],
                         cmd,
                     );
+
+                    // Transition swapchain image to present state
+                    let image_barriers = [vk::ImageMemoryBarrier::builder()
+                        .src_access_mask(
+                            vk::AccessFlags::COLOR_ATTACHMENT_READ
+                                | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                        )
+                        .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                        .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                        .image(present_images[present_index as usize])
+                        .subresource_range(
+                            vk::ImageSubresourceRange::builder()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .base_mip_level(0)
+                                .level_count(vk::REMAINING_MIP_LEVELS)
+                                .base_array_layer(0)
+                                .layer_count(vk::REMAINING_ARRAY_LAYERS)
+                                .build(),
+                        )
+                        .build()];
+                    unsafe {
+                        device.cmd_pipeline_barrier(
+                            cmd,
+                            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                            vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                            vk::DependencyFlags::empty(),
+                            &[],
+                            &[],
+                            &image_barriers,
+                        )
+                    };
                 },
             );
 
@@ -368,6 +404,7 @@ fn main() {
                 .build();
 
             unsafe { swapchain_loader.queue_present(present_queue, &present_create_info) }?;
+            //break;
         }
 
         unsafe { device.queue_wait_idle(present_queue) }?;
