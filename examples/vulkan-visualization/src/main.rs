@@ -277,6 +277,7 @@ fn main() {
             &mut imgui,
             &device,
             descriptor_pool,
+            surface_format.format,
             &mut allocator,
             setup_command_buffer,
             setup_commands_reuse_fence,

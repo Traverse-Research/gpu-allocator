@@ -42,6 +42,7 @@ impl ImGuiRenderer {
         imgui: &mut imgui::Context,
         device: &ash::Device,
         descriptor_pool: vk::DescriptorPool,
+        render_target_format: vk::Format,
         allocator: &mut VulkanAllocator,
         cmd: vk::CommandBuffer,
         cmd_reuse_fence: vk::Fence,
@@ -87,7 +88,7 @@ impl ImGuiRenderer {
 
         let render_pass = {
             let attachments = vk::AttachmentDescription::builder()
-                .format(vk::Format::B8G8R8A8_UNORM)
+                .format(render_target_format)
                 .samples(vk::SampleCountFlags::TYPE_1)
                 .load_op(vk::AttachmentLoadOp::CLEAR)
                 .store_op(vk::AttachmentStoreOp::STORE)
