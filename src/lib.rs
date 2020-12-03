@@ -172,7 +172,8 @@ pub struct SubAllocation {
     memory_type_index: usize,
     device_memory: vk::DeviceMemory,
     offset: u64,
-    mapped_ptr: *mut std::ffi::c_void,
+    size: u64,
+    mapped_ptr: Option<std::ptr::NonNull<std::ffi::c_void>>,
 
     name: Option<String>,
     backtrace: Option<String>,
@@ -193,12 +194,51 @@ impl SubAllocation {
         self.device_memory
     }
 
+    /// Returns the offset of the allocation on the vk::DeviceMemory.
+    /// When binding the memory to a buffer or image, this offset needs to be supplied as well.
     pub fn offset(&self) -> u64 {
         self.offset
     }
 
-    pub fn mapped_ptr(&self) -> *mut std::ffi::c_void {
+    /// Returns the size of the allocation
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    /// Returns a valid mapped pointer if the memory is host visible, otherwise it will return None.
+    /// The pointer already points to the exact memory region of the suballocation, so no offset needs to be applied.
+    pub fn mapped_ptr(&self) -> Option<std::ptr::NonNull<std::ffi::c_void>> {
         self.mapped_ptr
+    }
+
+    /// Returns a valid mapped slice if the memory is host visible, otherwise it will return None.
+    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    pub fn mapped_slice(&self) -> Option<&[u8]> {
+        if let Some(ptr) = self.mapped_ptr() {
+            unsafe {
+                Some(std::slice::from_raw_parts(
+                    ptr.as_ptr() as *const _,
+                    self.size as usize,
+                ))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Returns a valid mapped mutable slice if the memory is host visible, otherwise it will return None.
+    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    pub fn mapped_slice_mut(&mut self) -> Option<&mut [u8]> {
+        if let Some(ptr) = self.mapped_ptr() {
+            unsafe {
+                Some(std::slice::from_raw_parts_mut(
+                    ptr.as_ptr() as *mut _,
+                    self.size as usize,
+                ))
+            }
+        } else {
+            None
+        }
     }
 
     pub fn is_null(&self) -> bool {
@@ -214,7 +254,8 @@ impl Default for SubAllocation {
             memory_type_index: !0,
             device_memory: vk::DeviceMemory::null(),
             offset: 0,
-            mapped_ptr: std::ptr::null_mut(),
+            size: 0,
+            mapped_ptr: None,
             name: None,
             backtrace: None,
         }
@@ -383,7 +424,8 @@ impl MemoryType {
                 memory_type_index: self.memory_type_index as usize,
                 device_memory: mem_block.device_memory,
                 offset,
-                mapped_ptr: mem_block.mapped_ptr,
+                size,
+                mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
                 name: Some(desc.name.to_owned()),
                 backtrace: backtrace.map(|s| s.to_owned()),
             });
@@ -404,9 +446,10 @@ impl MemoryType {
                 match allocation {
                     Ok((offset, chunk_id)) => {
                         let mapped_ptr = if !mem_block.mapped_ptr.is_null() {
-                            unsafe { mem_block.mapped_ptr.add(offset as usize) }
+                            let offset_ptr = unsafe { mem_block.mapped_ptr.add(offset as usize) };
+                            std::ptr::NonNull::new(offset_ptr)
                         } else {
-                            std::ptr::null_mut()
+                            None
                         };
                         return Ok(SubAllocation {
                             chunk_id: Some(chunk_id),
@@ -414,6 +457,7 @@ impl MemoryType {
                             memory_type_index: self.memory_type_index as usize,
                             device_memory: mem_block.device_memory,
                             offset,
+                            size,
                             mapped_ptr,
                             name: Some(desc.name.to_owned()),
                             backtrace: backtrace.map(|s| s.to_owned()),
@@ -472,9 +516,10 @@ impl MemoryType {
         };
 
         let mapped_ptr = if !mem_block.mapped_ptr.is_null() {
-            unsafe { mem_block.mapped_ptr.add(offset as usize) }
+            let offset_ptr = unsafe { mem_block.mapped_ptr.add(offset as usize) };
+            std::ptr::NonNull::new(offset_ptr)
         } else {
-            std::ptr::null_mut()
+            None
         };
 
         Ok(SubAllocation {
@@ -483,6 +528,7 @@ impl MemoryType {
             memory_type_index: self.memory_type_index as usize,
             device_memory: mem_block.device_memory,
             offset,
+            size,
             mapped_ptr,
             name: Some(desc.name.to_owned()),
             backtrace: backtrace.map(|s| s.to_owned()),

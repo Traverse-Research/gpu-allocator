@@ -16,3 +16,4 @@ Cargo.lock
 
 imgui.ini
 *.bak
+*.fmt
