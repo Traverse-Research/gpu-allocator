@@ -1,0 +1,453 @@
+use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
+use ash::vk;
+
+use std::default::Default;
+use std::ffi::CString;
+
+use gpu_allocator::{VulkanAllocator, VulkanAllocatorCreateDesc};
+
+mod helper;
+use helper::record_and_submit_command_buffer;
+
+mod imgui_renderer;
+use imgui_renderer::{handle_imgui_event, ImGuiRenderer};
+
+fn main() {
+    let entry = ash::Entry::new().unwrap();
+
+    let event_loop = winit::event_loop::EventLoop::new();
+
+    let window_width = 1920;
+    let window_height = 1080;
+    let window = winit::window::WindowBuilder::new()
+        .with_title("gpu-allocator vulkan visualization")
+        .with_inner_size(winit::dpi::PhysicalSize::new(
+            window_width as f64,
+            window_height as f64,
+        ))
+        .with_resizable(false)
+        .build(&event_loop)
+        .unwrap();
+
+    let (event_send, event_recv) = std::sync::mpsc::sync_channel(1);
+    let quit_send = event_loop.create_proxy();
+
+    std::thread::spawn(move || -> Result<(), vk::Result> {
+        // Create vulkan instance
+        let instance = {
+            let app_name = CString::new("gpu-allocator examples vulkan-visualization").unwrap();
+
+            let appinfo = vk::ApplicationInfo::builder()
+                .application_name(&app_name)
+                .application_version(0)
+                .engine_name(&app_name)
+                .engine_version(0)
+                .api_version(vk::make_version(1, 0, 0));
+
+            let layer_names: &[CString] = &[CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
+            let layers_names_raw: Vec<*const i8> = layer_names
+                .iter()
+                .map(|raw_name| raw_name.as_ptr())
+                .collect();
+
+            let surface_extensions = ash_window::enumerate_required_extensions(&window).unwrap();
+            let extensions_names_raw = surface_extensions
+                .iter()
+                .map(|ext| ext.as_ptr())
+                .collect::<Vec<_>>();
+
+            let create_info = vk::InstanceCreateInfo::builder()
+                .application_info(&appinfo)
+                .enabled_layer_names(&layers_names_raw)
+                .enabled_extension_names(&extensions_names_raw);
+
+            unsafe {
+                entry
+                    .create_instance(&create_info, None)
+                    .expect("Instance creation error")
+            }
+        };
+
+        let surface =
+            unsafe { ash_window::create_surface(&entry, &instance, &window, None) }.unwrap();
+        let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
+
+        // Look for vulkan physical device
+        let (pdevice, queue_family_index) = {
+            let pdevices = unsafe {
+                instance
+                    .enumerate_physical_devices()
+                    .expect("Physical device error")
+            };
+            pdevices
+                .iter()
+                .map(|pdevice| {
+                    unsafe { instance.get_physical_device_queue_family_properties(*pdevice) }
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, &info)| {
+                            let supports_graphics =
+                                info.queue_flags.contains(vk::QueueFlags::GRAPHICS);
+                            let supports_surface = unsafe {
+                                surface_loader.get_physical_device_surface_support(
+                                    *pdevice,
+                                    index as u32,
+                                    surface,
+                                )
+                            }
+                            .unwrap();
+                            if supports_graphics && supports_surface {
+                                Some((*pdevice, index))
+                            } else {
+                                None
+                            }
+                        })
+                        .next()
+                })
+                .filter_map(|v| v)
+                .next()
+                .expect("Couldn't find suitable device.")
+        };
+
+        // Create vulkan device
+        let device = {
+            let device_extension_names_raw = vec![ash::extensions::khr::Swapchain::name().as_ptr()];
+            let features = vk::PhysicalDeviceFeatures {
+                shader_clip_distance: 1,
+                ..Default::default()
+            };
+            let priorities = [1.0];
+
+            let queue_info = [vk::DeviceQueueCreateInfo::builder()
+                .queue_family_index(queue_family_index as u32)
+                .queue_priorities(&priorities)
+                .build()];
+
+            let create_info = vk::DeviceCreateInfo::builder()
+                .queue_create_infos(&queue_info)
+                .enabled_extension_names(&device_extension_names_raw)
+                .enabled_features(&features);
+
+            unsafe { instance.create_device(pdevice, &create_info, None).unwrap() }
+        };
+
+        let present_queue = unsafe { device.get_device_queue(queue_family_index as u32, 0) };
+
+        let surface_format =
+            unsafe { surface_loader.get_physical_device_surface_formats(pdevice, surface) }
+                .unwrap()[0];
+        let surface_capabilities =
+            unsafe { surface_loader.get_physical_device_surface_capabilities(pdevice, surface) }
+                .unwrap();
+        let mut desired_image_count = surface_capabilities.min_image_count + 1;
+        if surface_capabilities.max_image_count > 0
+            && desired_image_count > surface_capabilities.max_image_count
+        {
+            desired_image_count = surface_capabilities.max_image_count;
+        }
+        let surface_resolution = match surface_capabilities.current_extent.width {
+            std::u32::MAX => vk::Extent2D {
+                width: window_width,
+                height: window_height,
+            },
+            _ => surface_capabilities.current_extent,
+        };
+        let pre_transform = if surface_capabilities
+            .supported_transforms
+            .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
+        {
+            vk::SurfaceTransformFlagsKHR::IDENTITY
+        } else {
+            surface_capabilities.current_transform
+        };
+        let present_modes =
+            unsafe { surface_loader.get_physical_device_surface_present_modes(pdevice, surface) }
+                .unwrap();
+        let present_mode = present_modes
+            .iter()
+            .cloned()
+            .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
+            .unwrap_or(vk::PresentModeKHR::FIFO);
+        let swapchain_loader = ash::extensions::khr::Swapchain::new(&instance, &device);
+
+        let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+            .surface(surface)
+            .min_image_count(desired_image_count)
+            .image_color_space(surface_format.color_space)
+            .image_format(surface_format.format)
+            .image_extent(surface_resolution)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .pre_transform(pre_transform)
+            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+            .present_mode(present_mode)
+            .clipped(true)
+            .image_array_layers(1);
+
+        let swapchain =
+            unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }.unwrap();
+
+        let pool_create_info = vk::CommandPoolCreateInfo::builder()
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .queue_family_index(queue_family_index as u32);
+        let command_pool = unsafe { device.create_command_pool(&pool_create_info, None) }.unwrap();
+
+        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_buffer_count(2)
+            .command_pool(command_pool)
+            .level(vk::CommandBufferLevel::PRIMARY);
+
+        let command_buffers =
+            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }.unwrap();
+        let setup_command_buffer = command_buffers[0];
+        let draw_command_buffer = command_buffers[1];
+
+        let present_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }.unwrap();
+        let present_image_views = present_images
+            .iter()
+            .map(|&image| {
+                let create_view_info = vk::ImageViewCreateInfo::builder()
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(surface_format.format)
+                    .components(vk::ComponentMapping {
+                        r: vk::ComponentSwizzle::R,
+                        g: vk::ComponentSwizzle::G,
+                        b: vk::ComponentSwizzle::B,
+                        a: vk::ComponentSwizzle::A,
+                    })
+                    .subresource_range(vk::ImageSubresourceRange {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        base_mip_level: 0,
+                        level_count: 1,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    })
+                    .image(image);
+                unsafe { device.create_image_view(&create_view_info, None) }.unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        // Setting up the allocator
+        let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
+            instance: instance.clone(),
+            device: device.clone(),
+            physical_device: pdevice,
+            debug_settings: Default::default(),
+        });
+
+        let fence_create_info =
+            vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
+        let draw_commands_reuse_fence =
+            unsafe { device.create_fence(&fence_create_info, None) }.unwrap();
+        let setup_commands_reuse_fence =
+            unsafe { device.create_fence(&fence_create_info, None) }.unwrap();
+
+        let semaphore_create_info = vk::SemaphoreCreateInfo::default();
+
+        let present_complete_semaphore =
+            unsafe { device.create_semaphore(&semaphore_create_info, None) }.unwrap();
+        let rendering_complete_semaphore =
+            unsafe { device.create_semaphore(&semaphore_create_info, None) }.unwrap();
+
+        let mut imgui = imgui::Context::create();
+        imgui.io_mut().display_size = [window_width as f32, window_height as f32];
+
+        let descriptor_pool = {
+            let pool_sizes = [
+                vk::DescriptorPoolSize::builder()
+                    .ty(vk::DescriptorType::UNIFORM_BUFFER)
+                    .descriptor_count(1)
+                    .build(),
+                vk::DescriptorPoolSize::builder()
+                    .ty(vk::DescriptorType::SAMPLED_IMAGE)
+                    .descriptor_count(1)
+                    .build(),
+                vk::DescriptorPoolSize::builder()
+                    .ty(vk::DescriptorType::SAMPLER)
+                    .descriptor_count(1)
+                    .build(),
+            ];
+            let create_info = vk::DescriptorPoolCreateInfo::builder()
+                .max_sets(1)
+                .pool_sizes(&pool_sizes);
+            unsafe { device.create_descriptor_pool(&create_info, None) }?
+        };
+
+        let mut imgui_renderer = ImGuiRenderer::new(
+            &mut imgui,
+            &device,
+            descriptor_pool,
+            surface_format.format,
+            &mut allocator,
+            setup_command_buffer,
+            setup_commands_reuse_fence,
+            present_queue,
+        )?;
+
+        let framebuffers = present_image_views
+            .iter()
+            .map(|&view| {
+                let create_info = vk::FramebufferCreateInfo::builder()
+                    .render_pass(imgui_renderer.render_pass)
+                    .attachments(&[view])
+                    .width(window_width)
+                    .height(window_height)
+                    .layers(1)
+                    .build();
+
+                unsafe { device.create_framebuffer(&create_info, None) }.unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        let mut visualizer = gpu_allocator::visualizer::AllocatorVisualizer::new(&allocator);
+
+        loop {
+            let event = event_recv.recv().unwrap();
+            handle_imgui_event(imgui.io_mut(), &window, &event);
+
+            let mut should_quit = false;
+            match event {
+                winit::event::Event::WindowEvent { event, .. } => match event {
+                    winit::event::WindowEvent::KeyboardInput { input, .. } => {
+                        if let Some(winit::event::VirtualKeyCode::Escape) = input.virtual_keycode {
+                            should_quit = true;
+                        }
+                    }
+                    winit::event::WindowEvent::CloseRequested => {
+                        should_quit = true;
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+
+            if should_quit {
+                quit_send.send_event(()).unwrap();
+                break;
+            }
+
+            let (present_index, _) = unsafe {
+                swapchain_loader.acquire_next_image(
+                    swapchain,
+                    std::u64::MAX,
+                    present_complete_semaphore,
+                    vk::Fence::null(),
+                )
+            }
+            .unwrap();
+
+            // Start ImGui frame
+            let ui = imgui.frame();
+
+            // Submit visualizer ImGui commands
+            visualizer.render(&ui);
+
+            // Finish ImGui Frame
+            let imgui_draw_data = ui.render();
+
+            record_and_submit_command_buffer(
+                &device,
+                draw_command_buffer,
+                draw_commands_reuse_fence,
+                present_queue,
+                &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
+                &[present_complete_semaphore],
+                &[rendering_complete_semaphore],
+                |device, cmd| {
+                    // Render ImGui to swapchain image
+                    imgui_renderer.render(
+                        imgui_draw_data,
+                        &device,
+                        window_width,
+                        window_height,
+                        framebuffers[present_index as usize],
+                        cmd,
+                    );
+
+                    // Transition swapchain image to present state
+                    let image_barriers = [vk::ImageMemoryBarrier::builder()
+                        .src_access_mask(
+                            vk::AccessFlags::COLOR_ATTACHMENT_READ
+                                | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                        )
+                        .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                        .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                        .image(present_images[present_index as usize])
+                        .subresource_range(
+                            vk::ImageSubresourceRange::builder()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .base_mip_level(0)
+                                .level_count(vk::REMAINING_MIP_LEVELS)
+                                .base_array_layer(0)
+                                .layer_count(vk::REMAINING_ARRAY_LAYERS)
+                                .build(),
+                        )
+                        .build()];
+                    unsafe {
+                        device.cmd_pipeline_barrier(
+                            cmd,
+                            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                            vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                            vk::DependencyFlags::empty(),
+                            &[],
+                            &[],
+                            &image_barriers,
+                        )
+                    };
+                },
+            );
+
+            let present_create_info = vk::PresentInfoKHR::builder()
+                .wait_semaphores(&[rendering_complete_semaphore])
+                .swapchains(&[swapchain])
+                .image_indices(&[present_index])
+                .build();
+
+            unsafe { swapchain_loader.queue_present(present_queue, &present_create_info) }?;
+            //break;
+        }
+
+        unsafe { device.queue_wait_idle(present_queue) }?;
+
+        drop(visualizer);
+
+        for fb in framebuffers {
+            unsafe {
+                device.destroy_framebuffer(fb, None);
+            }
+        }
+
+        imgui_renderer.destroy(&device, &mut allocator);
+
+        unsafe { device.destroy_descriptor_pool(descriptor_pool, None) };
+        unsafe { device.destroy_semaphore(rendering_complete_semaphore, None) };
+        unsafe { device.destroy_semaphore(present_complete_semaphore, None) };
+        unsafe { device.destroy_fence(setup_commands_reuse_fence, None) };
+        unsafe { device.destroy_fence(draw_commands_reuse_fence, None) };
+        drop(allocator);
+        for view in present_image_views {
+            unsafe { device.destroy_image_view(view, None) };
+        }
+        unsafe { device.free_command_buffers(command_pool, &command_buffers) };
+        unsafe { device.destroy_command_pool(command_pool, None) };
+        unsafe { swapchain_loader.destroy_swapchain(swapchain, None) };
+        unsafe { device.destroy_device(None) };
+        unsafe {
+            surface_loader.destroy_surface(surface, None);
+        }
+        unsafe { instance.destroy_instance(None) };
+        Ok(())
+    });
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = winit::event_loop::ControlFlow::Wait;
+
+        if event == winit::event::Event::UserEvent(()) {
+            *control_flow = winit::event_loop::ControlFlow::Exit;
+        } else if let Some(event) = event.to_static() {
+            let _ = event_send.send(event);
+        } else {
+            *control_flow = winit::event_loop::ControlFlow::Exit;
+        }
+    });
+}

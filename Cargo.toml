@@ -21,10 +21,23 @@ ash = "0.31"
 backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
+imgui = { version = "0.6", optional = true }
+
+[dev-dependencies]
+ash-window = "0.5"
+winit = "0.23"
+
 
 [[example]]
 name = "vulkan-buffer"
 path = "examples/vulkan-buffer/src/main.rs"
 
+[[example]]
+name = "vulkan-visualization"
+path = "examples/vulkan-visualization/src/main.rs"
+required-features = ["visualizer"]
+
+
 [features]
 vulkan_device_address = []
+visualizer = [ "imgui" ]

@@ -1,5 +1,7 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
-use super::{AllocationError, AllocationType, Result, SubAllocation, SubAllocator};
+use super::{
+    AllocationError, AllocationType, Result, SubAllocation, SubAllocator, SubAllocatorBase,
+};
 use log::{log, Level};
 
 #[derive(Debug)]
@@ -21,6 +23,7 @@ impl DedicatedBlockAllocator {
     }
 }
 
+impl SubAllocatorBase for DedicatedBlockAllocator {}
 impl SubAllocator for DedicatedBlockAllocator {
     fn allocate(
         &mut self,
