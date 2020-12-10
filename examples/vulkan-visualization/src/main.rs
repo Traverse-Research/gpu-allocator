@@ -299,7 +299,7 @@ fn main() {
             })
             .collect::<Vec<_>>();
 
-        let mut visualizer = gpu_allocator::visualizer::AllocatorVisualizer::new(&allocator);
+        let mut visualizer = gpu_allocator::visualizer::AllocatorVisualizer::new();
 
         loop {
             let event = event_recv.recv().unwrap();
@@ -340,7 +340,7 @@ fn main() {
             let ui = imgui.frame();
 
             // Submit visualizer ImGui commands
-            visualizer.render(&ui);
+            visualizer.render(&allocator, &ui);
 
             // Finish ImGui Frame
             let imgui_draw_data = ui.render();
