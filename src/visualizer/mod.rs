@@ -43,8 +43,7 @@ impl AllocatorVisualizerBlockWindow {
         }
     }
 }
-pub struct AllocatorVisualizer<'a> {
-    allocator: &'a VulkanAllocator,
+pub struct AllocatorVisualizer {
     selected_blocks: Vec<AllocatorVisualizerBlockWindow>,
     focus: Option<usize>,
     color_scheme: ColorScheme,
@@ -239,10 +238,9 @@ fn format_memory_properties(props: vk::MemoryPropertyFlags) -> String {
     result
 }
 
-impl<'a> AllocatorVisualizer<'a> {
-    pub fn new(allocator: &'a VulkanAllocator) -> Self {
+impl AllocatorVisualizer {
+    pub fn new() -> Self {
         Self {
-            allocator,
             selected_blocks: Vec::default(),
             focus: None,
             color_scheme: ColorScheme::default(),
@@ -502,10 +500,8 @@ impl<'a> AllocatorVisualizer<'a> {
         self.focus = None;
     }
 
-    pub fn render(&mut self, ui: &imgui::Ui) {
-        let alloc = self.allocator.borrow();
-
-        self.render_main_window(ui, &alloc);
-        self.render_memory_block_windows(ui, &alloc);
+    pub fn render(&mut self, allocator: &VulkanAllocator, ui: &imgui::Ui) {
+        self.render_main_window(ui, &allocator);
+        self.render_memory_block_windows(ui, &allocator);
     }
 }
