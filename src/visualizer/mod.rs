@@ -1,3 +1,5 @@
+#![allow(clippy::new_without_default)]
+
 use crate::dedicated_block_allocator;
 use crate::free_list_allocator;
 use crate::VulkanAllocator;
@@ -5,7 +7,6 @@ use crate::*;
 
 use ash::vk;
 use imgui::*;
-use std::borrow::Borrow;
 
 // Default value for block visualizer granularity.
 const DEFAULT_BYTES_PER_UNIT: i32 = 1024;
