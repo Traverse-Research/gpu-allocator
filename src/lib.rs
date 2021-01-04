@@ -105,7 +105,7 @@ impl Default for AllocatorDebugSettings {
         Self {
             log_memory_information: false,
             log_leaks_on_shutdown: true,
-            store_stack_traces: true,
+            store_stack_traces: false,
             log_allocations: false,
             log_frees: false,
             log_stack_traces: false,
