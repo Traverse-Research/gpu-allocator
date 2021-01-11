@@ -570,25 +570,9 @@ impl MemoryType {
     }
 }
 
-fn find_memorytype_index(
-    memory_req: &vk::MemoryRequirements,
-    memory_prop: &vk::PhysicalDeviceMemoryProperties,
-    flags: vk::MemoryPropertyFlags,
-) -> Option<u32> {
-    memory_prop.memory_types[..memory_prop.memory_type_count as _]
-        .iter()
-        .enumerate()
-        .find(|(index, memory_type)| {
-            (1 << index) & memory_req.memory_type_bits != 0
-                && memory_type.property_flags.contains(flags)
-        })
-        .map(|(index, _memory_type)| index as _)
-}
-
 pub struct VulkanAllocator {
     memory_types: Vec<MemoryType>,
     device: ash::Device,
-    physical_mem_props: vk::PhysicalDeviceMemoryProperties,
     buffer_image_granularity: u64,
     debug_settings: AllocatorDebugSettings,
 }
@@ -673,7 +657,6 @@ impl VulkanAllocator {
         Self {
             memory_types,
             device: desc.device.clone(),
-            physical_mem_props: mem_props,
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
         }
@@ -723,11 +706,8 @@ impl VulkanAllocator {
             }
             MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
         };
-        let mut memory_type_index_opt = find_memorytype_index(
-            &desc.requirements,
-            &self.physical_mem_props,
-            mem_loc_preferred_bits,
-        );
+        let mut memory_type_index_opt =
+            self.find_memorytype_index(&desc.requirements, mem_loc_preferred_bits);
 
         if memory_type_index_opt.is_none() {
             let mem_loc_required_bits = match desc.location {
@@ -741,11 +721,8 @@ impl VulkanAllocator {
                 MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
             };
 
-            memory_type_index_opt = find_memorytype_index(
-                &desc.requirements,
-                &self.physical_mem_props,
-                mem_loc_required_bits,
-            );
+            memory_type_index_opt =
+                self.find_memorytype_index(&desc.requirements, mem_loc_required_bits);
         }
 
         let memory_type_index = match memory_type_index_opt {
@@ -765,11 +742,8 @@ impl VulkanAllocator {
                 let mem_loc_preferred_bits =
                     vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
 
-                let memory_type_index_opt = find_memorytype_index(
-                    &desc.requirements,
-                    &self.physical_mem_props,
-                    mem_loc_preferred_bits,
-                );
+                let memory_type_index_opt =
+                    self.find_memorytype_index(&desc.requirements, mem_loc_preferred_bits);
 
                 let memory_type_index = match memory_type_index_opt {
                     Some(x) => x as usize,
@@ -819,6 +793,20 @@ impl VulkanAllocator {
                 }
             }
         }
+    }
+
+    fn find_memorytype_index(
+        &self,
+        memory_req: &vk::MemoryRequirements,
+        flags: vk::MemoryPropertyFlags,
+    ) -> Option<u32> {
+        self.memory_types
+            .iter()
+            .find(|memory_type| {
+                (1 << memory_type.memory_type_index) & memory_req.memory_type_bits != 0
+                    && memory_type.memory_properties.contains(flags)
+            })
+            .map(|memory_type| memory_type.memory_type_index as _)
     }
 }
 
