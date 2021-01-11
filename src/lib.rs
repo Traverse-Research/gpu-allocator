@@ -371,12 +371,14 @@ impl MemoryType {
             AllocationType::NonLinear
         };
 
-        let memblock_size =
-            if !(self.memory_properties & vk::MemoryPropertyFlags::HOST_VISIBLE).is_empty() {
-                DEFAULT_HOST_MEMBLOCK_SIZE
-            } else {
-                DEFAULT_DEVICE_MEMBLOCK_SIZE
-            };
+        let memblock_size = if self
+            .memory_properties
+            .contains(vk::MemoryPropertyFlags::HOST_VISIBLE)
+        {
+            DEFAULT_HOST_MEMBLOCK_SIZE
+        } else {
+            DEFAULT_DEVICE_MEMBLOCK_SIZE
+        };
 
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
@@ -578,7 +580,7 @@ fn find_memorytype_index(
         .enumerate()
         .find(|(index, memory_type)| {
             (1 << index) & memory_req.memory_type_bits != 0
-                && memory_type.property_flags & flags == flags
+                && memory_type.property_flags.contains(flags)
         })
         .map(|(index, _memory_type)| index as _)
 }
@@ -598,6 +600,8 @@ impl VulkanAllocator {
                 .get_physical_device_memory_properties(desc.physical_device)
         };
 
+        let memory_types = &mem_props.memory_types[..mem_props.memory_type_count as _];
+
         if desc.debug_settings.log_memory_information {
             log!(
                 Level::Debug,
@@ -609,8 +613,8 @@ impl VulkanAllocator {
                 "memory heap count: {}",
                 mem_props.memory_heap_count
             );
-            for i in 0..mem_props.memory_type_count {
-                let mem_type = mem_props.memory_types[i as usize];
+
+            for (i, mem_type) in memory_types.iter().enumerate() {
                 let flags = mem_type.property_flags;
                 log!(
                     Level::Debug,
@@ -631,38 +635,33 @@ impl VulkanAllocator {
             }
         }
 
-        let memory_types = (0..mem_props.memory_type_count)
-            .map(|i| {
-                let i = i as usize;
-
-                let mem_type = &mem_props.memory_types[i];
-
-                MemoryType {
-                    memory_blocks: Vec::default(),
-                    memory_properties: mem_type.property_flags,
-                    memory_type_index: i,
-                    heap_index: mem_props.memory_types[i].heap_index as usize,
-                    mappable: (mem_type.property_flags & vk::MemoryPropertyFlags::HOST_VISIBLE)
-                        != vk::MemoryPropertyFlags::empty(),
-                    active_general_blocks: 0,
-                }
-            })
-            .collect::<Vec<_>>();
-
         // NOTE(max): Test if there is any HOST_VISIBLE memory that does _not_
         //            have the HOST_COHERENT flag, in that case we want to panic,
         //            as we want to do cool things that we do not yet support
         //            with that type of memory :)
-        for i in 0..mem_props.memory_type_count {
-            let flags = mem_props.memory_types[i as usize].property_flags;
-
-            if (flags & vk::MemoryPropertyFlags::HOST_VISIBLE) != vk::MemoryPropertyFlags::empty()
-                && (flags & vk::MemoryPropertyFlags::HOST_COHERENT)
-                    == vk::MemoryPropertyFlags::empty()
-            {
-                log!(Level::Warn, "There is a memory type that is host visible, but not host coherent. It's time to upgrade our memory allocator to take advantage of this type of memory :)");
-            }
+        let host_visible_not_coherent = memory_types.iter().any(|t| {
+            let flags = t.property_flags;
+            flags.contains(vk::MemoryPropertyFlags::HOST_VISIBLE)
+                && !flags.contains(vk::MemoryPropertyFlags::HOST_COHERENT)
+        });
+        if host_visible_not_coherent {
+            log!(Level::Warn, "There is a memory type that is host visible, but not host coherent. It's time to upgrade our memory allocator to take advantage of this type of memory :)");
         }
+
+        let memory_types = memory_types
+            .iter()
+            .enumerate()
+            .map(|(i, mem_type)| MemoryType {
+                memory_blocks: Vec::default(),
+                memory_properties: mem_type.property_flags,
+                memory_type_index: i,
+                heap_index: mem_type.heap_index as usize,
+                mappable: mem_type
+                    .property_flags
+                    .contains(vk::MemoryPropertyFlags::HOST_VISIBLE),
+                active_general_blocks: 0,
+            })
+            .collect::<Vec<_>>();
 
         let physical_device_properties = unsafe {
             desc.instance
