@@ -9,7 +9,7 @@ use gpu_allocator::{
 };
 
 fn main() {
-    let entry = ash::Entry::new().unwrap();
+    let entry = unsafe { ash::Entry::new() }.unwrap();
 
     // Create vulkan instance
     let instance = {
