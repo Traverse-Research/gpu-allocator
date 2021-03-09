@@ -572,6 +572,7 @@ impl MemoryType {
 
 pub struct VulkanAllocator {
     memory_types: Vec<MemoryType>,
+    #[cfg(feature = "visualizer")]
     memory_heaps: Vec<vk::MemoryHeap>,
     device: ash::Device,
     buffer_image_granularity: u64,
@@ -658,6 +659,7 @@ impl VulkanAllocator {
 
         Self {
             memory_types,
+            #[cfg(feature = "visualizer")]
             memory_heaps,
             device: desc.device.clone(),
             buffer_image_granularity: granularity,
