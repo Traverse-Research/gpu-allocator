@@ -16,7 +16,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --workspace --all-targets
+          args: --workspace --all-targets --all-features
 
   test:
     name: Test Suite
@@ -31,7 +31,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --workspace --all-targets
+          args: --workspace --all-targets --all-features
 
   fmt:
     name: Rustfmt
@@ -63,4 +63,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --workspace --all-targets -- -D warnings
+          args: --workspace --all-targets --all-features -- -D warnings
