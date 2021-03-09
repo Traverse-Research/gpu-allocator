@@ -19,13 +19,27 @@
 //!
 //! ## Simple Vulkan allocation example
 //!
-//! ```
+//! ```no_run
+//! use gpu_allocator::*;
+//! # use ash::vk;
+//! # use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
+//! # let device = todo!();
+//! # let instance = todo!();
+//! # let physical_device = todo!();
+//!
+//! # let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
+//! #     instance,
+//! #     device,
+//! #     physical_device,
+//! #     debug_settings: Default::default(),
+//! # });
+//!
 //! // Setup vulkan info
 //! let vk_info = vk::BufferCreateInfo::builder()
 //!     .size(512)
 //!     .usage(vk::BufferUsageFlags::STORAGE_BUFFER);
 //!
-//! let buffer = unsafe { device.create_buffer(&vk_info, None) }?;
+//! let buffer = unsafe { device.create_buffer(&vk_info, None) }.unwrap();
 //! let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
 //!
 //! let allocation = allocator
@@ -34,13 +48,13 @@
 //!         requirements,
 //!         location: MemoryLocation::CpuToGpu,
 //!         linear: true, // Buffers are always linear
-//!     })?;
+//!     }).unwrap();
 //!
 //! // Bind memory to the buffer
-//! unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset())? };
+//! unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset()).unwrap() };
 //!
 //! // Cleanup
-//! allocator.free(allocation)?;
+//! allocator.free(allocation).unwrap();
 //! unsafe { device.destroy_buffer(buffer, None) };
 //! ```
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
