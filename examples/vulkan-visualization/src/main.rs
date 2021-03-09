@@ -306,8 +306,8 @@ fn main() {
             handle_imgui_event(imgui.io_mut(), &window, &event);
 
             let mut should_quit = false;
-            match event {
-                winit::event::Event::WindowEvent { event, .. } => match event {
+            if let winit::event::Event::WindowEvent { event, .. } = event {
+                match event {
                     winit::event::WindowEvent::KeyboardInput { input, .. } => {
                         if let Some(winit::event::VirtualKeyCode::Escape) = input.virtual_keycode {
                             should_quit = true;
@@ -317,8 +317,7 @@ fn main() {
                         should_quit = true;
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
 
             if should_quit {
