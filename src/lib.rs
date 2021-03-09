@@ -2,7 +2,7 @@
 //!
 //! ## Setting up the Vulkan memory allocator
 //!
-//! ```rust
+//! ```
 //! use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 //! use ash::vk;
 //!
@@ -16,7 +16,7 @@
 //!
 //! ## Simple Vulkan allocation example
 //!
-//! ```rust
+//! ```
 //! // Setup vulkan info
 //! let vk_info = vk::BufferCreateInfo::builder()
 //!     .size(512)
