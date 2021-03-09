@@ -572,6 +572,7 @@ impl MemoryType {
 
 pub struct VulkanAllocator {
     memory_types: Vec<MemoryType>,
+    memory_heaps: Vec<vk::MemoryHeap>,
     device: ash::Device,
     buffer_image_granularity: u64,
     debug_settings: AllocatorDebugSettings,
@@ -585,6 +586,7 @@ impl VulkanAllocator {
         };
 
         let memory_types = &mem_props.memory_types[..mem_props.memory_type_count as _];
+        let memory_heaps = mem_props.memory_heaps[..mem_props.memory_heap_count as _].to_vec();
 
         if desc.debug_settings.log_memory_information {
             log!(
@@ -608,13 +610,13 @@ impl VulkanAllocator {
                     mem_type.heap_index,
                 );
             }
-            for i in 0..mem_props.memory_heap_count {
+            for (i, heap) in memory_heaps.iter().enumerate() {
                 log!(
                     Level::Debug,
                     "heap[{}] flags: 0x{:x}, size: {} MiB",
                     i,
-                    mem_props.memory_heaps[i as usize].flags.as_raw(),
-                    mem_props.memory_heaps[i as usize].size / (1024 * 1024)
+                    heap.flags.as_raw(),
+                    heap.size / (1024 * 1024)
                 );
             }
         }
@@ -656,6 +658,7 @@ impl VulkanAllocator {
 
         Self {
             memory_types,
+            memory_heaps,
             device: desc.device.clone(),
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,

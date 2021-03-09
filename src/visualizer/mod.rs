@@ -264,15 +264,14 @@ impl AllocatorVisualizer {
                     alloc.buffer_image_granularity
                 ));
 
-                let heap_count = alloc.physical_mem_props.memory_heap_count;
+                let heap_count = alloc.memory_heaps.len();
                 if CollapsingHeader::new(&ImString::new(format!(
                     "Memory Heaps ({} heaps)",
                     heap_count
                 )))
                 .build(ui)
                 {
-                    for i in 0..alloc.physical_mem_props.memory_heap_count {
-                        let heap = &alloc.physical_mem_props.memory_heaps[i as usize];
+                    for (i, heap) in alloc.memory_heaps.iter().enumerate() {
                         ui.indent();
                         if CollapsingHeader::new(&ImString::new(format!("Heap: {}", i))).build(ui) {
                             ui.indent();
@@ -316,10 +315,7 @@ impl AllocatorVisualizer {
                                 format_memory_properties(mem_type.memory_properties),
                                 mem_type.memory_properties.as_raw()
                             ));
-                            ui.text(&format!(
-                                "heap index: {}",
-                                alloc.physical_mem_props.memory_types[mem_type_i].heap_index
-                            ));
+                            ui.text(&format!("heap index: {}", mem_type.heap_index));
                             ui.text(&format!(
                                 "total block size: {} KiB",
                                 total_block_size / 1024
