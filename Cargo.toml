@@ -24,7 +24,7 @@ thiserror = "1.0"
 imgui = { version = "0.6", optional = true }
 
 [dev-dependencies]
-ash-window = "0.5"
+ash-window = "0.6"
 winit = "0.23"
 
 

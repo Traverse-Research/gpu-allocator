@@ -13,7 +13,7 @@ mod imgui_renderer;
 use imgui_renderer::{handle_imgui_event, ImGuiRenderer};
 
 fn main() {
-    let entry = ash::Entry::new().unwrap();
+    let entry = unsafe { ash::Entry::new() }.unwrap();
 
     let event_loop = winit::event_loop::EventLoop::new();
 
