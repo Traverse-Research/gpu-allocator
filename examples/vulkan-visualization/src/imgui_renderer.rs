@@ -38,6 +38,7 @@ pub struct ImGuiRenderer {
 }
 
 impl ImGuiRenderer {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         imgui: &mut imgui::Context,
         device: &ash::Device,
