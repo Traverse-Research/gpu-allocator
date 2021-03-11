@@ -11,7 +11,7 @@
 
 ```toml
 [dependencies]
-gpu-allocator = "0.5.0"
+gpu-allocator = "0.6.0"
 ```
 
 ## Setting up the allocator for Vulkan
