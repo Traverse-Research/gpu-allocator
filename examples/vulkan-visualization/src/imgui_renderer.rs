@@ -1,4 +1,3 @@
-use ash::version::DeviceV1_0;
 use ash::vk;
 
 use crate::helper::record_and_submit_command_buffer;
