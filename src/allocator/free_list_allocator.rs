@@ -1,7 +1,7 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
-use super::{
-    AllocationError, AllocationType, Result, SubAllocation, SubAllocator, SubAllocatorBase,
-};
+use super::{SubAllocator, SubAllocatorBase};
+use crate::{AllocationError, AllocationType, Result, SubAllocation};
+
 use log::{log, Level};
 use std::collections::{HashMap, HashSet};
 

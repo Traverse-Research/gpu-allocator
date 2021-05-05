@@ -1,9 +1,9 @@
 #![allow(clippy::new_without_default)]
 
-use crate::dedicated_block_allocator;
-use crate::free_list_allocator;
-use crate::VulkanAllocator;
-use crate::*;
+use super::dedicated_block_allocator;
+use super::free_list_allocator;
+use crate::allocator::*;
+use crate::vulkan::VulkanAllocator;
 
 use imgui::*;
 
