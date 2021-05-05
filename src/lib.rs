@@ -361,6 +361,10 @@ impl MemoryBlock {
     }
 }
 
+// The `mapped_ptr` points towards mapped memory that outlives the buffer.
+unsafe impl Send for MemoryBlock {}
+unsafe impl Sync for MemoryBlock {}
+
 #[derive(Debug)]
 struct MemoryType {
     memory_blocks: Vec<Option<MemoryBlock>>,
