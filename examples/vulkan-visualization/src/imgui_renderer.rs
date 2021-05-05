@@ -76,7 +76,7 @@ impl ImGuiRenderer {
                 .build()];
             let set_layouts = set_layout_infos
                 .iter()
-                .map(|info| Ok(unsafe { device.create_descriptor_set_layout(info, None) }?))
+                .map(|info| unsafe { device.create_descriptor_set_layout(info, None) })
                 .collect::<Result<Vec<_>, vk::Result>>()?;
 
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
