@@ -3,7 +3,7 @@ use ash::vk;
 use log::{log, Level};
 use std::fmt;
 
-use crate::{AllocationError, AllocationType, Result};
+use crate::{AllocationError, AllocationType, AllocatorDebugSettings, MemoryLocation, Result};
 
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
@@ -17,51 +17,7 @@ pub struct AllocationCreateDesc<'a> {
     pub linear: bool,
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub enum MemoryLocation {
-    /// The allocated resource is stored at an unknown memory location; let the driver decide what's the best location
-    Unknown,
-    /// Store the allocation in GPU only accessible memory - typically this is the faster GPU resource and this should be
-    /// where most of the allocations live.
-    GpuOnly,
-    /// Memory useful for uploading data to the GPU and potentially for constant buffers
-    CpuToGpu,
-    /// Memory useful for CPU readback of data
-    GpuToCpu,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct AllocatorDebugSettings {
-    /// Logs out debugging information about the various heaps the current device has on startup
-    pub log_memory_information: bool,
-    /// Logs out all memory leaks on shutdown with log level Warn
-    pub log_leaks_on_shutdown: bool,
-    /// Stores a copy of the full backtrace for every allocation made, this makes it easier to debug leaks
-    /// or other memory allocations, but storing stack traces has a RAM overhead so should be disabled
-    /// in shipping applications.
-    pub store_stack_traces: bool,
-    /// Log out every allocation as it's being made with log level Debug, rather spammy so off by default
-    pub log_allocations: bool,
-    /// Log out every free that is being called with log level Debug, rather spammy so off by default
-    pub log_frees: bool,
-    /// Log out stack traces when either `log_allocations` or `log_frees` is enabled.
-    pub log_stack_traces: bool,
-}
-
-impl Default for AllocatorDebugSettings {
-    fn default() -> Self {
-        Self {
-            log_memory_information: false,
-            log_leaks_on_shutdown: true,
-            store_stack_traces: false,
-            log_allocations: false,
-            log_frees: false,
-            log_stack_traces: false,
-        }
-    }
-}
-
-pub struct VulkanAllocatorCreateDesc {
+pub struct AllocatorCreateDesc {
     pub instance: ash::Instance,
     pub device: ash::Device,
     pub physical_device: ash::vk::PhysicalDevice,
@@ -90,6 +46,12 @@ unsafe impl Send for SubAllocation {}
 // In order to break safety guarantees, the user needs to `unsafe`ly dereference
 // `mapped_ptr` themselves.
 unsafe impl Sync for SubAllocation {}
+
+impl crate::SubAllocation for SubAllocation {
+    fn chunk_id(&self) -> Option<std::num::NonZeroU64> {
+        self.chunk_id
+    }
+}
 
 impl SubAllocation {
     /// Returns the `vk::DeviceMemory` object that is backing this allocation.
@@ -446,7 +408,7 @@ impl MemoryType {
             .as_mut()
             .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
 
-        mem_block.sub_allocator.free(sub_allocation)?;
+        mem_block.sub_allocator.free(Box::new(sub_allocation))?;
 
         if mem_block.sub_allocator.is_empty() {
             if mem_block.sub_allocator.supports_general_allocations() {
@@ -472,7 +434,7 @@ impl MemoryType {
     }
 }
 
-pub struct VulkanAllocator {
+pub struct Allocator {
     pub(crate) memory_types: Vec<MemoryType>,
     pub(crate) memory_heaps: Vec<vk::MemoryHeap>,
     device: ash::Device,
@@ -480,9 +442,9 @@ pub struct VulkanAllocator {
     pub(crate) debug_settings: AllocatorDebugSettings,
 }
 
-impl fmt::Debug for VulkanAllocator {
+impl fmt::Debug for Allocator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("VulkanAllocator")
+        f.debug_struct("Allocator")
             .field("memory_types", &self.memory_types)
             .field("memory_heaps", &self.memory_heaps)
             .field("buffer_image_granularity", &self.buffer_image_granularity)
@@ -491,8 +453,8 @@ impl fmt::Debug for VulkanAllocator {
     }
 }
 
-impl VulkanAllocator {
-    pub fn new(desc: &VulkanAllocatorCreateDesc) -> Self {
+impl Allocator {
+    pub fn new(desc: &AllocatorCreateDesc) -> Self {
         let mem_props = unsafe {
             desc.instance
                 .get_physical_device_memory_properties(desc.physical_device)
@@ -727,7 +689,7 @@ impl VulkanAllocator {
     }
 }
 
-impl Drop for VulkanAllocator {
+impl Drop for Allocator {
     fn drop(&mut self) {
         if self.debug_settings.log_leaks_on_shutdown {
             self.report_memory_leaks(Level::Warn);

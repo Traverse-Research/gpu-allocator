@@ -3,7 +3,7 @@
 use super::dedicated_block_allocator;
 use super::free_list_allocator;
 use crate::allocator::*;
-use crate::vulkan::VulkanAllocator;
+use crate::vulkan::Allocator;
 
 use imgui::*;
 
@@ -207,7 +207,7 @@ impl AllocatorVisualizer {
         self.color_scheme = color_scheme;
     }
 
-    fn render_main_window(&mut self, ui: &imgui::Ui, alloc: &VulkanAllocator) {
+    fn render_main_window(&mut self, ui: &imgui::Ui, alloc: &Allocator) {
         imgui::Window::new(imgui::im_str!("Allocator visualization"))
             .collapsed(true, Condition::FirstUseEver)
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
@@ -349,7 +349,7 @@ impl AllocatorVisualizer {
             });
     }
 
-    fn render_memory_block_windows(&mut self, ui: &imgui::Ui, alloc: &VulkanAllocator) {
+    fn render_memory_block_windows(&mut self, ui: &imgui::Ui, alloc: &Allocator) {
         use imgui::*;
         // Copy here to workaround the borrow checker.
         let focus_opt = self.focus;
@@ -455,7 +455,7 @@ impl AllocatorVisualizer {
         self.focus = None;
     }
 
-    pub fn render(&mut self, allocator: &VulkanAllocator, ui: &imgui::Ui) {
+    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui) {
         self.render_main_window(ui, allocator);
         self.render_memory_block_windows(ui, allocator);
     }

@@ -3,7 +3,7 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 
-use gpu_allocator::{VulkanAllocator, VulkanAllocatorCreateDesc};
+use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 
 mod helper;
 use helper::record_and_submit_command_buffer;
@@ -223,7 +223,7 @@ fn main() {
             .collect::<Vec<_>>();
 
         // Setting up the allocator
-        let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
+        let mut allocator = Allocator::new(&AllocatorCreateDesc {
             instance: instance.clone(),
             device: device.clone(),
             physical_device: pdevice,
