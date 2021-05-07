@@ -591,18 +591,16 @@ impl ImGuiRenderer {
         };
 
         Ok(Self {
+            sampler,
+
             vb_capacity,
-            vb_allocation,
-            vertex_buffer,
-
             ib_capacity,
+            vb_allocation,
             ib_allocation,
+            vertex_buffer,
             index_buffer,
-
             cb_allocation,
             constant_buffer,
-
-            sampler,
 
             font_image,
             font_image_memory,
