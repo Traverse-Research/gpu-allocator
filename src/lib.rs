@@ -197,6 +197,7 @@ pub struct SubAllocation {
 }
 
 unsafe impl Send for SubAllocation {}
+unsafe impl Sync for SubAllocation {}
 
 impl SubAllocation {
     /// Returns the `vk::DeviceMemory` object that is backing this allocation.
