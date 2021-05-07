@@ -86,7 +86,7 @@ pub struct AllocationCreateDesc<'a> {
     pub linear: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum MemoryLocation {
     /// The allocated resource is stored at an unknown memory location; let the driver decide what's the best location
     Unknown,
