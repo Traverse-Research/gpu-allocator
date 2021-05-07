@@ -224,14 +224,16 @@ impl SubAllocation {
 
     /// Returns a valid mapped pointer if the memory is host visible, otherwise it will return None.
     /// The pointer already points to the exact memory region of the suballocation, so no offset needs to be applied.
-    pub fn mapped_ptr(&self) -> Option<std::ptr::NonNull<std::ffi::c_void>> {
+    /// # Safety
+    /// Be careful not to mutably alias with this pointer; safety cannot be guaranteed, particularly over multiple threads.
+    pub unsafe fn mapped_ptr(&self) -> Option<std::ptr::NonNull<std::ffi::c_void>> {
         self.mapped_ptr
     }
 
     /// Returns a valid mapped slice if the memory is host visible, otherwise it will return None.
     /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
     pub fn mapped_slice(&self) -> Option<&[u8]> {
-        if let Some(ptr) = self.mapped_ptr() {
+        if let Some(ptr) = self.mapped_ptr {
             unsafe {
                 Some(std::slice::from_raw_parts(
                     ptr.as_ptr() as *const _,
@@ -246,7 +248,7 @@ impl SubAllocation {
     /// Returns a valid mapped mutable slice if the memory is host visible, otherwise it will return None.
     /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
     pub fn mapped_slice_mut(&mut self) -> Option<&mut [u8]> {
-        if let Some(ptr) = self.mapped_ptr() {
+        if let Some(ptr) = self.mapped_ptr {
             unsafe {
                 Some(std::slice::from_raw_parts_mut(
                     ptr.as_ptr() as *mut _,
