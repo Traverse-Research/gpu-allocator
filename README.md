@@ -22,7 +22,7 @@ This crate provides a fully written in Rust memory allocator for Vulkan, and wil
 ```rust
 use gpu_allocator::*;
 
-let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
+let mut allocator = vulkan::Allocator::new(&vulkan::AllocatorCreateDesc {
     instance,
     device,
     physical_device,
@@ -46,7 +46,7 @@ let buffer = unsafe { device.create_buffer(&vk_info, None) }.unwrap();
 let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
 
 let allocation = allocator
-    .allocate(&AllocationCreateDesc {
+    .allocate(&vulkan::AllocationCreateDesc {
         name: "Example allocation",
         requirements,
         location: MemoryLocation::CpuToGpu,
