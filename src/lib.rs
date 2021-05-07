@@ -361,7 +361,8 @@ impl MemoryBlock {
     }
 }
 
-// The `mapped_ptr` points towards mapped memory that outlives the buffer.
+// `mapped_ptr` is safe to send or share across threads because
+// it is never exposed publicly through [`MemoryBlock`].
 unsafe impl Send for MemoryBlock {}
 unsafe impl Sync for MemoryBlock {}
 
