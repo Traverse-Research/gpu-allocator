@@ -304,11 +304,9 @@ impl AllocatorVisualizer {
                         {
                             let mut total_block_size = 0;
                             let mut total_allocated = 0;
-                            for block in mem_type.memory_blocks.iter() {
-                                if let Some(block) = block {
-                                    total_block_size += block.size;
-                                    total_allocated += block.sub_allocator.allocated();
-                                }
+                            for block in mem_type.memory_blocks.iter().flatten() {
+                                total_block_size += block.size;
+                                total_allocated += block.sub_allocator.allocated();
                             }
                             ui.text(&format!(
                                 "properties: {} (0x{:x})",
