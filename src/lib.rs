@@ -233,31 +233,17 @@ impl SubAllocation {
     /// Returns a valid mapped slice if the memory is host visible, otherwise it will return None.
     /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
     pub fn mapped_slice(&self) -> Option<&[u8]> {
-        if let Some(ptr) = self.mapped_ptr {
-            unsafe {
-                Some(std::slice::from_raw_parts(
-                    ptr.as_ptr() as *const _,
-                    self.size as usize,
-                ))
-            }
-        } else {
-            None
-        }
+        self.mapped_ptr.map(|ptr| unsafe {
+            std::slice::from_raw_parts(ptr.as_ptr() as *const _, self.size as usize)
+        })
     }
 
     /// Returns a valid mapped mutable slice if the memory is host visible, otherwise it will return None.
     /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
     pub fn mapped_slice_mut(&mut self) -> Option<&mut [u8]> {
-        if let Some(ptr) = self.mapped_ptr {
-            unsafe {
-                Some(std::slice::from_raw_parts_mut(
-                    ptr.as_ptr() as *mut _,
-                    self.size as usize,
-                ))
-            }
-        } else {
-            None
-        }
+        self.mapped_ptr.map(|ptr| unsafe {
+            std::slice::from_raw_parts_mut(ptr.as_ptr() as *mut _, self.size as usize)
+        })
     }
 
     pub fn is_null(&self) -> bool {
