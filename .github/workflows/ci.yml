@@ -70,3 +70,29 @@ jobs:
         with:
           command: clippy
           args: --workspace --all-targets --all-features -- -D warnings
+
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Use cached cargo-readme
+        uses: actions/cache@v2
+        id: cargo-readme-cache
+        with:
+          path: ~/.cargo/bin/cargo-readme
+          key: ${{ runner.os }}-cargo-readme
+      - name: Install cargo-readme
+        if: steps.cargo-readme-cache.outputs.cache-hit != 'true'
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-readme
+      - name: Check if README.md is up-to-date
+        run: |
+          cargo readme > README.md
+          git diff --quiet || (echo '::error::Generated README is different, please regenerate with `cargo readme > README.md`'; git diff; false)
