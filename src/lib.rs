@@ -196,6 +196,8 @@ pub struct SubAllocation {
     backtrace: Option<String>,
 }
 
+// `mapped_ptr` is safe to send or share across threads because
+// it is never exposed publicly through [`SubAllocation`].
 unsafe impl Send for SubAllocation {}
 unsafe impl Sync for SubAllocation {}
 
