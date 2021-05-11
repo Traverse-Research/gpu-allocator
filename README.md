@@ -12,7 +12,7 @@
 
 ```toml
 [dependencies]
-gpu-allocator = "0.6.0"
+gpu-allocator = "0.7.0"
 ```
 
 This crate provides a fully written in Rust memory allocator for Vulkan, and will provide one for DirectX 12 in the future.
