@@ -591,18 +591,16 @@ impl ImGuiRenderer {
         };
 
         Ok(Self {
+            sampler,
+
             vb_capacity,
-            vb_allocation,
-            vertex_buffer,
-
             ib_capacity,
+            vb_allocation,
             ib_allocation,
+            vertex_buffer,
             index_buffer,
-
             cb_allocation,
             constant_buffer,
-
-            sampler,
 
             font_image,
             font_image_memory,
@@ -747,8 +745,8 @@ impl ImGuiRenderer {
 
             {
                 let vertices = draw_list.vtx_buffer();
-                let dst_ptr =
-                    self.vb_allocation.mapped_ptr().unwrap().as_ptr() as *mut imgui::DrawVert;
+                let dst_ptr = unsafe { self.vb_allocation.mapped_ptr() }.unwrap().as_ptr()
+                    as *mut imgui::DrawVert;
                 let dst_ptr = unsafe { dst_ptr.offset(vb_offset) };
                 unsafe {
                     std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst_ptr, vertices.len())
@@ -758,8 +756,8 @@ impl ImGuiRenderer {
 
             {
                 let indices = draw_list.idx_buffer();
-                let dst_ptr =
-                    self.ib_allocation.mapped_ptr().unwrap().as_ptr() as *mut imgui::DrawIdx;
+                let dst_ptr = unsafe { self.ib_allocation.mapped_ptr() }.unwrap().as_ptr()
+                    as *mut imgui::DrawIdx;
                 let dst_ptr = unsafe { dst_ptr.offset(ib_offset) };
                 unsafe { std::ptr::copy_nonoverlapping(indices.as_ptr(), dst_ptr, indices.len()) };
                 ib_offset += indices.len() as isize;

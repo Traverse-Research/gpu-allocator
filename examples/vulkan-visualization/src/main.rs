@@ -81,11 +81,11 @@ fn main() {
             };
             pdevices
                 .iter()
-                .map(|pdevice| {
+                .find_map(|pdevice| {
                     unsafe { instance.get_physical_device_queue_family_properties(*pdevice) }
                         .iter()
                         .enumerate()
-                        .filter_map(|(index, &info)| {
+                        .find_map(|(index, &info)| {
                             let supports_graphics =
                                 info.queue_flags.contains(vk::QueueFlags::GRAPHICS);
                             let supports_surface = unsafe {
@@ -102,10 +102,7 @@ fn main() {
                                 None
                             }
                         })
-                        .next()
                 })
-                .filter_map(|v| v)
-                .next()
                 .expect("Couldn't find suitable device.")
         };
 
