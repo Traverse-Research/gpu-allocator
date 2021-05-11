@@ -86,7 +86,7 @@ pub struct AllocationCreateDesc<'a> {
     pub linear: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum MemoryLocation {
     /// The allocated resource is stored at an unknown memory location; let the driver decide what's the best location
     Unknown,
@@ -196,7 +196,13 @@ pub struct SubAllocation {
     backtrace: Option<String>,
 }
 
+// Sending is fine because mapped_ptr does not change based on the thread we are in
 unsafe impl Send for SubAllocation {}
+// Sync is also okay because Sending &SubAllocation is safe: a mutable reference
+// to the data in mapped_ptr is never exposed while `self` is immutably borrowed.
+// In order to break safety guarantees, the user needs to `unsafe`ly dereference
+// `mapped_ptr` themselves.
+unsafe impl Sync for SubAllocation {}
 
 impl SubAllocation {
     /// Returns the `vk::DeviceMemory` object that is backing this allocation.
