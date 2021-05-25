@@ -17,10 +17,14 @@ include = [
 ]
 
 [dependencies]
-ash = { version = "0.33", optional = true }
 backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
+# Only needed for vulkan.
+ash = { version = "0.33", optional = true }
+# Only needed for d3d12.
+winapi = { git = "https://github.com/Traverse-Research/winapi-rs.git", rev = "b30c725", features = ["windef", "winuser", "libloaderapi", "d3d12", "d3d12sdklayers", "winbase", "winerror", "impl-default", "impl-debug"] }
+# Only needed for visualizer.
 imgui = { version = "0.7", optional = true }
 
 [dev-dependencies]
