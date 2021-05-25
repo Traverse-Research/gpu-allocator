@@ -253,14 +253,14 @@ impl AllocatorVisualizer {
     }
 
     fn render_main_window(&mut self, ui: &imgui::Ui, alloc: &VulkanAllocator) {
-        imgui::Window::new(imgui::im_str!("Allocator visualiziation"))
+        imgui::Window::new(imgui::im_str!("Allocator visualization"))
             .collapsed(true, Condition::FirstUseEver)
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
             .build(&ui, || {
                 use imgui::*;
 
                 ui.text(&format!(
-                    "buffer image granualarity: {:?}",
+                    "buffer image granularity: {:?}",
                     alloc.buffer_image_granularity
                 ));
 
