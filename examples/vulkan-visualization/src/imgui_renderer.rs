@@ -51,37 +51,37 @@ impl ImGuiRenderer {
     ) -> Result<Self, vk::Result> {
         let (pipeline_layout, descriptor_set_layouts) = {
             let bindings = [
-                vk::DescriptorSetLayoutBinding::builder()
-                    .binding(0)
-                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .descriptor_count(1)
-                    .stage_flags(vk::ShaderStageFlags::VERTEX)
-                    .build(),
-                vk::DescriptorSetLayoutBinding::builder()
-                    .binding(1)
-                    .descriptor_type(vk::DescriptorType::SAMPLER)
-                    .descriptor_count(1)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-                    .build(),
-                vk::DescriptorSetLayoutBinding::builder()
-                    .binding(2)
-                    .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
-                    .descriptor_count(1)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-                    .build(),
+                vk::DescriptorSetLayoutBinding {
+                    binding: 0,
+                    descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                    descriptor_count: 1,
+                    stage_flags: vk::ShaderStageFlags::VERTEX,
+                    p_immutable_samplers: std::ptr::null(),
+                },
+                vk::DescriptorSetLayoutBinding {
+                    binding: 1,
+                    descriptor_type: vk::DescriptorType::SAMPLER,
+                    descriptor_count: 1,
+                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                    p_immutable_samplers: std::ptr::null(),
+                },
+                vk::DescriptorSetLayoutBinding {
+                    binding: 2,
+                    descriptor_type: vk::DescriptorType::SAMPLED_IMAGE,
+                    descriptor_count: 1,
+                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                    p_immutable_samplers: std::ptr::null(),
+                },
             ];
 
-            let set_layout_infos = [vk::DescriptorSetLayoutCreateInfo::builder()
-                .bindings(&bindings)
-                .build()];
+            let set_layout_infos =
+                [vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings)];
             let set_layouts = set_layout_infos
                 .iter()
                 .map(|info| unsafe { device.create_descriptor_set_layout(info, None) })
                 .collect::<Result<Vec<_>, vk::Result>>()?;
 
-            let layout_info = vk::PipelineLayoutCreateInfo::builder()
-                .set_layouts(&set_layouts)
-                .build();
+            let layout_info = vk::PipelineLayoutCreateInfo::builder().set_layouts(&set_layouts);
             let pipeline_layout = unsafe { device.create_pipeline_layout(&layout_info, None) }?;
 
             (pipeline_layout, set_layouts)
@@ -93,16 +93,14 @@ impl ImGuiRenderer {
                 .samples(vk::SampleCountFlags::TYPE_1)
                 .load_op(vk::AttachmentLoadOp::CLEAR)
                 .store_op(vk::AttachmentStoreOp::STORE)
-                .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .build();
+                .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
 
+            let subpass_attachment = vk::AttachmentReference::builder()
+                .attachment(0)
+                .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
             let subpass_description = vk::SubpassDescription::builder()
                 .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-                .color_attachments(&[vk::AttachmentReference::builder()
-                    .attachment(0)
-                    .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                    .build()])
-                .build();
+                .color_attachments(std::slice::from_ref(&subpass_attachment));
 
             let dependencies = vk::SubpassDependency::builder()
                 .src_subpass(vk::SUBPASS_EXTERNAL)
@@ -111,14 +109,12 @@ impl ImGuiRenderer {
                     vk::AccessFlags::COLOR_ATTACHMENT_READ
                         | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                 )
-                .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                .build();
+                .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT);
 
             let render_pass_create_info = vk::RenderPassCreateInfo::builder()
-                .attachments(&[attachments])
-                .subpasses(&[subpass_description])
-                .dependencies(&[dependencies])
-                .build();
+                .attachments(std::slice::from_ref(&attachments))
+                .subpasses(std::slice::from_ref(&subpass_description))
+                .dependencies(std::slice::from_ref(&dependencies));
             unsafe { device.create_render_pass(&render_pass_create_info, None) }.unwrap()
         };
 
@@ -144,18 +140,15 @@ impl ImGuiRenderer {
         };
 
         let pipeline = {
-            let stages = [
-                vk::PipelineShaderStageCreateInfo::builder()
-                    .stage(vk::ShaderStageFlags::VERTEX)
-                    .module(vs_module)
-                    .name(std::ffi::CStr::from_bytes_with_nul(b"main\0").unwrap())
-                    .build(),
-                vk::PipelineShaderStageCreateInfo::builder()
-                    .stage(vk::ShaderStageFlags::FRAGMENT)
-                    .module(ps_module)
-                    .name(std::ffi::CStr::from_bytes_with_nul(b"main\0").unwrap())
-                    .build(),
-            ];
+            let vertex_stage = vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::VERTEX)
+                .module(vs_module)
+                .name(std::ffi::CStr::from_bytes_with_nul(b"main\0").unwrap());
+            let fragment_stage = vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::FRAGMENT)
+                .module(ps_module)
+                .name(std::ffi::CStr::from_bytes_with_nul(b"main\0").unwrap());
+            let stages = [vertex_stage.build(), fragment_stage.build()];
 
             let vertex_binding_descriptions = [vk::VertexInputBindingDescription {
                 binding: 0,
@@ -214,7 +207,7 @@ impl ImGuiRenderer {
                 .front(noop_stencil_state)
                 .back(noop_stencil_state)
                 .max_depth_bounds(1.0);
-            let attachments = [vk::PipelineColorBlendAttachmentState::builder()
+            let attachments = vk::PipelineColorBlendAttachmentState::builder()
                 .blend_enable(true)
                 .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
                 .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
@@ -222,11 +215,10 @@ impl ImGuiRenderer {
                 .src_alpha_blend_factor(vk::BlendFactor::ZERO)
                 .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
                 .alpha_blend_op(vk::BlendOp::ADD)
-                .color_write_mask(vk::ColorComponentFlags::all())
-                .build()];
+                .color_write_mask(vk::ColorComponentFlags::all());
             let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
                 .logic_op(vk::LogicOp::CLEAR)
-                .attachments(&attachments);
+                .attachments(std::slice::from_ref(&attachments));
             let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
                 .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
 
@@ -242,13 +234,12 @@ impl ImGuiRenderer {
                 .dynamic_state(&dynamic_state)
                 .layout(pipeline_layout)
                 .render_pass(render_pass)
-                .subpass(0)
-                .build();
+                .subpass(0);
 
             unsafe {
                 device.create_graphics_pipelines(
                     vk::PipelineCache::null(),
-                    &[pipeline_create_info],
+                    std::slice::from_ref(&pipeline_create_info),
                     None,
                 )
             }
@@ -303,24 +294,20 @@ impl ImGuiRenderer {
                     b: vk::ComponentSwizzle::B,
                     a: vk::ComponentSwizzle::A,
                 })
-                .subresource_range(
-                    vk::ImageSubresourceRange::builder()
-                        .aspect_mask(vk::ImageAspectFlags::COLOR)
-                        .base_mip_level(0)
-                        .level_count(1)
-                        .base_array_layer(0)
-                        .layer_count(1)
-                        .build(),
-                )
-                .build();
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                });
             let image_view = unsafe { device.create_image_view(&view_create_info, None) }?;
 
             // Create upload buffer
             let (upload_buffer, upload_buffer_memory) = {
                 let create_info = vk::BufferCreateInfo::builder()
                     .size((font_atlas.width * font_atlas.height * 4) as u64)
-                    .usage(vk::BufferUsageFlags::TRANSFER_SRC)
-                    .build();
+                    .usage(vk::BufferUsageFlags::TRANSFER_SRC);
                 let buffer = unsafe { device.create_buffer(&create_info, None) }?;
 
                 let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
@@ -371,13 +358,13 @@ impl ImGuiRenderer {
                             .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                             .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                             .old_layout(vk::ImageLayout::UNDEFINED)
-                            .subresource_range(
-                                vk::ImageSubresourceRange::builder()
-                                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                    .layer_count(vk::REMAINING_ARRAY_LAYERS)
-                                    .level_count(vk::REMAINING_MIP_LEVELS)
-                                    .build(),
-                            );
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: vk::REMAINING_MIP_LEVELS,
+                                base_array_layer: 0,
+                                layer_count: vk::REMAINING_ARRAY_LAYERS,
+                            });
 
                         unsafe {
                             device.cmd_pipeline_barrier(
@@ -387,37 +374,34 @@ impl ImGuiRenderer {
                                 vk::DependencyFlags::empty(),
                                 &[],
                                 &[],
-                                &[layout_transition_barriers.build()],
+                                std::slice::from_ref(&layout_transition_barriers),
                             )
                         };
                     }
 
-                    let regions = [vk::BufferImageCopy::builder()
+                    let regions = vk::BufferImageCopy::builder()
                         .buffer_offset(0)
                         .buffer_row_length(font_atlas.width)
                         .buffer_image_height(font_atlas.height)
-                        .image_subresource(
-                            vk::ImageSubresourceLayers::builder()
-                                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                .mip_level(0)
-                                .base_array_layer(0)
-                                .layer_count(1)
-                                .build(),
-                        )
+                        .image_subresource(vk::ImageSubresourceLayers {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            mip_level: 0,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        })
                         .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
                         .image_extent(vk::Extent3D {
                             width: font_atlas.width,
                             height: font_atlas.height,
                             depth: 1,
-                        })
-                        .build()];
+                        });
                     unsafe {
                         device.cmd_copy_buffer_to_image(
                             cmd,
                             upload_buffer,
                             image,
                             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                            &regions,
+                            std::slice::from_ref(&regions),
                         )
                     };
 
@@ -427,13 +411,13 @@ impl ImGuiRenderer {
                             .dst_access_mask(vk::AccessFlags::SHADER_READ)
                             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                            .subresource_range(
-                                vk::ImageSubresourceRange::builder()
-                                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                    .layer_count(vk::REMAINING_ARRAY_LAYERS)
-                                    .level_count(vk::REMAINING_MIP_LEVELS)
-                                    .build(),
-                            );
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: vk::REMAINING_MIP_LEVELS,
+                                base_array_layer: 0,
+                                layer_count: vk::REMAINING_ARRAY_LAYERS,
+                            });
 
                         unsafe {
                             device.cmd_pipeline_barrier(
@@ -443,7 +427,7 @@ impl ImGuiRenderer {
                                 vk::DependencyFlags::empty(),
                                 &[],
                                 &[],
-                                &[layout_transition_barriers.build()],
+                                std::slice::from_ref(&layout_transition_barriers),
                             )
                         };
                     }
@@ -470,8 +454,7 @@ impl ImGuiRenderer {
                 .mip_lod_bias(0.0)
                 .anisotropy_enable(false)
                 .compare_enable(false)
-                .unnormalized_coordinates(false)
-                .build();
+                .unnormalized_coordinates(false);
             unsafe { device.create_sampler(&create_info, None) }?
         };
 
@@ -481,8 +464,7 @@ impl ImGuiRenderer {
             let create_info = vk::BufferCreateInfo::builder()
                 .size(capacity)
                 .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .build();
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
             let buffer = unsafe { device.create_buffer(&create_info, None) }?;
 
@@ -507,8 +489,7 @@ impl ImGuiRenderer {
             let create_info = vk::BufferCreateInfo::builder()
                 .size(capacity)
                 .usage(vk::BufferUsageFlags::INDEX_BUFFER)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .build();
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
             let buffer = unsafe { device.create_buffer(&create_info, None) }?;
 
@@ -531,8 +512,7 @@ impl ImGuiRenderer {
             let create_info = vk::BufferCreateInfo::builder()
                 .size(std::mem::size_of::<ImGuiCBuffer>() as u64)
                 .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .build();
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
             let buffer = unsafe { device.create_buffer(&create_info, None) }?;
 
@@ -558,35 +538,43 @@ impl ImGuiRenderer {
                 .set_layouts(&descriptor_set_layouts);
             let descriptor_sets = unsafe { device.allocate_descriptor_sets(&alloc_info) }?;
 
-            let write_desc_sets = [
-                vk::WriteDescriptorSet::builder()
-                    .dst_set(descriptor_sets[0])
-                    .dst_binding(0)
-                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .buffer_info(&[vk::DescriptorBufferInfo::builder()
-                        .buffer(constant_buffer)
-                        .offset(0)
-                        .range(std::mem::size_of::<ImGuiCBuffer>() as u64)
-                        .build()])
-                    .build(),
-                vk::WriteDescriptorSet::builder()
-                    .dst_set(descriptor_sets[0])
-                    .dst_binding(1)
-                    .descriptor_type(vk::DescriptorType::SAMPLER)
-                    .image_info(&[vk::DescriptorImageInfo::builder().sampler(sampler).build()])
-                    .build(),
-                vk::WriteDescriptorSet::builder()
-                    .dst_set(descriptor_sets[0])
-                    .dst_binding(2)
-                    .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
-                    .image_info(&[vk::DescriptorImageInfo::builder()
-                        .image_view(font_image_view)
-                        //.sampler(imgui_renderer.sampler)
-                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                        .build()])
-                    .build(),
-            ];
-            unsafe { device.update_descriptor_sets(&write_desc_sets, &[]) };
+            let buffer_info = vk::DescriptorBufferInfo::builder()
+                .buffer(constant_buffer)
+                .offset(0)
+                .range(std::mem::size_of::<ImGuiCBuffer>() as u64);
+            let uniform_buffer = vk::WriteDescriptorSet::builder()
+                .dst_set(descriptor_sets[0])
+                .dst_binding(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(std::slice::from_ref(&buffer_info));
+
+            let image_info = vk::DescriptorImageInfo::builder().sampler(sampler);
+            let sampler = vk::WriteDescriptorSet::builder()
+                .dst_set(descriptor_sets[0])
+                .dst_binding(1)
+                .descriptor_type(vk::DescriptorType::SAMPLER)
+                .image_info(std::slice::from_ref(&image_info));
+
+            let image_info = vk::DescriptorImageInfo::builder()
+                .image_view(font_image_view)
+                //.sampler(imgui_renderer.sampler)
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+            let sampled_image = vk::WriteDescriptorSet::builder()
+                .dst_set(descriptor_sets[0])
+                .dst_binding(2)
+                .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                .image_info(std::slice::from_ref(&image_info));
+
+            unsafe {
+                device.update_descriptor_sets(
+                    &[
+                        uniform_buffer.build(),
+                        sampler.build(),
+                        sampled_image.build(),
+                    ],
+                    &[],
+                )
+            };
             descriptor_sets
         };
 
@@ -664,8 +652,7 @@ impl ImGuiRenderer {
                 color: vk::ClearColorValue {
                     float32: [1.0, 0.5, 1.0, 0.0],
                 },
-            }])
-            .build();
+            }]);
         unsafe {
             device.cmd_begin_render_pass(cmd, &render_pass_begin_info, vk::SubpassContents::INLINE)
         };
@@ -676,9 +663,8 @@ impl ImGuiRenderer {
             .x(0.0)
             .y(0.0)
             .width(window_width as f32)
-            .height(window_height as f32)
-            .build();
-        unsafe { device.cmd_set_viewport(cmd, 0, &[viewport]) };
+            .height(window_height as f32);
+        unsafe { device.cmd_set_viewport(cmd, 0, std::slice::from_ref(&viewport)) };
         {
             let scissor_rect = vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },

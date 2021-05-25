@@ -115,13 +115,12 @@ fn main() {
             };
             let priorities = [1.0];
 
-            let queue_info = [vk::DeviceQueueCreateInfo::builder()
+            let queue_info = vk::DeviceQueueCreateInfo::builder()
                 .queue_family_index(queue_family_index as u32)
-                .queue_priorities(&priorities)
-                .build()];
+                .queue_priorities(&priorities);
 
             let create_info = vk::DeviceCreateInfo::builder()
-                .queue_create_infos(&queue_info)
+                .queue_create_infos(std::slice::from_ref(&queue_info))
                 .enabled_extension_names(&device_extension_names_raw)
                 .enabled_features(&features);
 
@@ -251,18 +250,18 @@ fn main() {
 
         let descriptor_pool = {
             let pool_sizes = [
-                vk::DescriptorPoolSize::builder()
-                    .ty(vk::DescriptorType::UNIFORM_BUFFER)
-                    .descriptor_count(1)
-                    .build(),
-                vk::DescriptorPoolSize::builder()
-                    .ty(vk::DescriptorType::SAMPLED_IMAGE)
-                    .descriptor_count(1)
-                    .build(),
-                vk::DescriptorPoolSize::builder()
-                    .ty(vk::DescriptorType::SAMPLER)
-                    .descriptor_count(1)
-                    .build(),
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::UNIFORM_BUFFER,
+                    descriptor_count: 1,
+                },
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::SAMPLED_IMAGE,
+                    descriptor_count: 1,
+                },
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::SAMPLER,
+                    descriptor_count: 1,
+                },
             ];
             let create_info = vk::DescriptorPoolCreateInfo::builder()
                 .max_sets(1)
@@ -286,11 +285,10 @@ fn main() {
             .map(|&view| {
                 let create_info = vk::FramebufferCreateInfo::builder()
                     .render_pass(imgui_renderer.render_pass)
-                    .attachments(&[view])
+                    .attachments(std::slice::from_ref(&view))
                     .width(window_width)
                     .height(window_height)
-                    .layers(1)
-                    .build();
+                    .layers(1);
 
                 unsafe { device.create_framebuffer(&create_info, None) }.unwrap()
             })
@@ -361,7 +359,7 @@ fn main() {
                     );
 
                     // Transition swapchain image to present state
-                    let image_barriers = [vk::ImageMemoryBarrier::builder()
+                    let image_barriers = vk::ImageMemoryBarrier::builder()
                         .src_access_mask(
                             vk::AccessFlags::COLOR_ATTACHMENT_READ
                                 | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
@@ -369,16 +367,13 @@ fn main() {
                         .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                         .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
                         .image(present_images[present_index as usize])
-                        .subresource_range(
-                            vk::ImageSubresourceRange::builder()
-                                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                .base_mip_level(0)
-                                .level_count(vk::REMAINING_MIP_LEVELS)
-                                .base_array_layer(0)
-                                .layer_count(vk::REMAINING_ARRAY_LAYERS)
-                                .build(),
-                        )
-                        .build()];
+                        .subresource_range(vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            base_mip_level: 0,
+                            level_count: vk::REMAINING_MIP_LEVELS,
+                            base_array_layer: 0,
+                            layer_count: vk::REMAINING_ARRAY_LAYERS,
+                        });
                     unsafe {
                         device.cmd_pipeline_barrier(
                             cmd,
@@ -387,17 +382,16 @@ fn main() {
                             vk::DependencyFlags::empty(),
                             &[],
                             &[],
-                            &image_barriers,
+                            std::slice::from_ref(&image_barriers),
                         )
                     };
                 },
             );
 
             let present_create_info = vk::PresentInfoKHR::builder()
-                .wait_semaphores(&[rendering_complete_semaphore])
-                .swapchains(&[swapchain])
-                .image_indices(&[present_index])
-                .build();
+                .wait_semaphores(std::slice::from_ref(&rendering_complete_semaphore))
+                .swapchains(std::slice::from_ref(&swapchain))
+                .image_indices(std::slice::from_ref(&present_index));
 
             unsafe { swapchain_loader.queue_present(present_queue, &present_create_info) }?;
             //break;
