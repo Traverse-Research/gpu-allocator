@@ -13,9 +13,9 @@ const DEFAULT_BYTES_PER_UNIT: i32 = 1024;
 
 #[derive(Clone)]
 pub struct ColorScheme {
-    free_color: ImColor,
-    linear_color: ImColor,
-    non_linear_color: ImColor,
+    free_color: ImColor32,
+    linear_color: ImColor32,
+    non_linear_color: ImColor32,
 }
 
 impl Default for ColorScheme {
