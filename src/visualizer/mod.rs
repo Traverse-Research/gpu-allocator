@@ -1,7 +1,5 @@
 #![allow(clippy::new_without_default)]
 
-use super::dedicated_block_allocator;
-use super::free_list_allocator;
 use crate::allocator::*;
 use crate::vulkan::Allocator;
 

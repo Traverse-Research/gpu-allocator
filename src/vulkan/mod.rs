@@ -1,9 +1,11 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
+use super::allocator;
+use super::allocator::AllocationType;
 use ash::vk;
 use log::{log, Level};
 use std::fmt;
 
-use crate::{AllocationError, AllocationType, AllocatorDebugSettings, MemoryLocation, Result};
+use crate::{AllocationError, AllocatorDebugSettings, MemoryLocation, Result};
 
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
@@ -26,13 +28,13 @@ pub struct AllocatorCreateDesc {
 }
 
 #[derive(Clone, Debug)]
-pub struct SubAllocation {
-    pub(crate) chunk_id: Option<std::num::NonZeroU64>,
+pub struct Allocation {
+    chunk_id: Option<std::num::NonZeroU64>,
+    offset: u64,
+    size: u64,
     memory_block_index: usize,
     memory_type_index: usize,
     device_memory: vk::DeviceMemory,
-    offset: u64,
-    size: u64,
     mapped_ptr: Option<std::ptr::NonNull<std::ffi::c_void>>,
 
     name: Option<String>,
@@ -40,20 +42,18 @@ pub struct SubAllocation {
 }
 
 // Sending is fine because mapped_ptr does not change based on the thread we are in
-unsafe impl Send for SubAllocation {}
-// Sync is also okay because Sending &SubAllocation is safe: a mutable reference
+unsafe impl Send for Allocation {}
+// Sync is also okay because Sending &Allocation is safe: a mutable reference
 // to the data in mapped_ptr is never exposed while `self` is immutably borrowed.
 // In order to break safety guarantees, the user needs to `unsafe`ly dereference
 // `mapped_ptr` themselves.
-unsafe impl Sync for SubAllocation {}
+unsafe impl Sync for Allocation {}
 
-impl crate::SubAllocation for SubAllocation {
-    fn chunk_id(&self) -> Option<std::num::NonZeroU64> {
+impl Allocation {
+    pub fn chunk_id(&self) -> Option<std::num::NonZeroU64> {
         self.chunk_id
     }
-}
 
-impl SubAllocation {
     /// Returns the `vk::DeviceMemory` object that is backing this allocation.
     /// This memory object can be shared with multiple other allocations and shouldn't be freed (or allocated from)
     /// without this library, because that will lead to undefined behavior.
@@ -84,7 +84,7 @@ impl SubAllocation {
     }
 
     /// Returns a valid mapped slice if the memory is host visible, otherwise it will return None.
-    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    /// The slice already references the exact memory region of the allocation, so no offset needs to be applied.
     pub fn mapped_slice(&self) -> Option<&[u8]> {
         self.mapped_ptr().map(|ptr| unsafe {
             std::slice::from_raw_parts(ptr.cast().as_ptr(), self.size as usize)
@@ -92,7 +92,7 @@ impl SubAllocation {
     }
 
     /// Returns a valid mapped mutable slice if the memory is host visible, otherwise it will return None.
-    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    /// The slice already references the exact memory region of the allocation, so no offset needs to be applied.
     pub fn mapped_slice_mut(&mut self) -> Option<&mut [u8]> {
         self.mapped_ptr().map(|ptr| unsafe {
             std::slice::from_raw_parts_mut(ptr.cast().as_ptr(), self.size as usize)
@@ -104,15 +104,15 @@ impl SubAllocation {
     }
 }
 
-impl Default for SubAllocation {
+impl Default for Allocation {
     fn default() -> Self {
         Self {
             chunk_id: None,
+            offset: 0,
+            size: 0,
             memory_block_index: !0,
             memory_type_index: !0,
             device_memory: vk::DeviceMemory::null(),
-            offset: 0,
-            size: 0,
             mapped_ptr: None,
             name: None,
             backtrace: None,
@@ -125,7 +125,7 @@ pub(crate) struct MemoryBlock {
     pub(crate) device_memory: vk::DeviceMemory,
     pub(crate) size: u64,
     pub(crate) mapped_ptr: *mut std::ffi::c_void,
-    pub(crate) sub_allocator: Box<dyn super::SubAllocator>,
+    pub(crate) sub_allocator: Box<dyn allocator::SubAllocator>,
 }
 
 impl MemoryBlock {
@@ -172,10 +172,10 @@ impl MemoryBlock {
             std::ptr::null_mut()
         };
 
-        let sub_allocator: Box<dyn super::SubAllocator> = if dedicated {
-            Box::new(super::DedicatedBlockAllocator::new(size))
+        let sub_allocator: Box<dyn allocator::SubAllocator> = if dedicated {
+            Box::new(allocator::DedicatedBlockAllocator::new(size))
         } else {
-            Box::new(super::FreeListAllocator::new(size))
+            Box::new(allocator::FreeListAllocator::new(size))
         };
 
         Ok(Self {
@@ -221,7 +221,7 @@ impl MemoryType {
         desc: &AllocationCreateDesc,
         granularity: u64,
         backtrace: Option<&str>,
-    ) -> Result<SubAllocation> {
+    ) -> Result<Allocation> {
         let allocation_type = if desc.linear {
             AllocationType::Linear
         } else {
@@ -283,13 +283,13 @@ impl MemoryType {
                 backtrace,
             )?;
 
-            return Ok(SubAllocation {
+            return Ok(Allocation {
                 chunk_id: Some(chunk_id),
+                offset,
+                size,
                 memory_block_index: block_index,
                 memory_type_index: self.memory_type_index as usize,
                 device_memory: mem_block.device_memory,
-                offset,
-                size,
                 mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
                 name: Some(desc.name.to_owned()),
                 backtrace: backtrace.map(|s| s.to_owned()),
@@ -316,13 +316,13 @@ impl MemoryType {
                         } else {
                             None
                         };
-                        return Ok(SubAllocation {
+                        return Ok(Allocation {
                             chunk_id: Some(chunk_id),
+                            offset,
+                            size,
                             memory_block_index: mem_block_i,
                             memory_type_index: self.memory_type_index as usize,
                             device_memory: mem_block.device_memory,
-                            offset,
-                            size,
                             mapped_ptr,
                             name: Some(desc.name.to_owned()),
                             backtrace: backtrace.map(|s| s.to_owned()),
@@ -388,27 +388,27 @@ impl MemoryType {
             None
         };
 
-        Ok(SubAllocation {
+        Ok(Allocation {
             chunk_id: Some(chunk_id),
+            offset,
+            size,
             memory_block_index: new_block_index,
             memory_type_index: self.memory_type_index as usize,
             device_memory: mem_block.device_memory,
-            offset,
-            size,
             mapped_ptr,
             name: Some(desc.name.to_owned()),
             backtrace: backtrace.map(|s| s.to_owned()),
         })
     }
 
-    fn free(&mut self, sub_allocation: SubAllocation, device: &ash::Device) -> Result<()> {
-        let block_idx = sub_allocation.memory_block_index;
+    fn free(&mut self, allocation: Allocation, device: &ash::Device) -> Result<()> {
+        let block_idx = allocation.memory_block_index;
 
         let mem_block = self.memory_blocks[block_idx]
             .as_mut()
             .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
 
-        mem_block.sub_allocator.free(Box::new(sub_allocation))?;
+        mem_block.sub_allocator.free(allocation.chunk_id)?;
 
         if mem_block.sub_allocator.is_empty() {
             if mem_block.sub_allocator.supports_general_allocations() {
@@ -541,7 +541,7 @@ impl Allocator {
         }
     }
 
-    pub fn allocate(&mut self, desc: &AllocationCreateDesc) -> Result<SubAllocation> {
+    pub fn allocate(&mut self, desc: &AllocationCreateDesc) -> Result<Allocation> {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
@@ -609,7 +609,7 @@ impl Allocator {
             None => return Err(AllocationError::NoCompatibleMemoryTypeFound),
         };
 
-        let sub_allocation = self.memory_types[memory_type_index].allocate(
+        let allocation = self.memory_types[memory_type_index].allocate(
             &self.device,
             desc,
             self.buffer_image_granularity,
@@ -617,7 +617,7 @@ impl Allocator {
         );
 
         if desc.location == MemoryLocation::CpuToGpu {
-            if sub_allocation.is_err() {
+            if allocation.is_err() {
                 let mem_loc_preferred_bits =
                     vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
 
@@ -636,16 +636,16 @@ impl Allocator {
                     backtrace.as_deref(),
                 )
             } else {
-                sub_allocation
+                allocation
             }
         } else {
-            sub_allocation
+            allocation
         }
     }
 
-    pub fn free(&mut self, sub_allocation: SubAllocation) -> Result<()> {
+    pub fn free(&mut self, allocation: Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
-            let name = sub_allocation.name.as_deref().unwrap_or("<null>");
+            let name = allocation.name.as_deref().unwrap_or("<null>");
             log!(Level::Debug, "Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
                 let backtrace = format!("{:?}", backtrace::Backtrace::new());
@@ -653,11 +653,11 @@ impl Allocator {
             }
         }
 
-        if sub_allocation.is_null() {
+        if allocation.is_null() {
             return Ok(());
         }
 
-        self.memory_types[sub_allocation.memory_type_index].free(sub_allocation, &self.device)?;
+        self.memory_types[allocation.memory_type_index].free(allocation, &self.device)?;
 
         Ok(())
     }
