@@ -67,7 +67,7 @@ pub(crate) mod allocator;
 #[cfg(feature = "visualizer")]
 pub mod visualizer;
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(all(not(any(target_os = "macos", target_os = "ios")), feature = "vulkan"))]
 pub mod vulkan;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
