@@ -557,7 +557,6 @@ impl ImGuiRenderer {
 
             let image_info = vk::DescriptorImageInfo::builder()
                 .image_view(font_image_view)
-                //.sampler(imgui_renderer.sampler)
                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
             let sampled_image = vk::WriteDescriptorSet::builder()
                 .dst_set(descriptor_sets[0])
