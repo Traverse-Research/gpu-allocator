@@ -1,7 +1,5 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
-use super::{
-    AllocationError, AllocationType, Result, SubAllocation, SubAllocator, SubAllocatorBase,
-};
+use super::{AllocationError, AllocationType, Result, SubAllocator, SubAllocatorBase};
 use log::{log, Level};
 
 #[derive(Debug)]
@@ -53,8 +51,8 @@ impl SubAllocator for DedicatedBlockAllocator {
         Ok((0, dummy_id))
     }
 
-    fn free(&mut self, sub_allocation: SubAllocation) -> Result<()> {
-        if sub_allocation.chunk_id != std::num::NonZeroU64::new(1) {
+    fn free(&mut self, chunk_id: std::num::NonZeroU64) -> Result<()> {
+        if Some(chunk_id) != std::num::NonZeroU64::new(1) {
             Err(AllocationError::Internal("Chunk ID must be 1.".into()))
         } else {
             self.allocated = 0;

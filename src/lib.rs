@@ -153,7 +153,7 @@ trait SubAllocator: SubAllocatorBase + std::fmt::Debug {
         backtrace: Option<&str>,
     ) -> Result<(u64, std::num::NonZeroU64)>;
 
-    fn free(&mut self, sub_allocation: SubAllocation) -> Result<()>;
+    fn free(&mut self, chunk_id: std::num::NonZeroU64) -> Result<()>;
 
     fn report_memory_leaks(
         &self,
@@ -560,7 +560,10 @@ impl MemoryType {
             .as_mut()
             .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
 
-        mem_block.sub_allocator.free(sub_allocation)?;
+        let chunk_id = sub_allocation
+            .chunk_id
+            .ok_or_else(|| AllocationError::Internal("Chunk ID must be a valid value.".into()))?;
+        mem_block.sub_allocator.free(chunk_id)?;
 
         if mem_block.sub_allocator.is_empty() {
             if mem_block.sub_allocator.supports_general_allocations() {
