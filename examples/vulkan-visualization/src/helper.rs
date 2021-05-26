@@ -40,7 +40,7 @@ pub(crate) fn record_and_submit_command_buffer<D: DeviceV1_0, F: FnOnce(&D, vk::
     unsafe {
         device.queue_submit(
             submit_queue,
-            &[submit_info.build()],
+            std::slice::from_ref(&submit_info),
             command_buffer_reuse_fence,
         )
     }
