@@ -74,7 +74,7 @@ pub mod vulkan;
 pub enum MemoryLocation {
     /// The allocated resource is stored at an unknown memory location; let the driver decide what's the best location
     Unknown,
-    /// Store the allocation in GPU only accesible memory - typically this is the faster GPU resource and this should be
+    /// Store the allocation in GPU only accessible memory - typically this is the faster GPU resource and this should be
     /// where most of the allocations live.
     GpuOnly,
     /// Memory useful for uploading data to the GPU and potentially for constant buffers
