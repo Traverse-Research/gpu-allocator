@@ -30,6 +30,7 @@ imgui = { version = "0.7", optional = true }
 [dev-dependencies]
 ash-window = "0.7"
 winit = "0.25"
+winapi = { git = "https://github.com/Traverse-Research/winapi-rs.git", rev = "b30c725", features = ["d3d12", "dxgi1_6", "winerror", "impl-default", "impl-debug"] }
 
 [[example]]
 name = "vulkan-buffer"
@@ -40,6 +41,10 @@ required-features = ["vulkan"]
 name = "vulkan-visualization"
 path = "examples/vulkan-visualization/src/main.rs"
 required-features = ["vulkan", "visualizer"]
+
+[[example]]
+name = "d3d12-buffer"
+path = "examples/d3d12-buffer/src/main.rs"
 
 
 [features]
