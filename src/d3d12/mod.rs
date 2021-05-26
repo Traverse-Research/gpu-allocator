@@ -53,7 +53,7 @@ impl Allocation {
     }
 
     /// Returns the `d3d12::ID3D12Heap` object that is backing this allocation.
-    /// This memory object can be shared with multiple other allocations and shouldn't be free'd (or allocated from)
+    /// This memory object can be shared with multiple other allocations and shouldn't be freed (or allocated from)
     /// without this library, because that will lead to undefined behavior.
     ///
     /// # Safety
@@ -414,7 +414,7 @@ impl Allocator {
         if self.debug_settings.log_allocations {
             log!(
                 Level::Debug,
-                "Allocating \"{}\" of {} bytes with an alignment of {}.",
+                "Allocating `{}` of {} bytes with an alignment of {}.",
                 &desc.name,
                 size,
                 alignment
@@ -449,7 +449,7 @@ impl Allocator {
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
-            log!(Level::Debug, "Free'ing \"{}\".", name);
+            log!(Level::Debug, "Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
                 let backtrace = format!("{:?}", backtrace::Backtrace::new());
                 log!(Level::Debug, "Free stack trace: {}", backtrace);
