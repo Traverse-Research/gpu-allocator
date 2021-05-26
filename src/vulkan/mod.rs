@@ -9,10 +9,11 @@ use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;
 use log::{debug, Level};
-use std::fmt;
+use std::{fmt, marker::PhantomData};
 
 use crate::{
-    allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result,
+    allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, Initialized, MemoryInitState,
+    MemoryLocation, PossiblyUninitialized, Result,
 };
 
 #[derive(Clone, Debug)]
@@ -36,7 +37,7 @@ pub struct AllocatorCreateDesc {
 }
 
 #[derive(Debug)]
-pub struct Allocation {
+pub struct Allocation<T: MemoryInitState> {
     chunk_id: Option<std::num::NonZeroU64>,
     offset: u64,
     size: u64,
@@ -46,17 +47,19 @@ pub struct Allocation {
     mapped_ptr: Option<std::ptr::NonNull<std::ffi::c_void>>,
 
     name: Option<Box<str>>,
+
+    _t: PhantomData<T>,
 }
 
 // Sending is fine because mapped_ptr does not change based on the thread we are in
-unsafe impl Send for Allocation {}
+unsafe impl<T: MemoryInitState> Send for Allocation<T> {}
 // Sync is also okay because Sending &Allocation is safe: a mutable reference
 // to the data in mapped_ptr is never exposed while `self` is immutably borrowed.
 // In order to break safety guarantees, the user needs to `unsafe`ly dereference
 // `mapped_ptr` themselves.
-unsafe impl Sync for Allocation {}
+unsafe impl<T: MemoryInitState> Sync for Allocation<T> {}
 
-impl Allocation {
+impl<T: MemoryInitState> Allocation<T> {
     pub fn chunk_id(&self) -> Option<std::num::NonZeroU64> {
         self.chunk_id
     }
@@ -84,23 +87,31 @@ impl Allocation {
         self.size
     }
 
-    /// Returns a valid mapped pointer if the memory is host visible, otherwise it will return None.
+    /// Returns a valid mapped pointer if the memory is host-visible, otherwise it will return None.
     /// The pointer already points to the exact memory region of the suballocation, so no offset needs to be applied.
     pub fn mapped_ptr(&self) -> Option<std::ptr::NonNull<std::ffi::c_void>> {
         self.mapped_ptr
     }
 
-    /// Returns a valid mapped slice if the memory is host visible, otherwise it will return None.
-    /// The slice already references the exact memory region of the allocation, so no offset needs to be applied.
-    pub fn mapped_slice(&self) -> Option<&[u8]> {
+    /// Returns a valid mapped slice if the memory is host-visible, otherwise it will return None.
+    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    ///
+    /// # Safety
+    /// Only to be called when the memory is known to be initialized. Private for the [`MemoryInitState`] implementations
+    /// below to reuse common code.
+    unsafe fn as_slice(&self) -> Option<&[u8]> {
         self.mapped_ptr().map(|ptr| unsafe {
             std::slice::from_raw_parts(ptr.cast().as_ptr(), self.size as usize)
         })
     }
 
-    /// Returns a valid mapped mutable slice if the memory is host visible, otherwise it will return None.
-    /// The slice already references the exact memory region of the allocation, so no offset needs to be applied.
-    pub fn mapped_slice_mut(&mut self) -> Option<&mut [u8]> {
+    /// Returns a valid mapped mutable slice if the memory is host-visible, otherwise it will return None.
+    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    ///
+    /// # Safety
+    /// Only to be called when the memory is known to be initialized. Private for the [`MemoryInitState`] implementations
+    /// below to reuse common code.
+    unsafe fn as_mut_slice(&mut self) -> Option<&mut [u8]> {
         self.mapped_ptr().map(|ptr| unsafe {
             std::slice::from_raw_parts_mut(ptr.cast().as_ptr(), self.size as usize)
         })
@@ -111,7 +122,75 @@ impl Allocation {
     }
 }
 
-impl Default for Allocation {
+impl Allocation<PossiblyUninitialized> {
+    /// Initialized memory from the host if the memory is host-visible.
+    // TODO: The caller has to cast/transmute their input data to `&[u8]`, which is immediately UB
+    // if the type at hand contains any padding bytes in its layout (https://github.com/EmbarkStudios/presser).
+    // Change this argument type to something more lenient? (write_slice transmutes to `&[MaybeUninit<T>]` under the hood).
+    pub fn initialize(mut self, data: &[u8]) -> Option<Allocation<Initialized>> {
+        // Safe, but on nightly only: https://doc.rust-lang.org/std/mem/union.MaybeUninit.html#method.write_slice.
+        // self.mapped_uninit_mut_slice()
+        //     .map(|tgt| std::mem::MaybeUninit::write_slice(tgt, data))
+
+        // Safety: The slice may map uninitialized memory. copy_from_slice will only write to it.
+        unsafe { self.mapped_mut_slice() }
+            .map(|tgt| tgt.copy_from_slice(data))
+            // TODO: redo this
+            // .map(|()| Allocation::<Initialized> {
+            //     _t: PhantomData,
+            //     ..self // expected struct `Initialized`, found struct `PossiblyUninitialized`
+            // })
+            .map(|()| unsafe { std::mem::transmute(self) })
+    }
+
+    pub fn mapped_uninit_slice(&self) -> Option<&[std::mem::MaybeUninit<u8>]> {
+        self.mapped_ptr().map(|ptr| unsafe {
+            std::slice::from_raw_parts(ptr.cast().as_ptr(), self.size as usize)
+        })
+    }
+
+    pub fn mapped_uninit_mut_slice(&mut self) -> Option<&mut [std::mem::MaybeUninit<u8>]> {
+        self.mapped_ptr().map(|ptr| unsafe {
+            std::slice::from_raw_parts_mut(ptr.cast().as_ptr(), self.size as usize)
+        })
+    }
+
+    /// Returns a valid mapped slice if the memory is host-visible, otherwise it will return None.
+    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    /// # Safety
+    /// Only to be called when the memory is known to be initialized.
+    pub unsafe fn mapped_slice(&self) -> Option<&[u8]> {
+        // std::mem::MaybeUninit::slice_assume_init_ref(self.mapped_uninit_slice())
+        self.as_slice()
+    }
+
+    /// Returns a valid mapped mutable slice if the memory is host-visible, otherwise it will return None.
+    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    /// # Safety
+    /// Only to be called when the memory is known to be initialized.
+    pub unsafe fn mapped_mut_slice(&mut self) -> Option<&mut [u8]> {
+        // std::mem::MaybeUninit::slice_assume_init_mut(self.mapped_uninit_mut_slice())
+        self.as_mut_slice()
+    }
+}
+
+impl Allocation<Initialized> {
+    /// Returns a valid mapped slice if the memory is host-visible, otherwise it will return None.
+    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    pub fn mapped_slice(&self) -> Option<&[u8]> {
+        // SAFETY: This memory is marked to have been initialized
+        unsafe { self.as_slice() }
+    }
+
+    /// Returns a valid mapped mutable slice if the memory is host-visible, otherwise it will return None.
+    /// The slice already references the exact memory region of the suballocation, so no offset needs to be applied.
+    pub fn mapped_mut_slice(&mut self) -> Option<&mut [u8]> {
+        // SAFETY: This memory is marked to have been initialized
+        unsafe { self.as_mut_slice() }
+    }
+}
+
+impl Default for Allocation<PossiblyUninitialized> {
     fn default() -> Self {
         Self {
             chunk_id: None,
@@ -122,6 +201,7 @@ impl Default for Allocation {
             device_memory: vk::DeviceMemory::null(),
             mapped_ptr: None,
             name: None,
+            _t: PhantomData,
         }
     }
 }
@@ -232,7 +312,7 @@ impl MemoryType {
         desc: &AllocationCreateDesc<'_>,
         granularity: u64,
         backtrace: Option<backtrace::Backtrace>,
-    ) -> Result<Allocation> {
+    ) -> Result<Allocation<PossiblyUninitialized>> {
         let allocation_type = if desc.linear {
             AllocationType::Linear
         } else {
@@ -303,6 +383,7 @@ impl MemoryType {
                 device_memory: mem_block.device_memory,
                 mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
                 name: Some(desc.name.into()),
+                _t: PhantomData,
             });
         }
 
@@ -335,6 +416,7 @@ impl MemoryType {
                             device_memory: mem_block.device_memory,
                             mapped_ptr,
                             name: Some(desc.name.into()),
+                            _t: PhantomData,
                         });
                     }
                     Err(err) => match err {
@@ -406,11 +488,16 @@ impl MemoryType {
             device_memory: mem_block.device_memory,
             mapped_ptr,
             name: Some(desc.name.into()),
+            _t: PhantomData,
         })
     }
 
     #[allow(clippy::needless_pass_by_value)]
-    fn free(&mut self, allocation: Allocation, device: &ash::Device) -> Result<()> {
+    fn free(
+        &mut self,
+        allocation: Allocation<impl MemoryInitState>,
+        device: &ash::Device,
+    ) -> Result<()> {
         let block_idx = allocation.memory_block_index;
 
         let mem_block = self.memory_blocks[block_idx]
@@ -568,7 +655,10 @@ impl Allocator {
         })
     }
 
-    pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
+    pub fn allocate(
+        &mut self,
+        desc: &AllocationCreateDesc<'_>,
+    ) -> Result<Allocation<PossiblyUninitialized>> {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
@@ -668,7 +758,7 @@ impl Allocator {
         }
     }
 
-    pub fn free(&mut self, allocation: Allocation) -> Result<()> {
+    pub fn free(&mut self, allocation: Allocation<impl MemoryInitState>) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
             debug!("Freeing `{}`.", name);
@@ -687,7 +777,11 @@ impl Allocator {
         Ok(())
     }
 
-    pub fn rename_allocation(&mut self, allocation: &mut Allocation, name: &str) -> Result<()> {
+    pub fn rename_allocation(
+        &mut self,
+        allocation: &mut Allocation<impl MemoryInitState>,
+        name: &str,
+    ) -> Result<()> {
         allocation.name = Some(name.into());
 
         if allocation.is_null() {

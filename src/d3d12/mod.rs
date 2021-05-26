@@ -75,7 +75,7 @@ use super::allocator;
 use super::allocator::AllocationType;
 
 use crate::{
-    allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result,
+    allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result, MemoryInitState,
 };
 
 /// [`ResourceCategory`] is used for supporting [`D3D12_RESOURCE_HEAP_TIER_1`].
@@ -213,7 +213,7 @@ pub struct AllocatorCreateDesc {
 }
 
 #[derive(Debug)]
-pub struct Allocation {
+pub struct Allocation<T: MemoryInitState> {
     chunk_id: Option<std::num::NonZeroU64>,
     offset: u64,
     size: u64,

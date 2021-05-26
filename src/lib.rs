@@ -179,6 +179,14 @@ pub enum MemoryLocation {
     GpuToCpu,
 }
 
+/// Marker trait for initialization status
+pub trait MemoryInitState {}
+
+pub struct PossiblyUninitialized;
+impl MemoryInitState for PossiblyUninitialized {}
+pub struct Initialized;
+impl MemoryInitState for Initialized {}
+
 #[derive(Copy, Clone, Debug)]
 pub struct AllocatorDebugSettings {
     /// Logs out debugging information about the various heaps the current device has on startup
