@@ -23,7 +23,7 @@ thiserror = "1.0"
 # Only needed for vulkan.
 ash = { version = "0.33", optional = true }
 # Only needed for d3d12.
-winapi = { git = "https://github.com/Traverse-Research/winapi-rs.git", rev = "b30c725", features = ["d3d12", "winerror", "impl-default", "impl-debug"] }
+winapi = { git = "https://github.com/Traverse-Research/winapi-rs.git", rev = "b30c725", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
 # Only needed for visualizer.
 imgui = { version = "0.7", optional = true }
 
@@ -50,3 +50,4 @@ path = "examples/d3d12-buffer/src/main.rs"
 [features]
 visualizer = [ "imgui" ]
 vulkan = [ "ash" ]
+d3d12 = ["winapi"]

@@ -70,7 +70,7 @@ pub mod visualizer;
 #[cfg(all(not(any(target_os = "macos", target_os = "ios")), feature = "vulkan"))]
 pub mod vulkan;
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "d3d12"))]
 pub mod d3d12;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
