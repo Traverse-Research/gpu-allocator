@@ -25,8 +25,7 @@ imgui = { version = "0.7", optional = true }
 
 [dev-dependencies]
 ash-window = "0.6"
-winit = "0.23"
-
+winit = "0.25"
 
 [[example]]
 name = "vulkan-buffer"
