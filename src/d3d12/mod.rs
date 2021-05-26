@@ -11,7 +11,7 @@ use crate::{AllocationError, AllocatorDebugSettings, MemoryLocation, Result};
 pub struct AllocationCreateDesc<'a> {
     /// Name of the allocation, for tracking and debugging purposes
     pub name: &'a str,
-    // Should we use the D3D12 struct here?
+    // TODO(max): Should we use the D3D12 struct `D3D12_RESOURCE_ALLOCATION_INFO` here?
     pub size: u64,
     pub alignment: u64,
     /// Location where the memory allocation should be stored
@@ -20,6 +20,7 @@ pub struct AllocationCreateDesc<'a> {
     pub linear: bool,
 }
 
+#[derive(Debug)]
 pub struct AllocatorCreateDesc {
     pub device: *mut d3d12::ID3D12Device,
     pub debug_settings: AllocatorDebugSettings,
@@ -32,7 +33,7 @@ pub struct Allocation {
     size: u64,
     memory_block_index: usize,
     memory_type_index: usize,
-    device_memory: *mut d3d12::ID3D12Heap,
+    heap: *mut d3d12::ID3D12Heap,
     mapped_ptr: Option<std::ptr::NonNull<std::ffi::c_void>>,
 
     name: Option<String>,
@@ -52,19 +53,18 @@ impl Allocation {
         self.chunk_id
     }
 
-    /// Returns the `vk::DeviceMemory` object that is backing this allocation.
+    /// Returns the `d3d12::ID3D12Heap` object that is backing this allocation.
     /// This memory object can be shared with multiple other allocations and shouldn't be free'd (or allocated from)
     /// without this library, because that will lead to undefined behavior.
     ///
     /// # Safety
-    /// The result of this function can safely be used to pass into `bind_buffer_memory` (`vkBindBufferMemory`),
-    /// `bind_texture_memory` (`vkBindTextureMemory`) etc. It's exposed for this reason. Keep in mind to also
-    /// pass `Self::offset()` along to those.
-    pub unsafe fn memory(&self) -> *mut d3d12::ID3D12Heap {
-        self.device_memory
+    /// The result of this function can safely be used to pass into `CreatePlacedResource`. It's exposed
+    /// for this reason. Keep in mind to also pass `Self::offset()` along to it.
+    pub unsafe fn heap(&self) -> *mut d3d12::ID3D12Heap {
+        self.heap
     }
 
-    /// Returns the offset of the allocation on the vk::DeviceMemory.
+    /// Returns the offset of the allocation on the ID3D12Heap.
     /// When binding the memory to a buffer or image, this offset needs to be supplied as well.
     pub fn offset(&self) -> u64 {
         self.offset
@@ -73,28 +73,6 @@ impl Allocation {
     /// Returns the size of the allocation
     pub fn size(&self) -> u64 {
         self.size
-    }
-
-    /// # Safety
-    /// Be careful not to mutably alias with this pointer; safety cannot be guaranteed, particularly over multiple threads.
-    pub unsafe fn mapped_ptr(&self) -> Option<std::ptr::NonNull<std::ffi::c_void>> {
-        self.mapped_ptr
-    }
-
-    /// Returns a valid mapped slice if the memory is host visible, otherwise it will return None.
-    /// The slice already references the exact memory region of the allocation, so no offset needs to be applied.
-    pub fn mapped_slice(&self) -> Option<&[u8]> {
-        self.mapped_ptr.map(|ptr| unsafe {
-            std::slice::from_raw_parts(ptr.as_ptr() as *const _, self.size() as usize)
-        })
-    }
-
-    /// Returns a valid mapped mutable slice if the memory is host visible, otherwise it will return None.
-    /// The slice already references the exact memory region of the allocation, so no offset needs to be applied.
-    pub fn mapped_slice_mut(&mut self) -> Option<&mut [u8]> {
-        self.mapped_ptr.map(|ptr| unsafe {
-            std::slice::from_raw_parts_mut(ptr.as_ptr() as *mut _, self.size() as usize)
-        })
     }
 
     pub fn is_null(&self) -> bool {
@@ -110,7 +88,7 @@ impl Default for Allocation {
             size: 0,
             memory_block_index: !0,
             memory_type_index: !0,
-            device_memory: std::ptr::null_mut(),
+            heap: std::ptr::null_mut(),
             mapped_ptr: None,
             name: None,
             backtrace: None,
@@ -119,7 +97,7 @@ impl Default for Allocation {
 }
 
 struct MemoryBlock {
-    device_memory: *mut d3d12::ID3D12Heap,
+    heap: *mut d3d12::ID3D12Heap,
     sub_allocator: Box<dyn allocator::SubAllocator>,
 }
 impl MemoryBlock {
@@ -129,7 +107,7 @@ impl MemoryBlock {
         heap_properties: &d3d12::D3D12_HEAP_PROPERTIES,
         dedicated: bool,
     ) -> Result<Self> {
-        let device_memory = unsafe {
+        let heap = unsafe {
             let mut desc = d3d12::D3D12_HEAP_DESC::default();
             desc.SizeInBytes = size;
             desc.Properties = *heap_properties;
@@ -159,13 +137,13 @@ impl MemoryBlock {
         //TODO(max): Create placed resource to map heap
 
         Ok(Self {
-            device_memory,
+            heap,
             sub_allocator,
         })
     }
 
     fn destroy(self) {
-        unsafe { self.device_memory.as_mut().unwrap().Release() };
+        unsafe { self.heap.as_mut().unwrap().Release() };
     }
 }
 
@@ -250,7 +228,7 @@ impl MemoryType {
                 offset,
                 memory_block_index: block_index,
                 memory_type_index: self.memory_type_index as usize,
-                device_memory: mem_block.device_memory,
+                heap: mem_block.heap,
                 mapped_ptr: None,
                 name: Some(desc.name.to_owned()),
                 backtrace: backtrace.map(|s| s.to_owned()),
@@ -278,7 +256,7 @@ impl MemoryType {
                             size,
                             memory_block_index: mem_block_i,
                             memory_type_index: self.memory_type_index as usize,
-                            device_memory: mem_block.device_memory,
+                            heap: mem_block.heap,
                             mapped_ptr: None,
                             name: Some(desc.name.to_owned()),
                             backtrace: backtrace.map(|s| s.to_owned()),
@@ -338,7 +316,7 @@ impl MemoryType {
             size,
             memory_block_index: new_block_index,
             memory_type_index: self.memory_type_index as usize,
-            device_memory: mem_block.device_memory,
+            heap: mem_block.heap,
             mapped_ptr: None,
             name: Some(desc.name.to_owned()),
             backtrace: backtrace.map(|s| s.to_owned()),
