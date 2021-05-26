@@ -1,5 +1,10 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
-use super::{AllocationError, AllocationType, Result, SubAllocator, SubAllocatorBase};
+
+#[cfg(feature = "visualizer")]
+pub(crate) mod visualizer;
+
+use super::{AllocationType, SubAllocator, SubAllocatorBase};
+use crate::{AllocationError, Result};
 use log::{log, Level};
 
 #[derive(Debug)]

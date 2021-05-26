@@ -1,4 +1,8 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
+
+#[cfg(feature = "visualizer")]
+pub(crate) mod visualizer;
+
 use super::{AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
 

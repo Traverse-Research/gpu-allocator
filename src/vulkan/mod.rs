@@ -1,4 +1,10 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
+
+#[cfg(feature = "visualizer")]
+mod visualizer;
+#[cfg(feature = "visualizer")]
+pub use visualizer::AllocatorVisualizer;
+
 use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;

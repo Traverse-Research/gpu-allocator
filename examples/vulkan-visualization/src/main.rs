@@ -294,7 +294,7 @@ fn main() {
             })
             .collect::<Vec<_>>();
 
-        let mut visualizer = gpu_allocator::visualizer::AllocatorVisualizer::new();
+        let mut visualizer = gpu_allocator::vulkan::AllocatorVisualizer::new();
 
         loop {
             let event = event_recv.recv().unwrap();

@@ -6,9 +6,6 @@ pub(crate) use dedicated_block_allocator::DedicatedBlockAllocator;
 pub(crate) mod free_list_allocator;
 pub(crate) use free_list_allocator::FreeListAllocator;
 
-#[cfg(feature = "visualizer")]
-use super::visualizer;
-
 use log::*;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -20,7 +17,7 @@ pub(crate) enum AllocationType {
 }
 
 #[cfg(feature = "visualizer")]
-pub(crate) trait SubAllocatorBase: visualizer::SubAllocatorVisualizer {}
+pub(crate) trait SubAllocatorBase: crate::visualizer::SubAllocatorVisualizer {}
 #[cfg(not(feature = "visualizer"))]
 pub(crate) trait SubAllocatorBase {}
 
