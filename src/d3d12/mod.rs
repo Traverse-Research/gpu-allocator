@@ -34,7 +34,6 @@ pub struct Allocation {
     memory_block_index: usize,
     memory_type_index: usize,
     heap: *mut d3d12::ID3D12Heap,
-    mapped_ptr: Option<std::ptr::NonNull<std::ffi::c_void>>,
 
     name: Option<String>,
     backtrace: Option<String>,
@@ -89,7 +88,6 @@ impl Default for Allocation {
             memory_block_index: !0,
             memory_type_index: !0,
             heap: std::ptr::null_mut(),
-            mapped_ptr: None,
             name: None,
             backtrace: None,
         }
@@ -229,7 +227,6 @@ impl MemoryType {
                 memory_block_index: block_index,
                 memory_type_index: self.memory_type_index as usize,
                 heap: mem_block.heap,
-                mapped_ptr: None,
                 name: Some(desc.name.to_owned()),
                 backtrace: backtrace.map(|s| s.to_owned()),
                 ..Allocation::default()
@@ -257,7 +254,6 @@ impl MemoryType {
                             memory_block_index: mem_block_i,
                             memory_type_index: self.memory_type_index as usize,
                             heap: mem_block.heap,
-                            mapped_ptr: None,
                             name: Some(desc.name.to_owned()),
                             backtrace: backtrace.map(|s| s.to_owned()),
                             ..Default::default()
@@ -317,7 +313,6 @@ impl MemoryType {
             memory_block_index: new_block_index,
             memory_type_index: self.memory_type_index as usize,
             heap: mem_block.heap,
-            mapped_ptr: None,
             name: Some(desc.name.to_owned()),
             backtrace: backtrace.map(|s| s.to_owned()),
             ..Default::default()
