@@ -45,6 +45,7 @@ required-features = ["vulkan", "visualizer"]
 [[example]]
 name = "d3d12-buffer"
 path = "examples/d3d12-buffer/src/main.rs"
+required-features = ["d3d12"]
 
 
 [features]
