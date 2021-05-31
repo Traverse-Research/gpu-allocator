@@ -1,5 +1,6 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 use log::{log, Level};
+use winapi::shared::winerror;
 use winapi::um::d3d12;
 
 use super::allocator;
@@ -7,17 +8,84 @@ use super::allocator::AllocationType;
 
 use crate::{AllocationError, AllocatorDebugSettings, MemoryLocation, Result};
 
+///
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResourceCategory {
+    Buffer,
+    RtvDsvTexture,
+    OtherTexture,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HeapCategory {
+    All,
+    Buffer,
+    RtvDsvTexture,
+    OtherTexture,
+}
+
+impl From<ResourceCategory> for HeapCategory {
+    fn from(resource_category: ResourceCategory) -> Self {
+        match resource_category {
+            ResourceCategory::Buffer => HeapCategory::Buffer,
+            ResourceCategory::RtvDsvTexture => HeapCategory::RtvDsvTexture,
+            ResourceCategory::OtherTexture => HeapCategory::OtherTexture,
+        }
+    }
+}
+
+impl From<&d3d12::D3D12_RESOURCE_DESC> for ResourceCategory {
+    fn from(desc: &d3d12::D3D12_RESOURCE_DESC) -> Self {
+        if desc.Dimension == d3d12::D3D12_RESOURCE_DIMENSION_BUFFER {
+            ResourceCategory::Buffer
+        } else if (desc.Flags
+            & (d3d12::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+                | d3d12::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
+            != 0
+        {
+            ResourceCategory::RtvDsvTexture
+        } else {
+            ResourceCategory::OtherTexture
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
     /// Name of the allocation, for tracking and debugging purposes
     pub name: &'a str,
-    // TODO(max): Should we use the D3D12 struct `D3D12_RESOURCE_ALLOCATION_INFO` here?
-    pub size: u64,
-    pub alignment: u64,
     /// Location where the memory allocation should be stored
     pub location: MemoryLocation,
-    /// If the resource is linear (buffer / linear texture) or a regular (tiled) texture.
-    pub linear: bool,
+
+    /// Size of allocation, should be queried using `ID3D12Device::GetResourceAllocationInfo`
+    pub size: u64,
+    /// Alignment of allocation, should be queried using `ID3D12Device::GetResourceAllocationInfo`
+    pub alignment: u64,
+    /// Resource category based on resource dimension and flags. Can be created from a `D3D12_RESOURCE_DESC`
+    /// using the helper into function. The resource category is ignored when Resource Heap Tier 2 or higher
+    /// is supported.
+    pub resource_category: ResourceCategory,
+}
+
+impl<'a> AllocationCreateDesc<'a> {
+    #[cfg(feature = "winapi")]
+    pub fn from_d3d12_resource_desc(
+        device: &d3d12::ID3D12Device,
+        desc: &d3d12::D3D12_RESOURCE_DESC,
+        name: &'a str,
+        location: MemoryLocation,
+    ) -> AllocationCreateDesc<'a> {
+        let allocation_info = unsafe { device.GetResourceAllocationInfo(0, 1, desc as *const _) };
+        let resource_category: ResourceCategory = desc.into();
+
+        AllocationCreateDesc {
+            name,
+            location,
+            size: allocation_info.SizeInBytes,
+            alignment: allocation_info.Alignment,
+            resource_category,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -39,12 +107,7 @@ pub struct Allocation {
     backtrace: Option<String>,
 }
 
-// Sending is fine because mapped_ptr does not change based on the thread we are in
 unsafe impl Send for Allocation {}
-// Sync is also okay because Sending &Allocation is safe: a mutable reference
-// to the data in mapped_ptr is never exposed while `self` is immutably borrowed.
-// In order to break safety guarantees, the user needs to `unsafe`ly dereference
-// `mapped_ptr` themselves.
 unsafe impl Sync for Allocation {}
 
 impl Allocation {
@@ -53,7 +116,7 @@ impl Allocation {
     }
 
     /// Returns the `d3d12::ID3D12Heap` object that is backing this allocation.
-    /// This memory object can be shared with multiple other allocations and shouldn't be freed (or allocated from)
+    /// This heap object can be shared with multiple other allocations and shouldn't be freed (or allocated from)
     /// without this library, because that will lead to undefined behavior.
     ///
     /// # Safety
@@ -64,7 +127,7 @@ impl Allocation {
     }
 
     /// Returns the offset of the allocation on the ID3D12Heap.
-    /// When binding the memory to a buffer or image, this offset needs to be supplied as well.
+    /// When creating a placed resources, this offset needs to be supplied as well.
     pub fn offset(&self) -> u64 {
         self.offset
     }
@@ -103,6 +166,7 @@ impl MemoryBlock {
         device: &mut d3d12::ID3D12Device,
         size: u64,
         heap_properties: &d3d12::D3D12_HEAP_PROPERTIES,
+        heap_category: HeapCategory,
         dedicated: bool,
     ) -> Result<Self> {
         let heap = unsafe {
@@ -110,7 +174,12 @@ impl MemoryBlock {
             desc.SizeInBytes = size;
             desc.Properties = *heap_properties;
             desc.Alignment = d3d12::D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as u64;
-            desc.Flags = d3d12::D3D12_HEAP_FLAG_NONE;
+            desc.Flags = match heap_category {
+                HeapCategory::All => d3d12::D3D12_HEAP_FLAG_NONE,
+                HeapCategory::Buffer => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
+                HeapCategory::RtvDsvTexture => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES,
+                HeapCategory::OtherTexture => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
+            };
 
             let mut heap: *mut d3d12::ID3D12Heap = std::ptr::null_mut();
 
@@ -119,7 +188,7 @@ impl MemoryBlock {
             assert_eq!(
                 //TODO(max): Return error
                 hr,
-                winapi::shared::winerror::S_OK,
+                winerror::S_OK,
                 "Failed to allocate ID3D12Heap of {} bytes",
                 size,
             );
@@ -153,7 +222,9 @@ unsafe impl Sync for MemoryBlock {}
 #[cfg(windows)]
 struct MemoryType {
     memory_blocks: Vec<Option<MemoryBlock>>,
-    memory_properties: d3d12::D3D12_HEAP_PROPERTIES,
+    memory_location: MemoryLocation,
+    heap_category: HeapCategory,
+    heap_properties: d3d12::D3D12_HEAP_PROPERTIES,
     memory_type_index: usize,
     active_general_blocks: usize,
 }
@@ -166,16 +237,11 @@ impl MemoryType {
         &mut self,
         device: &mut d3d12::ID3D12Device,
         desc: &AllocationCreateDesc,
-        granularity: u64,
         backtrace: Option<&str>,
     ) -> Result<Allocation> {
-        let allocation_type = if desc.linear {
-            AllocationType::Linear
-        } else {
-            AllocationType::NonLinear
-        };
+        let allocation_type = AllocationType::Linear;
 
-        let memblock_size = if self.memory_properties.Type == d3d12::D3D12_HEAP_TYPE_DEFAULT {
+        let memblock_size = if self.heap_properties.Type == d3d12::D3D12_HEAP_TYPE_DEFAULT {
             DEFAULT_DEVICE_MEMBLOCK_SIZE
         } else {
             DEFAULT_HOST_MEMBLOCK_SIZE
@@ -186,7 +252,13 @@ impl MemoryType {
 
         // Create a dedicated block for large memory allocations
         if size > memblock_size {
-            let mem_block = MemoryBlock::new(device, size, &self.memory_properties, true)?;
+            let mem_block = MemoryBlock::new(
+                device,
+                size,
+                &self.heap_properties,
+                self.heap_category,
+                true,
+            )?;
 
             let mut block_index = None;
             for (i, block) in self.memory_blocks.iter().enumerate() {
@@ -215,7 +287,7 @@ impl MemoryType {
                 size,
                 alignment,
                 allocation_type,
-                granularity,
+                1,
                 desc.name,
                 backtrace,
             )?;
@@ -240,7 +312,7 @@ impl MemoryType {
                     size,
                     alignment,
                     allocation_type,
-                    granularity,
+                    1,
                     desc.name,
                     backtrace,
                 );
@@ -269,8 +341,13 @@ impl MemoryType {
             }
         }
 
-        let new_memory_block =
-            MemoryBlock::new(device, memblock_size, &self.memory_properties, false)?;
+        let new_memory_block = MemoryBlock::new(
+            device,
+            memblock_size,
+            &self.heap_properties,
+            self.heap_category,
+            false,
+        )?;
 
         let new_block_index = if let Some(block_index) = empty_block_index {
             self.memory_blocks[block_index] = Some(new_memory_block);
@@ -289,7 +366,7 @@ impl MemoryType {
             size,
             alignment,
             allocation_type,
-            granularity,
+            1,
             desc.name,
             backtrace,
         );
@@ -359,44 +436,105 @@ pub struct Allocator {
 }
 
 impl Allocator {
+    pub fn device(&self) -> &d3d12::ID3D12Device {
+        unsafe { self.device.as_ref().unwrap() }
+    }
+
     pub fn new(desc: &AllocatorCreateDesc) -> Self {
-        let heap_types = [
-            d3d12::D3D12_HEAP_PROPERTIES {
-                Type: d3d12::D3D12_HEAP_TYPE_DEFAULT,
-                CreationNodeMask: 1,
-                VisibleNodeMask: 1,
-                ..Default::default()
-            },
-            d3d12::D3D12_HEAP_PROPERTIES {
-                Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-                CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
-                MemoryPoolPreference: d3d12::D3D12_MEMORY_POOL_L0,
-                CreationNodeMask: 1,
-                VisibleNodeMask: 1,
-            },
-            d3d12::D3D12_HEAP_PROPERTIES {
-                Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-                CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
-                MemoryPoolPreference: d3d12::D3D12_MEMORY_POOL_L0,
-                CreationNodeMask: 1,
-                VisibleNodeMask: 1,
-            },
+        assert!(!desc.device.is_null());
+
+        // Query device for feature level
+        let mut options = d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS::default();
+        let hr = unsafe {
+            desc.device.as_ref().unwrap().CheckFeatureSupport(
+                d3d12::D3D12_FEATURE_D3D12_OPTIONS,
+                &mut options as *mut _ as *mut _,
+                std::mem::size_of_val(&options) as u32,
+            )
+        };
+        assert_eq!(hr, winerror::S_OK);
+
+        let is_heap_tier1 = options.ResourceHeapTier == d3d12::D3D12_RESOURCE_HEAP_TIER_1;
+
+        let heap_types = vec![
+            (
+                MemoryLocation::GpuOnly,
+                d3d12::D3D12_HEAP_PROPERTIES {
+                    Type: d3d12::D3D12_HEAP_TYPE_DEFAULT,
+                    ..Default::default()
+                },
+            ),
+            (
+                MemoryLocation::CpuToGpu,
+                d3d12::D3D12_HEAP_PROPERTIES {
+                    Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
+                    CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
+                    MemoryPoolPreference: d3d12::D3D12_MEMORY_POOL_L0,
+                    ..Default::default()
+                },
+            ),
+            (
+                MemoryLocation::GpuToCpu,
+                d3d12::D3D12_HEAP_PROPERTIES {
+                    Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
+                    CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+                    MemoryPoolPreference: d3d12::D3D12_MEMORY_POOL_L0,
+                    ..Default::default()
+                },
+            ),
         ];
+
+        let heap_types = if is_heap_tier1 {
+            heap_types
+                .iter()
+                .flat_map(|(memory_location, heap_properties)| {
+                    [
+                        (
+                            HeapCategory::Buffer,
+                            *memory_location,
+                            heap_properties.clone(),
+                        ),
+                        (
+                            HeapCategory::RtvDsvTexture,
+                            *memory_location,
+                            heap_properties.clone(),
+                        ),
+                        (
+                            HeapCategory::OtherTexture,
+                            *memory_location,
+                            heap_properties.clone(),
+                        ),
+                    ]
+                    .to_vec()
+                })
+                .collect::<Vec<_>>()
+        } else {
+            heap_types
+                .iter()
+                .map(|(memory_location, heap_properties)| {
+                    (HeapCategory::All, *memory_location, heap_properties.clone())
+                })
+                .collect::<Vec<_>>()
+        };
 
         let memory_types = heap_types
             .iter()
             .enumerate()
-            .map(|(i, &memory_properties)| MemoryType {
-                memory_blocks: Vec::default(),
-                memory_properties,
-                memory_type_index: i,
-                active_general_blocks: 0,
-            })
+            .map(
+                |(i, &(heap_category, memory_location, heap_properties))| MemoryType {
+                    memory_blocks: Vec::default(),
+                    memory_location,
+                    heap_category,
+                    heap_properties,
+                    memory_type_index: i,
+                    active_general_blocks: 0,
+                },
+            )
             .collect::<Vec<_>>();
 
         Self {
             memory_types,
-            device: desc.device.clone(),
+            device: desc.device,
             debug_settings: desc.debug_settings,
         }
     }
@@ -431,17 +569,24 @@ impl Allocator {
             return Err(AllocationError::InvalidAllocationCreateDesc);
         }
 
-        let memory_type_index = match desc.location {
-            MemoryLocation::GpuOnly => 0,
-            MemoryLocation::CpuToGpu => 1,
-            MemoryLocation::GpuToCpu => 2,
-            MemoryLocation::Unknown => panic!("Not sure what to do with unknown at the moment"),
-        };
+        // Find memory type
+        let memory_type = self
+            .memory_types
+            .iter_mut()
+            .find(|memory_type| {
+                let is_location_compatible = desc.location == MemoryLocation::Unknown
+                    || desc.location == memory_type.memory_location;
 
-        self.memory_types[memory_type_index].allocate(
+                let is_category_compatible = memory_type.heap_category == HeapCategory::All
+                    || memory_type.heap_category == desc.resource_category.into();
+
+                is_location_compatible && is_category_compatible
+            })
+            .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
+
+        memory_type.allocate(
             unsafe { self.device.as_mut().unwrap() },
             desc,
-            256, //TODO(max): Is this even a thing in D3D12?
             backtrace.as_deref(),
         )
     }

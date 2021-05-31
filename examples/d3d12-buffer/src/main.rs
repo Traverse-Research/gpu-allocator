@@ -8,7 +8,9 @@ mod all_dxgi {
 
 use log::*;
 
-use gpu_allocator::d3d12::{AllocationCreateDesc, Allocator, AllocatorCreateDesc};
+use gpu_allocator::d3d12::{
+    AllocationCreateDesc, Allocator, AllocatorCreateDesc, ResourceCategory,
+};
 use gpu_allocator::MemoryLocation;
 
 fn create_d3d12_device(
@@ -134,22 +136,13 @@ fn main() {
             Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
         };
 
-        let alloc_info = unsafe {
-            device
-                .as_ref()
-                .unwrap()
-                .GetResourceAllocationInfo(0, 1, &test_buffer_desc as *const _)
-        };
-
-        let allocation = allocator
-            .allocate(&AllocationCreateDesc {
-                name: "test allocation",
-                size: alloc_info.SizeInBytes,
-                alignment: alloc_info.Alignment,
-                linear: true,
-                location: MemoryLocation::GpuOnly,
-            })
-            .unwrap();
+        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
+            allocator.device(),
+            &test_buffer_desc,
+            "test allocation",
+            MemoryLocation::GpuOnly,
+        );
+        let allocation = allocator.allocate(&allocation_desc).unwrap();
 
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
@@ -199,10 +192,10 @@ fn main() {
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
                 name: "test allocation",
+                location: MemoryLocation::CpuToGpu,
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,
-                linear: true,
-                location: MemoryLocation::CpuToGpu,
+                resource_category: ResourceCategory::Buffer,
             })
             .unwrap();
 
@@ -254,10 +247,10 @@ fn main() {
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
                 name: "test allocation",
+                location: MemoryLocation::GpuToCpu,
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,
-                linear: true,
-                location: MemoryLocation::GpuToCpu,
+                resource_category: ResourceCategory::Buffer,
             })
             .unwrap();
 
