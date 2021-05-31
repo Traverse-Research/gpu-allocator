@@ -3,7 +3,10 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 
-use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
+use gpu_allocator::{
+    vulkan::{Allocator, AllocatorCreateDesc},
+    AllocatorDebugSettings,
+};
 
 mod helper;
 use helper::record_and_submit_command_buffer;
@@ -227,9 +230,10 @@ fn main() {
             instance: instance.clone(),
             device: device.clone(),
             physical_device: pdevice,
-            debug_settings: Default::default(),
+            debug_settings: AllocatorDebugSettings::default(),
             buffer_device_address: true,
-        });
+        })
+        .unwrap();
 
         let fence_create_info =
             vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);

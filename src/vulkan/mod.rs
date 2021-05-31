@@ -460,7 +460,13 @@ impl fmt::Debug for Allocator {
 }
 
 impl Allocator {
-    pub fn new(desc: &AllocatorCreateDesc) -> Self {
+    pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
+        if desc.physical_device == ash::vk::PhysicalDevice::null() {
+            return Err(AllocationError::InvalidAllocatorCreateDesc(
+                "AllocatorCreateDesc field `physical_device` is null.".into(),
+            ));
+        }
+
         let mem_props = unsafe {
             desc.instance
                 .get_physical_device_memory_properties(desc.physical_device)
@@ -538,13 +544,13 @@ impl Allocator {
 
         let granularity = physical_device_properties.limits.buffer_image_granularity;
 
-        Self {
+        Ok(Self {
             memory_types,
             memory_heaps,
             device: desc.device.clone(),
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
-        }
+        })
     }
 
     pub fn allocate(&mut self, desc: &AllocationCreateDesc) -> Result<Allocation> {
