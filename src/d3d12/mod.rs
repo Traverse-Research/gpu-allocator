@@ -440,8 +440,12 @@ impl Allocator {
         unsafe { self.device.as_ref().unwrap() }
     }
 
-    pub fn new(desc: &AllocatorCreateDesc) -> Self {
-        assert!(!desc.device.is_null());
+    pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
+        if desc.device.is_null() {
+            return Err(AllocationError::InvalidAllocatorCreateDesc(
+                "Device pointer is null.".to_owned(),
+            ));
+        }
 
         // Query device for feature level
         let mut options = d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS::default();
@@ -452,7 +456,12 @@ impl Allocator {
                 std::mem::size_of_val(&options) as u32,
             )
         };
-        assert_eq!(hr, winerror::S_OK);
+        if hr != winerror::S_OK {
+            return Err(AllocationError::Internal(format!(
+                "ID3D12Device::CheckFeatureSupport failed: {:x}",
+                hr
+            )));
+        }
 
         let is_heap_tier1 = options.ResourceHeapTier == d3d12::D3D12_RESOURCE_HEAP_TIER_1;
 
@@ -532,11 +541,11 @@ impl Allocator {
             )
             .collect::<Vec<_>>();
 
-        Self {
+        Ok(Self {
             memory_types,
             device: desc.device,
             debug_settings: desc.debug_settings,
-        }
+        })
     }
 
     pub fn allocate(&mut self, desc: &AllocationCreateDesc) -> Result<Allocation> {
