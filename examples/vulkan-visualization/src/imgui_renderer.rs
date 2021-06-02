@@ -333,11 +333,11 @@ impl ImGuiRenderer {
             };
 
             // Copy font data to upload buffer
+            let dst = upload_buffer_memory.mapped_ptr().unwrap().cast().as_ptr();
             unsafe {
-                let dst = upload_buffer_memory.mapped_ptr().unwrap().as_ptr();
                 std::ptr::copy_nonoverlapping(
                     font_atlas.data.as_ptr(),
-                    dst as *mut _,
+                    dst,
                     (font_atlas.width * font_atlas.height * 4) as usize,
                 );
             }
@@ -630,8 +630,8 @@ impl ImGuiRenderer {
 
             unsafe {
                 std::ptr::copy_nonoverlapping(
-                    &cbuffer_data as *const _,
-                    self.cb_allocation.mapped_ptr().unwrap().as_ptr() as *mut ImGuiCBuffer,
+                    &cbuffer_data,
+                    self.cb_allocation.mapped_ptr().unwrap().cast().as_ptr(),
                     1,
                 )
             };
@@ -730,8 +730,12 @@ impl ImGuiRenderer {
 
             {
                 let vertices = draw_list.vtx_buffer();
-                let dst_ptr = unsafe { self.vb_allocation.mapped_ptr() }.unwrap().as_ptr()
-                    as *mut imgui::DrawVert;
+                let dst_ptr = self
+                    .vb_allocation
+                    .mapped_ptr()
+                    .unwrap()
+                    .cast::<imgui::DrawVert>()
+                    .as_ptr();
                 let dst_ptr = unsafe { dst_ptr.offset(vb_offset) };
                 unsafe {
                     std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst_ptr, vertices.len())
@@ -741,8 +745,12 @@ impl ImGuiRenderer {
 
             {
                 let indices = draw_list.idx_buffer();
-                let dst_ptr = unsafe { self.ib_allocation.mapped_ptr() }.unwrap().as_ptr()
-                    as *mut imgui::DrawIdx;
+                let dst_ptr = self
+                    .ib_allocation
+                    .mapped_ptr()
+                    .unwrap()
+                    .cast::<imgui::DrawIdx>()
+                    .as_ptr();
                 let dst_ptr = unsafe { dst_ptr.offset(ib_offset) };
                 unsafe { std::ptr::copy_nonoverlapping(indices.as_ptr(), dst_ptr, indices.len()) };
                 ib_offset += indices.len() as isize;
