@@ -299,8 +299,13 @@ impl AllocatorVisualizer {
                 {
                     ui.indent();
                     for (mem_type_i, mem_type) in alloc.memory_types.iter().enumerate() {
-                        if CollapsingHeader::new(&ImString::new(format!("Type: {} ({} blocks)", mem_type_i, mem_type.memory_blocks.len() )))
-                            .build(ui)
+                        if CollapsingHeader::new(&ImString::new(format!(
+                            "Type: {} ({} blocks)###Type{}",
+                            mem_type_i,
+                            mem_type.memory_blocks.len(),
+                            mem_type_i
+                        )))
+                        .build(ui)
                         {
                             let mut total_block_size = 0;
                             let mut total_allocated = 0;
