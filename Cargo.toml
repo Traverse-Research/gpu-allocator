@@ -17,7 +17,7 @@ include = [
 ]
 
 [dependencies]
-ash = "0.32"
+ash = { version = "0.32", optional = true }
 backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
@@ -30,13 +30,15 @@ winit = "0.25"
 [[example]]
 name = "vulkan-buffer"
 path = "examples/vulkan-buffer/src/main.rs"
+required-features = ["vulkan"]
 
 [[example]]
 name = "vulkan-visualization"
 path = "examples/vulkan-visualization/src/main.rs"
-required-features = ["visualizer"]
+required-features = ["vulkan", "visualizer"]
 
 
 [features]
 vulkan_device_address = []
 visualizer = [ "imgui" ]
+vulkan = [ "ash" ]

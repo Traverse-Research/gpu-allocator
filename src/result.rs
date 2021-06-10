@@ -10,6 +10,8 @@ pub enum AllocationError {
     NoCompatibleMemoryTypeFound,
     #[error("Invalid AllocationCreateDesc")]
     InvalidAllocationCreateDesc,
+    #[error("Invalid AllocatorCreateDesc {0}")]
+    InvalidAllocatorCreateDesc(String),
     #[error("Internal error {0}")]
     Internal(String),
 }
