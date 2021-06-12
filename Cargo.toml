@@ -22,10 +22,11 @@ backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
 imgui = { version = "0.7", optional = true }
+imgui-winit-support = "0.7"
 
 [dev-dependencies]
 ash-window = "0.6"
-winit = "0.25"
+winit = "0.24"
 
 [[example]]
 name = "vulkan-buffer"
