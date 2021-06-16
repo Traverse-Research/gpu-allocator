@@ -306,7 +306,7 @@ impl MemoryBlock {
 
             let allocation_flags = vk::MemoryAllocateFlags::DEVICE_ADDRESS;
             let mut flags_info = vk::MemoryAllocateFlagsInfo::builder().flags(allocation_flags);
-            let alloc_info = if with_bda && cfg!(feature = "vulkan_device_address") {
+            let alloc_info = if with_bda {
                 alloc_info.push_next(&mut flags_info)
             } else {
                 alloc_info
