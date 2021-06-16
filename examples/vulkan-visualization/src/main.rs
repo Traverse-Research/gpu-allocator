@@ -229,6 +229,7 @@ fn main() {
             device: device.clone(),
             physical_device: pdevice,
             debug_settings: Default::default(),
+            device_supports_bda: true,
         });
 
         let fence_create_info =

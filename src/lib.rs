@@ -14,6 +14,7 @@
 //!     device,
 //!     physical_device,
 //!     debug_settings: Default::default(),
+//!     device_supports_bda: true,  // Ideally, check the BufferDeviceAddressFeatures struct.
 //! });
 //! ```
 //!
@@ -32,6 +33,7 @@
 //! #     device,
 //! #     physical_device,
 //! #     debug_settings: Default::default(),
+//! #     device_supports_bda: true,  // Ideally, check the BufferDeviceAddressFeatures struct.
 //! # });
 //!
 //! // Setup vulkan info

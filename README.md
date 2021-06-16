@@ -27,6 +27,7 @@ let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
     device,
     physical_device,
     debug_settings: Default::default(),
+    device_supports_bda: true,
 });
 ```
 
