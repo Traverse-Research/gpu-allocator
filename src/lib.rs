@@ -403,8 +403,14 @@ impl MemoryType {
 
         // Create a dedicated block for large memory allocations
         if size > memblock_size {
-            let mem_block =
-                MemoryBlock::new(device, size, self.memory_type_index, self.mappable, true, self.device_supports_bda)?;
+            let mem_block = MemoryBlock::new(
+                device,
+                size,
+                self.memory_type_index,
+                self.mappable,
+                true,
+                self.device_supports_bda,
+            )?;
 
             let mut block_index = None;
             for (i, block) in self.memory_blocks.iter().enumerate() {
