@@ -135,6 +135,7 @@ pub struct VulkanAllocatorCreateDesc {
     pub device: ash::Device,
     pub physical_device: ash::vk::PhysicalDevice,
     pub debug_settings: AllocatorDebugSettings,
+    pub device_supports_bda: bool,
 }
 
 #[cfg(feature = "visualizer")]
@@ -294,6 +295,7 @@ impl MemoryBlock {
         mem_type_index: usize,
         mapped: bool,
         dedicated: bool,
+        with_bda: bool,
     ) -> Result<Self> {
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::builder()
@@ -302,8 +304,7 @@ impl MemoryBlock {
 
             let allocation_flags = vk::MemoryAllocateFlags::DEVICE_ADDRESS;
             let mut flags_info = vk::MemoryAllocateFlagsInfo::builder().flags(allocation_flags);
-            // TODO(max): Test this based on if the device has this feature enabled or not
-            let alloc_info = if cfg!(feature = "vulkan_device_address") {
+            let alloc_info = if with_bda && cfg!(feature = "vulkan_device_address") {
                 alloc_info.push_next(&mut flags_info)
             } else {
                 alloc_info
@@ -366,6 +367,7 @@ struct MemoryType {
     heap_index: usize,
     mappable: bool,
     active_general_blocks: usize,
+    device_supports_bda: bool,
 }
 
 const DEFAULT_DEVICE_MEMBLOCK_SIZE: u64 = 256 * 1024 * 1024;
@@ -400,7 +402,7 @@ impl MemoryType {
         // Create a dedicated block for large memory allocations
         if size > memblock_size {
             let mem_block =
-                MemoryBlock::new(device, size, self.memory_type_index, self.mappable, true)?;
+                MemoryBlock::new(device, size, self.memory_type_index, self.mappable, true, self.device_supports_bda)?;
 
             let mut block_index = None;
             for (i, block) in self.memory_blocks.iter().enumerate() {
@@ -495,6 +497,7 @@ impl MemoryType {
             self.memory_type_index,
             self.mappable,
             false,
+            self.device_supports_bda,
         )?;
 
         let new_block_index = if let Some(block_index) = empty_block_index {
@@ -590,6 +593,7 @@ pub struct VulkanAllocator {
     memory_heaps: Vec<vk::MemoryHeap>,
     device: ash::Device,
     buffer_image_granularity: u64,
+    device_supports_bda: bool,
     debug_settings: AllocatorDebugSettings,
 }
 
@@ -661,6 +665,7 @@ impl VulkanAllocator {
                     .property_flags
                     .contains(vk::MemoryPropertyFlags::HOST_VISIBLE),
                 active_general_blocks: 0,
+                device_supports_bda: desc.device_supports_bda,
             })
             .collect::<Vec<_>>();
 
@@ -678,6 +683,7 @@ impl VulkanAllocator {
             device: desc.device.clone(),
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
+            device_supports_bda: desc.device_supports_bda,
         }
     }
 
