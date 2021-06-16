@@ -601,7 +601,6 @@ pub struct VulkanAllocator {
     memory_heaps: Vec<vk::MemoryHeap>,
     device: ash::Device,
     buffer_image_granularity: u64,
-    device_supports_bda: bool,
     debug_settings: AllocatorDebugSettings,
 }
 
@@ -691,7 +690,6 @@ impl VulkanAllocator {
             device: desc.device.clone(),
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
-            device_supports_bda: desc.device_supports_bda,
         }
     }
 
