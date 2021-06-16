@@ -94,7 +94,7 @@ fn main() {
         device: device.clone(),
         physical_device: pdevice,
         debug_settings: Default::default(),
-        device_supports_bda: true,
+        buffer_device_address: true,
     });
 
     // Test allocating GPU Only memory
