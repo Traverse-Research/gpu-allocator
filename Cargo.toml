@@ -38,5 +38,4 @@ required-features = ["visualizer"]
 
 
 [features]
-vulkan_device_address = []
 visualizer = [ "imgui" ]

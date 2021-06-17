@@ -27,6 +27,7 @@ let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
     device,
     physical_device,
     debug_settings: Default::default(),
+    buffer_device_address: true,  // Ideally, check the BufferDeviceAddressFeatures struct.
 });
 ```
 
