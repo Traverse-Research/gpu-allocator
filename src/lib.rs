@@ -611,7 +611,7 @@ impl fmt::Debug for VulkanAllocator {
             .field("memory_types", &self.memory_types)
             .field("buffer_image_granularity", &self.buffer_image_granularity)
             .field("debug_settings", &self.debug_settings)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
