@@ -611,7 +611,7 @@ impl fmt::Debug for VulkanAllocator {
             .field("memory_heaps", &self.memory_heaps)
             .field("buffer_image_granularity", &self.buffer_image_granularity)
             .field("debug_settings", &self.debug_settings)
-            .finish() // device doesn't really motivate finish_non_exhaustive, right?
+            .finish()
     }
 }
 
