@@ -598,7 +598,6 @@ impl MemoryType {
 
 pub struct VulkanAllocator {
     memory_types: Vec<MemoryType>,
-    #[cfg(feature = "visualizer")]
     memory_heaps: Vec<vk::MemoryHeap>,
     device: ash::Device,
     buffer_image_granularity: u64,
@@ -609,9 +608,10 @@ impl fmt::Debug for VulkanAllocator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("VulkanAllocator")
             .field("memory_types", &self.memory_types)
+            .field("memory_heaps", &self.memory_heaps)
             .field("buffer_image_granularity", &self.buffer_image_granularity)
             .field("debug_settings", &self.debug_settings)
-            .finish_non_exhaustive()
+            .finish() // device doesn't really motivate finish_non_exhaustive, right?
     }
 }
 
@@ -696,7 +696,6 @@ impl VulkanAllocator {
 
         Self {
             memory_types,
-            #[cfg(feature = "visualizer")]
             memory_heaps,
             device: desc.device.clone(),
             buffer_image_granularity: granularity,
