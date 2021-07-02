@@ -63,6 +63,7 @@
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use log::{log, Level};
+use std::fmt;
 
 mod result;
 pub use result::*;
@@ -602,6 +603,16 @@ pub struct VulkanAllocator {
     device: ash::Device,
     buffer_image_granularity: u64,
     debug_settings: AllocatorDebugSettings,
+}
+
+impl fmt::Debug for VulkanAllocator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VulkanAllocator")
+            .field("memory_types", &self.memory_types)
+            .field("buffer_image_granularity", &self.buffer_image_granularity)
+            .field("debug_settings", &self.debug_settings)
+            .finish()
+    }
 }
 
 impl VulkanAllocator {
