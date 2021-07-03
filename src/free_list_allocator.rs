@@ -1,7 +1,5 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
-use super::{
-    AllocationError, AllocationType, Result, SubAllocation, SubAllocator, SubAllocatorBase,
-};
+use super::{AllocationError, AllocationType, Result, SubAllocator, SubAllocatorBase};
 use log::{log, Level};
 use std::collections::{HashMap, HashSet};
 
@@ -280,11 +278,7 @@ impl SubAllocator for FreeListAllocator {
         Ok((best_offset, chunk_id))
     }
 
-    fn free(&mut self, sub_allocation: SubAllocation) -> Result<()> {
-        let chunk_id = sub_allocation
-            .chunk_id
-            .ok_or_else(|| AllocationError::Internal("Chunk ID must be a valid value.".into()))?;
-
+    fn free(&mut self, chunk_id: std::num::NonZeroU64) -> Result<()> {
         let (next_id, prev_id) = {
             let chunk = self.chunks.get_mut(&chunk_id).ok_or_else(|| {
                 AllocationError::Internal(
