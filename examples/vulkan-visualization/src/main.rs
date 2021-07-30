@@ -1,4 +1,3 @@
-use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 
 use std::default::Default;
@@ -42,7 +41,7 @@ fn main() {
                 .application_version(0)
                 .engine_name(&app_name)
                 .engine_version(0)
-                .api_version(vk::make_version(1, 0, 0));
+                .api_version(vk::make_api_version(0, 1, 0, 0));
 
             let layer_names: &[CString] = &[CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
             let layers_names_raw: Vec<*const i8> = layer_names

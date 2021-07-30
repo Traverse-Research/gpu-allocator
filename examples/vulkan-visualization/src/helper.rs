@@ -1,9 +1,8 @@
-use ash::version::DeviceV1_0;
 use ash::vk;
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn record_and_submit_command_buffer<D: DeviceV1_0, F: FnOnce(&D, vk::CommandBuffer)>(
-    device: &D,
+pub(crate) fn record_and_submit_command_buffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
+    device: &ash::Device,
     command_buffer: vk::CommandBuffer,
     command_buffer_reuse_fence: vk::Fence,
     submit_queue: vk::Queue,

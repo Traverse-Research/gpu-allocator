@@ -23,7 +23,6 @@
 //! ```no_run
 //! use gpu_allocator::*;
 //! # use ash::vk;
-//! # use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 //! # let device = todo!();
 //! # let instance = todo!();
 //! # let physical_device = todo!();
@@ -60,7 +59,6 @@
 //! unsafe { device.destroy_buffer(buffer, None) };
 //! ```
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
-use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use log::{log, Level};
 use std::fmt;
