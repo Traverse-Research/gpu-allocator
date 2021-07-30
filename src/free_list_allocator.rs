@@ -165,7 +165,7 @@ impl SubAllocator for FreeListAllocator {
         let mut best_chunk_size = 0u64;
 
         for current_chunk_id in self.free_chunks.iter() {
-            let current_chunk = self.chunks.get(&current_chunk_id).ok_or_else(|| {
+            let current_chunk = self.chunks.get(current_chunk_id).ok_or_else(|| {
                 AllocationError::Internal(
                     "Chunk ID in free list is not present in chunk list.".into(),
                 )
