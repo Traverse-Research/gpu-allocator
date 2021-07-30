@@ -211,7 +211,7 @@ impl AllocatorVisualizer {
         imgui::Window::new(imgui::im_str!("Allocator visualization"))
             .collapsed(true, Condition::FirstUseEver)
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
-            .build(&ui, || {
+            .build(ui, || {
                 use imgui::*;
 
                 ui.text(&format!(
@@ -376,7 +376,7 @@ impl AllocatorVisualizer {
             .scrollable(true)
             .focused(focus)
             .opened(&mut is_open)
-            .build(&ui, || {
+            .build(ui, || {
                 use imgui::*;
 
                 let memblock = &alloc.memory_types[window.memory_type_index].memory_blocks
@@ -417,7 +417,7 @@ impl AllocatorVisualizer {
                     .scroll_bar(true)
                     .build(ui, || {
                         memblock.sub_allocator.draw_visualization(
-                            &color_scheme,
+                            color_scheme,
                             ui,
                             window.bytes_per_unit,
                             window.show_backtraces,
@@ -456,7 +456,7 @@ impl AllocatorVisualizer {
     }
 
     pub fn render(&mut self, allocator: &VulkanAllocator, ui: &imgui::Ui) {
-        self.render_main_window(ui, &allocator);
-        self.render_memory_block_windows(ui, &allocator);
+        self.render_main_window(ui, allocator);
+        self.render_memory_block_windows(ui, allocator);
     }
 }

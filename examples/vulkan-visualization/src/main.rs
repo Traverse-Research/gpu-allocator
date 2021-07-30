@@ -352,7 +352,7 @@ fn main() {
                     // Render ImGui to swapchain image
                     imgui_renderer.render(
                         imgui_draw_data,
-                        &device,
+                        device,
                         window_width,
                         window_height,
                         framebuffers[present_index as usize],
