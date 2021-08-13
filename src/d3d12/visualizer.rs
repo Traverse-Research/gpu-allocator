@@ -222,12 +222,12 @@ impl AllocatorVisualizer {
                     [window.block_index]
                     .as_ref();
                 if let Some(memblock) = memblock {
-                    //ui.text(&format!(
-                    //    "Memory type {}, Memory block {}, Block size: {} KiB",
-                    //    window.memory_type_index,
-                    //    window.block_index,
-                    //    memblock.size / 1024
-                    //));
+                    ui.text(&format!(
+                        "Memory type {}, Memory block {}, Block size: {} KiB",
+                        window.memory_type_index,
+                        window.block_index,
+                        memblock.sub_allocator.size() / 1024
+                    ));
 
                     if alloc.debug_settings.store_stack_traces {
                         ui.checkbox(im_str!("Show backtraces"), &mut window.show_backtraces);
