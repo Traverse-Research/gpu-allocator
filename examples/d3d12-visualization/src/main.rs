@@ -432,12 +432,6 @@ fn main() {
             let current_backbuffer = &backbuffers[buffer_index as usize];
 
             let ui = imgui.frame();
-            imgui::Window::new(imgui::im_str!("test"))
-                .size([512.0, 512.0], imgui::Condition::FirstUseEver)
-                .build(&ui, || {
-                    ui.text(imgui::im_str!("hello world!"));
-                });
-
             visualizer.render(&allocator, &ui);
             let imgui_draw_data = ui.render();
 
