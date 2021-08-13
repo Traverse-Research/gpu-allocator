@@ -1,0 +1,728 @@
+#![windows_subsystem = "windows"]
+
+use raw_window_handle::HasRawWindowHandle;
+use winapi::um::d3d12;
+use winapi::um::winuser;
+
+use winapi::shared::basetsd::LONG_PTR;
+use winapi::shared::minwindef::{HINSTANCE, LPARAM, LRESULT, UINT, WPARAM};
+use winapi::shared::ntdef::LONG;
+use winapi::shared::windef::{HBRUSH, HMENU, HWND, LPRECT, RECT};
+
+use gpu_allocator::d3d12::{Allocator, AllocatorCreateDesc};
+mod all_dxgi {
+    pub use winapi::shared::{
+        dxgi::*, dxgi1_2::*, dxgi1_3::*, dxgi1_4::*, dxgi1_6::*, dxgiformat::*, dxgitype::*,
+    };
+}
+
+use winapi::um::d3d12::*;
+use winapi::um::d3dcommon::*;
+use winapi::Interface;
+
+use winapi::shared::winerror;
+use winapi::shared::winerror::{FAILED, SUCCEEDED};
+
+mod imgui_renderer;
+use imgui_renderer::{handle_imgui_event, ImGuiRenderer};
+
+const ENABLE_DEBUG_LAYER: bool = true;
+const FRAMES_IN_FLIGHT: usize = 2;
+
+#[derive(PartialEq, Eq)]
+pub(crate) enum MouseButton {
+    Left,
+    Right,
+}
+
+#[allow(clippy::enum_variant_names)] // We just happen to have only mouse events atm
+enum Event {
+    MouseButtonDown { button: MouseButton, x: i32, y: i32 },
+    MouseButtonUp { button: MouseButton, x: i32, y: i32 },
+    MouseMove { x: i32, y: i32 },
+}
+
+struct WndProcUserData {
+    running: bool,
+    event: Option<Event>,
+}
+impl Default for WndProcUserData {
+    fn default() -> Self {
+        Self {
+            running: true,
+            event: None,
+        }
+    }
+}
+
+struct BackBuffer {
+    resource: *mut ID3D12Resource,
+    footprint: D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
+    rtv_handle: D3D12_CPU_DESCRIPTOR_HANDLE,
+}
+
+/// # Safety
+/// Windows is gonna windows
+pub unsafe extern "system" fn wndproc(
+    hwnd: HWND,
+    msg: UINT,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    if let winuser::WM_CREATE = msg {
+        let create_struct = lparam as *const winuser::CREATESTRUCTW;
+        winuser::SetWindowLongPtrW(
+            hwnd,
+            winuser::GWLP_USERDATA,
+            (*create_struct).lpCreateParams as LONG_PTR,
+        );
+        return 0;
+    }
+
+    let user_data =
+        winuser::GetWindowLongPtrW(hwnd, winuser::GWLP_USERDATA) as *mut WndProcUserData;
+    if user_data == std::ptr::null_mut() {
+        return winuser::DefWindowProcW(hwnd, msg, wparam, lparam);
+    }
+
+    let user_data = user_data.as_mut().unwrap();
+
+    match msg {
+        winuser::WM_QUIT | winuser::WM_CLOSE => {
+            user_data.running = false;
+        }
+        winuser::WM_KEYDOWN => {
+            if wparam == winuser::VK_ESCAPE as usize {
+                user_data.running = false;
+            }
+        }
+        winuser::WM_LBUTTONDOWN => {
+            assert!(user_data.event.is_none());
+            use winapi::shared::windowsx::GET_X_LPARAM;
+            use winapi::shared::windowsx::GET_Y_LPARAM;
+            let x = GET_X_LPARAM(lparam) as i32;
+            let y = GET_Y_LPARAM(lparam) as i32;
+
+            user_data.event = Some(Event::MouseButtonDown {
+                button: MouseButton::Left,
+                x,
+                y,
+            });
+        }
+        winuser::WM_RBUTTONDOWN => {
+            assert!(user_data.event.is_none());
+            use winapi::shared::windowsx::GET_X_LPARAM;
+            use winapi::shared::windowsx::GET_Y_LPARAM;
+            let x = GET_X_LPARAM(lparam) as i32;
+            let y = GET_Y_LPARAM(lparam) as i32;
+
+            user_data.event = Some(Event::MouseButtonDown {
+                button: MouseButton::Right,
+                x,
+                y,
+            });
+        }
+        winuser::WM_LBUTTONUP => {
+            assert!(user_data.event.is_none());
+            use winapi::shared::windowsx::GET_X_LPARAM;
+            use winapi::shared::windowsx::GET_Y_LPARAM;
+            let x = GET_X_LPARAM(lparam) as i32;
+            let y = GET_Y_LPARAM(lparam) as i32;
+
+            user_data.event = Some(Event::MouseButtonUp {
+                button: MouseButton::Left,
+                x,
+                y,
+            });
+        }
+        winuser::WM_RBUTTONUP => {
+            assert!(user_data.event.is_none());
+            use winapi::shared::windowsx::GET_X_LPARAM;
+            use winapi::shared::windowsx::GET_Y_LPARAM;
+            let x = GET_X_LPARAM(lparam) as i32;
+            let y = GET_Y_LPARAM(lparam) as i32;
+
+            user_data.event = Some(Event::MouseButtonDown {
+                button: MouseButton::Right,
+                x,
+                y,
+            });
+        }
+        winuser::WM_MOUSEMOVE => {
+            assert!(user_data.event.is_none());
+            use winapi::shared::windowsx::GET_X_LPARAM;
+            use winapi::shared::windowsx::GET_Y_LPARAM;
+            let x = GET_X_LPARAM(lparam) as i32;
+            let y = GET_Y_LPARAM(lparam) as i32;
+            user_data.event = Some(Event::MouseMove { x, y });
+        }
+        _ => return winuser::DefWindowProcW(hwnd, msg, wparam, lparam),
+    }
+
+    0
+}
+
+fn find_hardware_adapter(
+    dxgi_factory: &all_dxgi::IDXGIFactory6,
+) -> Option<*mut all_dxgi::IDXGIAdapter4> {
+    let mut adapter: *mut all_dxgi::IDXGIAdapter4 = std::ptr::null_mut();
+    let mut adapater_index = 0;
+    loop {
+        let hr =
+            unsafe { dxgi_factory.EnumAdapters1(adapater_index, &mut adapter as *mut _ as *mut _) };
+        if hr == winerror::DXGI_ERROR_NOT_FOUND {
+            break None;
+        }
+
+        let mut desc = all_dxgi::DXGI_ADAPTER_DESC3::default();
+        unsafe {
+            adapter
+                .as_ref()
+                .unwrap()
+                .GetDesc3(&mut desc as *mut _ as *mut _)
+        };
+
+        if (desc.Flags & all_dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+            adapater_index += 1;
+            continue;
+        }
+
+        let hr = unsafe {
+            D3D12CreateDevice(
+                adapter as *mut _,
+                D3D_FEATURE_LEVEL_12_0,
+                &IID_ID3D12Device,
+                std::ptr::null_mut(),
+            )
+        };
+        if SUCCEEDED(hr) {
+            break Some(adapter);
+        }
+
+        adapater_index += 1;
+    }
+}
+
+fn enable_d3d12_debug_layer() -> bool {
+    use winapi::um::d3d12sdklayers::ID3D12Debug;
+    let mut debug: *mut ID3D12Debug = std::ptr::null_mut();
+    let hr =
+        unsafe { D3D12GetDebugInterface(&ID3D12Debug::uuidof(), &mut debug as *mut _ as *mut _) };
+    if FAILED(hr) {
+        return false;
+    }
+
+    let debug = unsafe { debug.as_mut().unwrap() };
+    unsafe { debug.EnableDebugLayer() };
+    unsafe { debug.Release() };
+
+    true
+}
+
+fn create_d3d12_device(adapter: &mut all_dxgi::IDXGIAdapter4) -> *mut ID3D12Device {
+    unsafe {
+        let mut device: *mut ID3D12Device = std::ptr::null_mut();
+        let hr = D3D12CreateDevice(
+            adapter as *mut _ as *mut _,
+            D3D_FEATURE_LEVEL_12_0,
+            &ID3D12Device::uuidof(),
+            &mut device as *mut _ as *mut _,
+        );
+        if FAILED(hr) {
+            panic!("Failed to create ID3D12Device.");
+        }
+        device
+    }
+}
+
+#[must_use]
+fn transition_resource(
+    resource: *mut ID3D12Resource,
+    before: D3D12_RESOURCE_STATES,
+    after: D3D12_RESOURCE_STATES,
+) -> D3D12_RESOURCE_BARRIER {
+    let mut barrier = D3D12_RESOURCE_BARRIER {
+        Type: D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        ..D3D12_RESOURCE_BARRIER::default()
+    };
+
+    unsafe {
+        barrier.u.Transition_mut().pResource = resource;
+        barrier.u.Transition_mut().StateBefore = before;
+        barrier.u.Transition_mut().StateAfter = after;
+        barrier.u.Transition_mut().Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    }
+
+    barrier
+}
+
+fn main() {
+    let hinstance = unsafe { winapi::um::libloaderapi::GetModuleHandleA(std::ptr::null()) };
+    let hinstance = hinstance as HINSTANCE;
+
+    // Disable automatic DPI scaling by windows
+    unsafe { winuser::SetProcessDPIAware() };
+
+    let event_loop = winit::event_loop::EventLoop::new();
+
+    let window_width = 1920;
+    let window_height = 1080;
+    let window = winit::window::WindowBuilder::new()
+        .with_title("gpu-allocator d3d12 visualization")
+        .with_inner_size(winit::dpi::PhysicalSize::new(
+            window_width as f64,
+            window_height as f64,
+        ))
+        .with_resizable(false)
+        .build(&event_loop)
+        .unwrap();
+
+    let (event_send, event_recv) = std::sync::mpsc::sync_channel(1);
+    let quit_send = event_loop.create_proxy();
+
+    std::thread::spawn(move || -> () {
+        let mut dxgi_factory_flags = 0;
+        if ENABLE_DEBUG_LAYER && enable_d3d12_debug_layer() {
+            println!("Enabled D3D12 debug layer");
+            dxgi_factory_flags |= all_dxgi::DXGI_CREATE_FACTORY_DEBUG;
+        }
+
+        let dxgi_factory = unsafe {
+            let mut factory: *mut all_dxgi::IDXGIFactory6 = std::ptr::null_mut();
+            let hr = all_dxgi::CreateDXGIFactory2(
+                dxgi_factory_flags,
+                &all_dxgi::IID_IDXGIFactory6,
+                &mut factory as *mut _ as *mut _,
+            );
+
+            if FAILED(hr) {
+                panic!("Failed to create dxgi factory");
+            }
+
+            factory.as_mut().unwrap()
+        };
+
+        let adapter = find_hardware_adapter(dxgi_factory).unwrap();
+        let adapter = unsafe { adapter.as_mut().unwrap() };
+
+        let device = create_d3d12_device(adapter);
+        let device = unsafe { device.as_mut().unwrap() };
+
+        let queue = unsafe {
+            let desc = D3D12_COMMAND_QUEUE_DESC {
+                Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
+                Priority: 0, // ?
+                Flags: D3D12_COMMAND_QUEUE_FLAG_NONE,
+                NodeMask: 0,
+            };
+
+            let mut queue: *mut ID3D12CommandQueue = std::ptr::null_mut();
+            let hr = device.CreateCommandQueue(
+                &desc as *const _,
+                &ID3D12CommandQueue::uuidof(),
+                &mut queue as *mut _ as *mut _,
+            );
+            if FAILED(hr) {
+                panic!("Failed to create command queue.");
+            }
+
+            queue.as_mut().unwrap()
+        };
+
+        let swapchain = unsafe {
+            let mut swapchain: *mut all_dxgi::IDXGISwapChain3 = std::ptr::null_mut();
+
+            let swap_chain_desc = all_dxgi::DXGI_SWAP_CHAIN_DESC1 {
+                BufferCount: FRAMES_IN_FLIGHT as UINT,
+                Width: window_width as UINT,
+                Height: window_height as UINT,
+                Format: all_dxgi::DXGI_FORMAT_R8G8B8A8_UNORM,
+                BufferUsage: all_dxgi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+                SwapEffect: all_dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
+                SampleDesc: all_dxgi::DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
+                ..all_dxgi::DXGI_SWAP_CHAIN_DESC1::default()
+            };
+
+            use raw_window_handle::RawWindowHandle;
+            let raw_window_haver: &dyn HasRawWindowHandle = &window;
+
+            let hwnd = if let raw_window_handle::RawWindowHandle::Windows(handle) =
+                raw_window_haver.raw_window_handle()
+            {
+                handle.hwnd
+            } else {
+                panic!("Failed to get HWND.")
+            };
+            let hr = dxgi_factory.CreateSwapChainForHwnd(
+                queue as *mut _ as *mut _,
+                hwnd as HWND,
+                &swap_chain_desc as *const _,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                &mut swapchain as *mut _ as *mut _,
+            );
+            if FAILED(hr) {
+                panic!("Failed to create swapchain. hr: 0x{:x}", hr);
+            }
+            swapchain.as_mut().unwrap()
+        };
+
+        let rtv_heap = unsafe {
+            let desc = D3D12_DESCRIPTOR_HEAP_DESC {
+                Type: D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                NumDescriptors: 2,
+                Flags: D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                NodeMask: 0,
+            };
+            let mut heap: *mut ID3D12DescriptorHeap = std::ptr::null_mut();
+            let hr = device.CreateDescriptorHeap(
+                &desc,
+                &IID_ID3D12DescriptorHeap,
+                &mut heap as *mut _ as *mut _,
+            );
+            if FAILED(hr) {
+                panic!("Failed to create RTV Descriptor heap");
+            }
+
+            heap.as_mut().unwrap()
+        };
+
+        let backbuffers = unsafe {
+            (0..FRAMES_IN_FLIGHT)
+                .map(|i| {
+                    let mut resource: *mut ID3D12Resource = std::ptr::null_mut();
+                    let hr = swapchain.GetBuffer(
+                        i as u32,
+                        &ID3D12Resource::uuidof(),
+                        &mut resource as *mut _ as *mut _,
+                    );
+                    if FAILED(hr) {
+                        panic!("Failed to access swapchain buffer {}", i);
+                    }
+
+                    let mut u = D3D12_RENDER_TARGET_VIEW_DESC_u::default();
+                    let t2d = u.Texture2D_mut();
+                    t2d.MipSlice = 0;
+                    t2d.PlaneSlice = 0;
+
+                    let resource_desc = resource.as_ref().unwrap().GetDesc();
+                    let mut footprint = D3D12_PLACED_SUBRESOURCE_FOOTPRINT::default();
+                    device.GetCopyableFootprints(
+                        &resource_desc,
+                        0,
+                        1,
+                        0,
+                        &mut footprint as *mut _,
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                    );
+
+                    let rtv_stride = device
+                        .GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
+                        as usize;
+                    let rtv_handle = D3D12_CPU_DESCRIPTOR_HANDLE {
+                        ptr: rtv_heap.GetCPUDescriptorHandleForHeapStart().ptr + i * rtv_stride,
+                    };
+
+                    let mut rtv_desc = D3D12_RENDER_TARGET_VIEW_DESC {
+                        Format: all_dxgi::DXGI_FORMAT_R8G8B8A8_UNORM,
+                        ViewDimension: D3D12_RTV_DIMENSION_TEXTURE2D,
+                        ..Default::default()
+                    };
+                    rtv_desc.u.Texture2D_mut().MipSlice = 0;
+                    rtv_desc.u.Texture2D_mut().PlaneSlice = 0;
+
+                    device.CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
+
+                    BackBuffer {
+                        resource,
+                        footprint,
+                        rtv_handle,
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let command_allocator = unsafe {
+            let mut command_allocator: *mut ID3D12CommandAllocator = std::ptr::null_mut();
+
+            let hr = device.CreateCommandAllocator(
+                D3D12_COMMAND_LIST_TYPE_DIRECT,
+                &ID3D12CommandAllocator::uuidof(),
+                &mut command_allocator as *mut _ as *mut _,
+            );
+            if FAILED(hr) {
+                panic!("Failed to create command allocator");
+            }
+
+            command_allocator.as_mut().unwrap()
+        };
+
+        let descriptor_heap = unsafe {
+            let desc = D3D12_DESCRIPTOR_HEAP_DESC {
+                Type: D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                NumDescriptors: 4096,
+                Flags: D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+                NodeMask: 0,
+            };
+
+            let mut heap: *mut ID3D12DescriptorHeap = std::ptr::null_mut();
+            let hr = device.CreateDescriptorHeap(
+                &desc as *const _,
+                &IID_ID3D12DescriptorHeap as *const _,
+                &mut heap as *mut _ as *mut _,
+            );
+            if FAILED(hr) {
+                panic!("Failed to create descriptor heap.");
+            }
+
+            heap.as_mut().unwrap()
+        };
+
+        let command_list = unsafe {
+            let mut command_list: *mut ID3D12GraphicsCommandList = std::ptr::null_mut();
+            let hr = device.CreateCommandList(
+                0,
+                D3D12_COMMAND_LIST_TYPE_DIRECT,
+                command_allocator as *mut _,
+                std::ptr::null_mut(),
+                &ID3D12GraphicsCommandList::uuidof(),
+                &mut command_list as *mut _ as *mut _,
+            );
+            if FAILED(hr) {
+                panic!("Failed to create command list.");
+            }
+
+            let command_list = command_list.as_mut().unwrap();
+            command_list
+        };
+
+        let mut allocator = Allocator::new(&AllocatorCreateDesc {
+            device: device as *mut _,
+            debug_settings: Default::default(),
+        })
+        .unwrap();
+
+        let mut descriptor_heap_counter = 0;
+
+        let mut imgui = imgui::Context::create();
+        imgui.io_mut().display_size = [window_width as f32, window_height as f32];
+        let mut imgui_renderer = ImGuiRenderer::new(
+            &mut imgui,
+            device,
+            &mut allocator,
+            descriptor_heap,
+            &mut descriptor_heap_counter,
+            command_list,
+        );
+
+        let fence = unsafe {
+            let mut fence: *mut ID3D12Fence = std::ptr::null_mut();
+            let hr = device.CreateFence(
+                0,
+                D3D12_FENCE_FLAG_NONE,
+                &ID3D12Fence::uuidof(),
+                &mut fence as *mut _ as *mut _,
+            );
+            if FAILED(hr) {
+                panic!("Failed to create fence");
+            }
+
+            fence.as_mut().unwrap()
+        };
+
+        let mut fence_value = 0_u64;
+
+        unsafe { command_list.Close() };
+
+        // Submit and wait idle
+        unsafe {
+            let lists: [*mut ID3D12CommandList; 1] =
+                [command_list as *mut _ as *mut ID3D12CommandList];
+            queue.ExecuteCommandLists(1, lists.as_ptr());
+            fence_value += 1;
+            queue.Signal(fence as *mut _, fence_value);
+
+            while fence.GetCompletedValue() < fence_value {}
+        };
+
+        //let mut visualizer = gpu_allocator::d3d12::AllocatorVisualizer::new();
+
+        let mut running = true;
+        let mut last_time = std::time::Instant::now();
+        loop {
+            let event = event_recv.recv().unwrap();
+            handle_imgui_event(imgui.io_mut(), &window, &event);
+
+            let mut should_quit = false;
+            if let winit::event::Event::WindowEvent { event, .. } = event {
+                match event {
+                    winit::event::WindowEvent::KeyboardInput { input, .. } => {
+                        if let Some(winit::event::VirtualKeyCode::Escape) = input.virtual_keycode {
+                            should_quit = true;
+                        }
+                    }
+                    winit::event::WindowEvent::CloseRequested => {
+                        should_quit = true;
+                    }
+                    _ => {}
+                }
+            }
+
+            if should_quit {
+                quit_send.send_event(()).unwrap();
+                break;
+            }
+
+            let delta_time = {
+                let now = std::time::Instant::now();
+                let delta = (now - last_time).as_secs_f32();
+                last_time = now;
+                delta
+            };
+
+            let buffer_index = unsafe { swapchain.GetCurrentBackBufferIndex() };
+            let current_backbuffer = &backbuffers[buffer_index as usize];
+
+            let ui = imgui.frame();
+            imgui::Window::new(imgui::im_str!("test"))
+                .size([512.0, 512.0], imgui::Condition::FirstUseEver)
+                .build(&ui, || {
+                    ui.text(imgui::im_str!("hello world!"));
+                });
+
+            //visualizer.render(&allocator, &ui);
+            let imgui_draw_data = ui.render();
+
+            unsafe {
+                command_allocator.Reset();
+                command_list.Reset(command_allocator as *mut _, std::ptr::null_mut());
+
+                {
+                    let barriers = [transition_resource(
+                        current_backbuffer.resource,
+                        D3D12_RESOURCE_STATE_PRESENT,
+                        D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    )];
+                    command_list.ResourceBarrier(barriers.len() as u32, barriers.as_ptr());
+                }
+
+                command_list.ClearRenderTargetView(
+                    current_backbuffer.rtv_handle,
+                    &[1.0, 1.0, 0.0, 0.0],
+                    0,
+                    std::ptr::null_mut(),
+                );
+
+                let rtv_handles = [current_backbuffer.rtv_handle];
+                command_list.OMSetRenderTargets(
+                    rtv_handles.len() as u32,
+                    rtv_handles.as_ptr(),
+                    0,
+                    std::ptr::null_mut(),
+                );
+                {
+                    let viewports = [D3D12_VIEWPORT {
+                        TopLeftX: 0.0,
+                        TopLeftY: 0.0,
+                        Width: window_width as f32,
+                        Height: window_height as f32,
+                        MinDepth: 0.0,
+                        MaxDepth: 1.0,
+                    }];
+                    command_list.RSSetViewports(viewports.len() as u32, viewports.as_ptr());
+                }
+                {
+                    let scissor_rects = [D3D12_RECT {
+                        left: 0,
+                        top: 0,
+                        right: window_width as i32,
+                        bottom: window_height as i32,
+                    }];
+                    command_list
+                        .RSSetScissorRects(scissor_rects.len() as u32, scissor_rects.as_ptr());
+                }
+
+                let mut heaps = [descriptor_heap as *mut _];
+                command_list.SetDescriptorHeaps(1, heaps.as_mut_ptr());
+
+                imgui_renderer.render(
+                    imgui_draw_data,
+                    device,
+                    window_width,
+                    window_height,
+                    descriptor_heap,
+                    command_list,
+                );
+
+                {
+                    let barriers = [transition_resource(
+                        current_backbuffer.resource,
+                        D3D12_RESOURCE_STATE_RENDER_TARGET,
+                        D3D12_RESOURCE_STATE_PRESENT,
+                    )];
+                    command_list.ResourceBarrier(barriers.len() as u32, barriers.as_ptr());
+                }
+
+                command_list.Close();
+
+                let lists: [*mut ID3D12CommandList; 1] =
+                    [command_list as *mut _ as *mut ID3D12CommandList];
+                queue.ExecuteCommandLists(1, lists.as_ptr());
+            }
+
+            unsafe { swapchain.Present(0, 0) };
+
+            unsafe {
+                fence_value += 1;
+                queue.Signal(fence, fence_value);
+
+                loop {
+                    if fence_value == fence.GetCompletedValue() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        unsafe {
+            fence_value += 1;
+            queue.Signal(fence, fence_value);
+
+            while fence.GetCompletedValue() < fence_value {}
+        }
+
+        unsafe {
+            for b in backbuffers {
+                b.resource.as_ref().unwrap().Release();
+            }
+
+            fence.Release();
+            command_list.Release();
+            command_allocator.Release();
+            swapchain.Release();
+
+            queue.Release();
+            device.Release();
+            adapter.Release();
+            dxgi_factory.Release();
+        }
+    });
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = winit::event_loop::ControlFlow::Wait;
+
+        if event == winit::event::Event::UserEvent(()) {
+            *control_flow = winit::event_loop::ControlFlow::Exit;
+        } else if let Some(event) = event.to_static() {
+            let _ = event_send.send(event);
+        } else {
+            *control_flow = winit::event_loop::ControlFlow::Exit;
+        }
+    });
+}

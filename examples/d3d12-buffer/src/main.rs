@@ -116,7 +116,8 @@ fn main() {
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
         device,
         debug_settings: Default::default(),
-    });
+    })
+    .unwrap();
 
     // Test allocating GPU Only memory
     {
