@@ -34,7 +34,7 @@
 //! #     physical_device,
 //! #     debug_settings: Default::default(),
 //! #     buffer_device_address: true,  // Ideally, check the BufferDeviceAddressFeatures struct.
-//! # });
+//! # }).unwrap();
 //!
 //! // Setup vulkan info
 //! let vk_info = vk::BufferCreateInfo::builder()
