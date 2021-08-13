@@ -739,14 +739,19 @@ impl ImGuiRenderer {
 
             // Upload vertices
             unsafe {
-                let dst_ptr = self.vb_pointer.add(vb_offset).cast::<imgui::DrawVert>();
+                let stride = std::mem::size_of::<imgui::DrawVert>();
+                let dst_ptr = self
+                    .vb_pointer
+                    .add(vb_offset * stride)
+                    .cast::<imgui::DrawVert>();
                 std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst_ptr, vertices.len());
             }
             vb_offset += vertices.len();
 
             // Upload indices
             unsafe {
-                let dst_ptr = self.ib_pointer.add(ib_offset).cast();
+                let stride = std::mem::size_of::<u16>();
+                let dst_ptr = self.ib_pointer.add(ib_offset * stride).cast();
                 std::ptr::copy_nonoverlapping(indices.as_ptr(), dst_ptr, indices.len());
             }
             ib_offset += indices.len();
