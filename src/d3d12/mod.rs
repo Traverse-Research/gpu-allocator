@@ -3,6 +3,11 @@ use log::{log, Level};
 use winapi::shared::winerror;
 use winapi::um::d3d12;
 
+#[cfg(feature = "visualizer")]
+mod visualizer;
+#[cfg(feature = "visualizer")]
+pub use visualizer::AllocatorVisualizer;
+
 use super::allocator;
 use super::allocator::AllocationType;
 

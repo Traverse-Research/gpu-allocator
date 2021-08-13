@@ -402,7 +402,7 @@ fn main() {
             while fence.GetCompletedValue() < fence_value {}
         };
 
-        //let mut visualizer = gpu_allocator::d3d12::AllocatorVisualizer::new();
+        let mut visualizer = gpu_allocator::d3d12::AllocatorVisualizer::new();
 
         loop {
             let event = event_recv.recv().unwrap();
@@ -438,7 +438,7 @@ fn main() {
                     ui.text(imgui::im_str!("hello world!"));
                 });
 
-            //visualizer.render(&allocator, &ui);
+            visualizer.render(&allocator, &ui);
             let imgui_draw_data = ui.render();
 
             unsafe {
