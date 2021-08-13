@@ -84,38 +84,6 @@ impl AllocatorVisualizer {
             .build(&ui, || {
                 use imgui::*;
 
-                //ui.text(&format!(
-                //    "buffer image granularity: {:?}",
-                //    alloc.buffer_image_granularity
-                //));
-
-                /*
-                let heap_count = alloc.memory_heaps.len();
-                if CollapsingHeader::new(&ImString::new(format!(
-                    "Memory Heaps ({} heaps)",
-                    heap_count
-                )))
-                .build(ui)
-                {
-                    for (i, heap) in alloc.memory_heaps.iter().enumerate() {
-                        ui.indent();
-                        if CollapsingHeader::new(&ImString::new(format!("Heap: {}", i))).build(ui) {
-                            ui.indent();
-                            ui.text(&format!(
-                                "flags: {} (0x{:x})",
-                                format_heap_flags(heap.flags),
-                                heap.flags.as_raw()
-                            ));
-                            ui.text(&format!(
-                                "size:  {} MiB",
-                                heap.size as f64 / (1024 * 1024) as f64
-                            ));
-                            ui.unindent();
-                        }
-                        ui.unindent();
-                    }
-                }*/
-
                 if CollapsingHeader::new(&ImString::new(format!(
                     "Memory Types: ({} types)",
                     alloc.memory_types.len()
