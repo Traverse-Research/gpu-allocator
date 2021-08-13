@@ -1,15 +1,9 @@
 #![windows_subsystem = "windows"]
 
 use raw_window_handle::HasRawWindowHandle;
-use winapi::um::d3d12;
-use winapi::um::winuser;
-
-use winapi::shared::basetsd::LONG_PTR;
-use winapi::shared::minwindef::{HINSTANCE, LPARAM, LRESULT, UINT, WPARAM};
-use winapi::shared::ntdef::LONG;
-use winapi::shared::windef::{HBRUSH, HMENU, HWND, LPRECT, RECT};
 
 use gpu_allocator::d3d12::{Allocator, AllocatorCreateDesc};
+
 mod all_dxgi {
     pub use winapi::shared::{
         dxgi::*, dxgi1_2::*, dxgi1_3::*, dxgi1_4::*, dxgi1_6::*, dxgiformat::*, dxgitype::*,
@@ -18,10 +12,14 @@ mod all_dxgi {
 
 use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
-use winapi::Interface;
+use winapi::um::winuser;
 
+use winapi::shared::minwindef::UINT;
+use winapi::shared::windef::HWND;
 use winapi::shared::winerror;
 use winapi::shared::winerror::{FAILED, SUCCEEDED};
+
+use winapi::Interface;
 
 mod imgui_renderer;
 use imgui_renderer::{handle_imgui_event, ImGuiRenderer};
@@ -29,137 +27,9 @@ use imgui_renderer::{handle_imgui_event, ImGuiRenderer};
 const ENABLE_DEBUG_LAYER: bool = true;
 const FRAMES_IN_FLIGHT: usize = 2;
 
-#[derive(PartialEq, Eq)]
-pub(crate) enum MouseButton {
-    Left,
-    Right,
-}
-
-#[allow(clippy::enum_variant_names)] // We just happen to have only mouse events atm
-enum Event {
-    MouseButtonDown { button: MouseButton, x: i32, y: i32 },
-    MouseButtonUp { button: MouseButton, x: i32, y: i32 },
-    MouseMove { x: i32, y: i32 },
-}
-
-struct WndProcUserData {
-    running: bool,
-    event: Option<Event>,
-}
-impl Default for WndProcUserData {
-    fn default() -> Self {
-        Self {
-            running: true,
-            event: None,
-        }
-    }
-}
-
 struct BackBuffer {
     resource: *mut ID3D12Resource,
-    footprint: D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
     rtv_handle: D3D12_CPU_DESCRIPTOR_HANDLE,
-}
-
-/// # Safety
-/// Windows is gonna windows
-pub unsafe extern "system" fn wndproc(
-    hwnd: HWND,
-    msg: UINT,
-    wparam: WPARAM,
-    lparam: LPARAM,
-) -> LRESULT {
-    if let winuser::WM_CREATE = msg {
-        let create_struct = lparam as *const winuser::CREATESTRUCTW;
-        winuser::SetWindowLongPtrW(
-            hwnd,
-            winuser::GWLP_USERDATA,
-            (*create_struct).lpCreateParams as LONG_PTR,
-        );
-        return 0;
-    }
-
-    let user_data =
-        winuser::GetWindowLongPtrW(hwnd, winuser::GWLP_USERDATA) as *mut WndProcUserData;
-    if user_data == std::ptr::null_mut() {
-        return winuser::DefWindowProcW(hwnd, msg, wparam, lparam);
-    }
-
-    let user_data = user_data.as_mut().unwrap();
-
-    match msg {
-        winuser::WM_QUIT | winuser::WM_CLOSE => {
-            user_data.running = false;
-        }
-        winuser::WM_KEYDOWN => {
-            if wparam == winuser::VK_ESCAPE as usize {
-                user_data.running = false;
-            }
-        }
-        winuser::WM_LBUTTONDOWN => {
-            assert!(user_data.event.is_none());
-            use winapi::shared::windowsx::GET_X_LPARAM;
-            use winapi::shared::windowsx::GET_Y_LPARAM;
-            let x = GET_X_LPARAM(lparam) as i32;
-            let y = GET_Y_LPARAM(lparam) as i32;
-
-            user_data.event = Some(Event::MouseButtonDown {
-                button: MouseButton::Left,
-                x,
-                y,
-            });
-        }
-        winuser::WM_RBUTTONDOWN => {
-            assert!(user_data.event.is_none());
-            use winapi::shared::windowsx::GET_X_LPARAM;
-            use winapi::shared::windowsx::GET_Y_LPARAM;
-            let x = GET_X_LPARAM(lparam) as i32;
-            let y = GET_Y_LPARAM(lparam) as i32;
-
-            user_data.event = Some(Event::MouseButtonDown {
-                button: MouseButton::Right,
-                x,
-                y,
-            });
-        }
-        winuser::WM_LBUTTONUP => {
-            assert!(user_data.event.is_none());
-            use winapi::shared::windowsx::GET_X_LPARAM;
-            use winapi::shared::windowsx::GET_Y_LPARAM;
-            let x = GET_X_LPARAM(lparam) as i32;
-            let y = GET_Y_LPARAM(lparam) as i32;
-
-            user_data.event = Some(Event::MouseButtonUp {
-                button: MouseButton::Left,
-                x,
-                y,
-            });
-        }
-        winuser::WM_RBUTTONUP => {
-            assert!(user_data.event.is_none());
-            use winapi::shared::windowsx::GET_X_LPARAM;
-            use winapi::shared::windowsx::GET_Y_LPARAM;
-            let x = GET_X_LPARAM(lparam) as i32;
-            let y = GET_Y_LPARAM(lparam) as i32;
-
-            user_data.event = Some(Event::MouseButtonDown {
-                button: MouseButton::Right,
-                x,
-                y,
-            });
-        }
-        winuser::WM_MOUSEMOVE => {
-            assert!(user_data.event.is_none());
-            use winapi::shared::windowsx::GET_X_LPARAM;
-            use winapi::shared::windowsx::GET_Y_LPARAM;
-            let x = GET_X_LPARAM(lparam) as i32;
-            let y = GET_Y_LPARAM(lparam) as i32;
-            user_data.event = Some(Event::MouseMove { x, y });
-        }
-        _ => return winuser::DefWindowProcW(hwnd, msg, wparam, lparam),
-    }
-
-    0
 }
 
 fn find_hardware_adapter(
@@ -258,9 +128,6 @@ fn transition_resource(
 }
 
 fn main() {
-    let hinstance = unsafe { winapi::um::libloaderapi::GetModuleHandleA(std::ptr::null()) };
-    let hinstance = hinstance as HINSTANCE;
-
     // Disable automatic DPI scaling by windows
     unsafe { winuser::SetProcessDPIAware() };
 
@@ -347,9 +214,7 @@ fn main() {
                 ..all_dxgi::DXGI_SWAP_CHAIN_DESC1::default()
             };
 
-            use raw_window_handle::RawWindowHandle;
             let raw_window_haver: &dyn HasRawWindowHandle = &window;
-
             let hwnd = if let raw_window_handle::RawWindowHandle::Windows(handle) =
                 raw_window_haver.raw_window_handle()
             {
@@ -409,19 +274,6 @@ fn main() {
                     t2d.MipSlice = 0;
                     t2d.PlaneSlice = 0;
 
-                    let resource_desc = resource.as_ref().unwrap().GetDesc();
-                    let mut footprint = D3D12_PLACED_SUBRESOURCE_FOOTPRINT::default();
-                    device.GetCopyableFootprints(
-                        &resource_desc,
-                        0,
-                        1,
-                        0,
-                        &mut footprint as *mut _,
-                        std::ptr::null_mut(),
-                        std::ptr::null_mut(),
-                        std::ptr::null_mut(),
-                    );
-
                     let rtv_stride = device
                         .GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
                         as usize;
@@ -441,7 +293,6 @@ fn main() {
 
                     BackBuffer {
                         resource,
-                        footprint,
                         rtv_handle,
                     }
                 })
@@ -553,8 +404,6 @@ fn main() {
 
         //let mut visualizer = gpu_allocator::d3d12::AllocatorVisualizer::new();
 
-        let mut running = true;
-        let mut last_time = std::time::Instant::now();
         loop {
             let event = event_recv.recv().unwrap();
             handle_imgui_event(imgui.io_mut(), &window, &event);
@@ -578,13 +427,6 @@ fn main() {
                 quit_send.send_event(()).unwrap();
                 break;
             }
-
-            let delta_time = {
-                let now = std::time::Instant::now();
-                let delta = (now - last_time).as_secs_f32();
-                last_time = now;
-                delta
-            };
 
             let buffer_index = unsafe { swapchain.GetCurrentBackBufferIndex() };
             let current_backbuffer = &backbuffers[buffer_index as usize];
@@ -626,17 +468,7 @@ fn main() {
                     0,
                     std::ptr::null_mut(),
                 );
-                {
-                    let viewports = [D3D12_VIEWPORT {
-                        TopLeftX: 0.0,
-                        TopLeftY: 0.0,
-                        Width: window_width as f32,
-                        Height: window_height as f32,
-                        MinDepth: 0.0,
-                        MaxDepth: 1.0,
-                    }];
-                    command_list.RSSetViewports(viewports.len() as u32, viewports.as_ptr());
-                }
+
                 {
                     let scissor_rects = [D3D12_RECT {
                         left: 0,
@@ -696,6 +528,8 @@ fn main() {
 
             while fence.GetCompletedValue() < fence_value {}
         }
+
+        imgui_renderer.destroy(&mut allocator);
 
         unsafe {
             for b in backbuffers {

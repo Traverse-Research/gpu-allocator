@@ -7,7 +7,7 @@ use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
 use winapi::Interface;
 
-use winapi::shared::winerror::{FAILED, SUCCEEDED};
+use winapi::shared::winerror::FAILED;
 
 use gpu_allocator::d3d12::{Allocation, AllocationCreateDesc, Allocator};
 use gpu_allocator::MemoryLocation;
@@ -41,14 +41,9 @@ pub struct ImGuiRenderer {
     font_image: *mut ID3D12Resource,
     font_image_memory: Allocation,
     font_image_srv_index: usize,
-    //font_image_view: vk::ImageView,
-    //descriptor_sets: Vec<vk::DescriptorSet>,
-    //vs_module: vk::ShaderModule,
-    //ps_module: vk::ShaderModule,
-    //descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    //pipeline_layout: vk::PipelineLayout,
-    //pub(crate) render_pass: vk::RenderPass,
-    //pipeline: vk::Pipeline,
+
+    font_image_upload_buffer: *mut ID3D12Resource,
+    font_image_upload_buffer_memory: Allocation,
 }
 
 impl ImGuiRenderer {
@@ -276,8 +271,8 @@ impl ImGuiRenderer {
             font_image,
             font_image_memory,
             font_image_srv_index,
-            upload_buffer,
-            upload_buffer_memory,
+            font_image_upload_buffer,
+            font_image_upload_buffer_memory,
         ) = {
             let mut fonts = imgui.fonts();
             let font_atlas = fonts.build_rgba32_texture();
@@ -637,6 +632,8 @@ impl ImGuiRenderer {
             font_image,
             font_image_memory,
             font_image_srv_index,
+            font_image_upload_buffer,
+            font_image_upload_buffer_memory,
 
             cb_allocation,
             cb_pointer,
@@ -683,10 +680,41 @@ impl ImGuiRenderer {
             unsafe { std::ptr::copy_nonoverlapping(&cbuffer_data, self.cb_pointer.cast(), 1) };
         }
 
+        let (vtx_count, idx_count) =
+            imgui_draw_data
+                .draw_lists()
+                .fold((0, 0), |(vtx_count, idx_count), draw_list| {
+                    (
+                        vtx_count + draw_list.vtx_buffer().len(),
+                        idx_count + draw_list.idx_buffer().len(),
+                    )
+                });
+
+        let vtx_size = (vtx_count * std::mem::size_of::<imgui::DrawVert>()) as u64;
+        if vtx_size > self.vb_capacity {
+            // reallocate vertex buffer
+            todo!();
+        }
+        let idx_size = (idx_count * std::mem::size_of::<imgui::DrawIdx>()) as u64;
+        if idx_size > self.ib_capacity {
+            // reallocate index buffer
+            todo!();
+        }
+
         let mut vb_offset = 0;
         let mut ib_offset = 0;
 
         unsafe {
+            let viewports = [D3D12_VIEWPORT {
+                TopLeftX: 0.0,
+                TopLeftY: 0.0,
+                Width: window_width as f32,
+                Height: window_height as f32,
+                MinDepth: 0.0,
+                MaxDepth: 1.0,
+            }];
+            cmd.RSSetViewports(viewports.len() as u32, viewports.as_ptr());
+
             cmd.SetPipelineState(self.pipeline);
             cmd.SetGraphicsRootSignature(self.root_signature);
             cmd.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -697,7 +725,7 @@ impl ImGuiRenderer {
                 cmd.SetGraphicsRootConstantBufferView(0, addr);
             }
 
-            unsafe {
+            {
                 let srv_stride =
                     device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                 let heap_handle = descriptor_heap.GetGPUDescriptorHandleForHeapStart();
@@ -789,11 +817,15 @@ impl ImGuiRenderer {
     pub(crate) fn destroy(self, allocator: &mut Allocator) {
         unsafe { self.pipeline.as_ref().unwrap().Release() };
 
+        unsafe { self.font_image_upload_buffer.as_ref().unwrap().Release() };
         unsafe { self.vertex_buffer.as_ref().unwrap().Release() };
         unsafe { self.index_buffer.as_ref().unwrap().Release() };
         unsafe { self.constant_buffer.as_ref().unwrap().Release() };
         unsafe { self.font_image.as_ref().unwrap().Release() };
 
+        allocator
+            .free(self.font_image_upload_buffer_memory)
+            .unwrap();
         allocator.free(self.vb_allocation).unwrap();
         allocator.free(self.ib_allocation).unwrap();
         allocator.free(self.cb_allocation).unwrap();
