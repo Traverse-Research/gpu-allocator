@@ -271,13 +271,11 @@ impl MemoryType {
                 true,
             )?;
 
-            let mut block_index = None;
-            for (i, block) in self.memory_blocks.iter().enumerate() {
-                if block.is_none() {
-                    block_index = Some(i);
-                    break;
-                }
-            }
+            let block_index = self
+                .memory_blocks
+                .iter()
+                .enumerate()
+                .find_map(|(i, block)| if block.is_some() { Some(i) } else { None });
 
             let block_index = match block_index {
                 Some(i) => {
