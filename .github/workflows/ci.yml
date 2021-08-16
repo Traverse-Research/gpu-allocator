@@ -5,7 +5,14 @@ name: CI
 jobs:
   check:
     name: Check
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+        - os: ubuntu-latest
+          features: vulkan,visualizer
+        - os: windows-latest
+          features: vulkan,visualizer
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
@@ -16,11 +23,18 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --workspace --all-targets --all-features
+          args: --workspace --all-targets --features ${{ matrix.features }}
 
   test:
     name: Test Suite
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+        - os: ubuntu-latest
+          features: vulkan,visualizer
+        - os: windows-latest
+          features: vulkan,visualizer
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
@@ -32,12 +46,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --workspace --all-targets --all-features
+          args: --workspace --all-targets --features ${{ matrix.features }}
       - name: Test docs
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --workspace --doc --all-features
+          args: --workspace --doc --features ${{ matrix.features }}
 
   fmt:
     name: Rustfmt
@@ -57,7 +71,14 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+        - os: ubuntu-latest
+          features: vulkan,visualizer
+        - os: windows-latest
+          features: vulkan,visualizer
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
@@ -69,7 +90,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --workspace --all-targets --all-features -- -D warnings
+          args: --workspace --all-targets --features ${{ matrix.features }} -- -D warnings
 
   doc:
     runs-on: ubuntu-latest
