@@ -1,7 +1,8 @@
 use ash::vk;
 
 use crate::helper::record_and_submit_command_buffer;
-use gpu_allocator::{AllocationCreateDesc, MemoryLocation, SubAllocation, VulkanAllocator};
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
+use gpu_allocator::MemoryLocation;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -14,16 +15,16 @@ pub struct ImGuiRenderer {
 
     vb_capacity: u64,
     ib_capacity: u64,
-    vb_allocation: SubAllocation,
-    ib_allocation: SubAllocation,
+    vb_allocation: Allocation,
+    ib_allocation: Allocation,
     vertex_buffer: vk::Buffer,
     index_buffer: vk::Buffer,
 
-    cb_allocation: SubAllocation,
+    cb_allocation: Allocation,
     constant_buffer: vk::Buffer,
 
     font_image: vk::Image,
-    font_image_memory: SubAllocation,
+    font_image_memory: Allocation,
     font_image_view: vk::ImageView,
 
     descriptor_sets: Vec<vk::DescriptorSet>,
@@ -43,7 +44,7 @@ impl ImGuiRenderer {
         device: &ash::Device,
         descriptor_pool: vk::DescriptorPool,
         render_target_format: vk::Format,
-        allocator: &mut VulkanAllocator,
+        allocator: &mut Allocator,
         cmd: vk::CommandBuffer,
         cmd_reuse_fence: vk::Fence,
         queue: vk::Queue,
@@ -789,7 +790,7 @@ impl ImGuiRenderer {
         unsafe { device.cmd_end_render_pass(cmd) };
     }
 
-    pub(crate) fn destroy(self, device: &ash::Device, allocator: &mut VulkanAllocator) {
+    pub(crate) fn destroy(self, device: &ash::Device, allocator: &mut Allocator) {
         unsafe { device.destroy_buffer(self.constant_buffer, None) };
         allocator.free(self.cb_allocation).unwrap();
 

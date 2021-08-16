@@ -3,9 +3,8 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 
-use gpu_allocator::{
-    AllocationCreateDesc, MemoryLocation, VulkanAllocator, VulkanAllocatorCreateDesc,
-};
+use gpu_allocator::vulkan::{AllocationCreateDesc, Allocator, AllocatorCreateDesc};
+use gpu_allocator::MemoryLocation;
 
 fn main() {
     let entry = unsafe { ash::Entry::new() }.unwrap();
@@ -88,13 +87,14 @@ fn main() {
     };
 
     // Setting up the allocator
-    let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
+    let mut allocator = Allocator::new(&AllocatorCreateDesc {
         instance: instance.clone(),
         device: device.clone(),
         physical_device: pdevice,
         debug_settings: Default::default(),
         buffer_device_address: true,
-    });
+    })
+    .unwrap();
 
     // Test allocating GPU Only memory
     {

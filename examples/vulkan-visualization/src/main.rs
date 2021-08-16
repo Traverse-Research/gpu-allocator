@@ -3,7 +3,10 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 
-use gpu_allocator::{VulkanAllocator, VulkanAllocatorCreateDesc};
+use gpu_allocator::{
+    vulkan::{Allocator, AllocatorCreateDesc},
+    AllocatorDebugSettings,
+};
 
 mod helper;
 use helper::record_and_submit_command_buffer;
@@ -223,13 +226,14 @@ fn main() {
             .collect::<Vec<_>>();
 
         // Setting up the allocator
-        let mut allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
+        let mut allocator = Allocator::new(&AllocatorCreateDesc {
             instance: instance.clone(),
             device: device.clone(),
             physical_device: pdevice,
-            debug_settings: Default::default(),
+            debug_settings: AllocatorDebugSettings::default(),
             buffer_device_address: true,
-        });
+        })
+        .unwrap();
 
         let fence_create_info =
             vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
@@ -294,7 +298,7 @@ fn main() {
             })
             .collect::<Vec<_>>();
 
-        let mut visualizer = gpu_allocator::visualizer::AllocatorVisualizer::new();
+        let mut visualizer = gpu_allocator::vulkan::AllocatorVisualizer::new();
 
         loop {
             let event = event_recv.recv().unwrap();

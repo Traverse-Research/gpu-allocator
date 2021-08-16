@@ -1,7 +1,11 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
-use super::{
-    AllocationError, AllocationType, Result, SubAllocation, SubAllocator, SubAllocatorBase,
-};
+
+#[cfg(feature = "visualizer")]
+pub(crate) mod visualizer;
+
+use super::{AllocationType, SubAllocator, SubAllocatorBase};
+use crate::{AllocationError, Result};
+
 use log::{log, Level};
 use std::collections::{HashMap, HashSet};
 
@@ -280,9 +284,8 @@ impl SubAllocator for FreeListAllocator {
         Ok((best_offset, chunk_id))
     }
 
-    fn free(&mut self, sub_allocation: SubAllocation) -> Result<()> {
-        let chunk_id = sub_allocation
-            .chunk_id
+    fn free(&mut self, chunk_id: Option<std::num::NonZeroU64>) -> Result<()> {
+        let chunk_id = chunk_id
             .ok_or_else(|| AllocationError::Internal("Chunk ID must be a valid value.".into()))?;
 
         let (next_id, prev_id) = {
