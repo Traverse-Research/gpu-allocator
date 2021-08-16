@@ -15,7 +15,7 @@
 gpu-allocator = "0.8.0"
 ```
 
-This crate provides a fully written in Rust memory allocator for Vulkan, and will provide one for DirectX 12 in the future.
+This crate provides a fully written in Rust memory allocator for Vulkan and DirectX 12.
 
 ### Setting up the Vulkan memory allocator
 
@@ -61,6 +61,68 @@ unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offse
 allocator.free(allocation).unwrap();
 unsafe { device.destroy_buffer(buffer, None) };
 ```
+
+### Setting up the D3D12 memory allocator
+
+```rust
+use gpu_allocator::d3d12::*;
+
+let mut allocator = Allocator::new(&AllocatorCreateDesc {
+    device,
+    debug_settings: Default::default(),
+});
+```
+
+### Simple d3d12 allocation example
+
+```rust
+use gpu_allocator::d3d12::*;
+use gpu_allocator::MemoryLocation;
+
+
+let buffer_desc = d3d12::D3D12_RESOURCE_DESC {
+    Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
+    Alignment: 0,
+    Width: 512,
+    Height: 1,
+    DepthOrArraySize: 1,
+    MipLevels: 1,
+    Format: dxgiformat::DXGI_FORMAT_UNKNOWN,
+    SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+        Count: 1,
+        Quality: 0,
+    },
+    Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+    Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
+};
+let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
+    allocator.device(),
+    &buffer_desc,
+    "Example allocation",
+    MemoryLocation::GpuOnly,
+);
+let allocation = allocator.allocate(&allocation_desc).unwrap();
+let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
+let hr = unsafe {
+    device.as_ref().unwrap().CreatePlacedResource(
+        allocation.heap(),
+        allocation.offset(),
+        &buffer_desc,
+        d3d12::D3D12_RESOURCE_STATE_COMMON,
+        std::ptr::null(),
+        &d3d12::IID_ID3D12Resource,
+        &mut resource as *mut _ as *mut _,
+    )
+};
+if hr != winerror::S_OK {
+    panic!("Failed to create placed resource.");
+}
+
+// Cleanup
+unsafe { resource.as_ref().unwrap().Release() };
+allocator.free(allocation).unwrap();
+```
+
 
 ### License
 
