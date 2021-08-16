@@ -120,13 +120,13 @@ impl Allocation {
         self.chunk_id
     }
 
-    /// Returns the `d3d12::ID3D12Heap` object that is backing this allocation.
+    /// Returns the [`d3d12::ID3D12Heap`] object that is backing this allocation.
     /// This heap object can be shared with multiple other allocations and shouldn't be freed (or allocated from)
     /// without this library, because that will lead to undefined behavior.
     ///
     /// # Safety
-    /// The result of this function can safely be used to pass into `CreatePlacedResource`. It's exposed
-    /// for this reason. Keep in mind to also pass `Self::offset()` along to it.
+    /// The result of this function can safely be used to pass into [`CreatePlacedResource()`]. It's exposed
+    /// for this reason. Keep in mind to also pass [`Self::offset()`] along to it.
     pub unsafe fn heap(&self) -> *mut d3d12::ID3D12Heap {
         self.heap
     }
