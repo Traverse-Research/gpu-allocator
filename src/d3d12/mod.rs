@@ -213,8 +213,6 @@ impl MemoryBlock {
             Box::new(allocator::FreeListAllocator::new(size))
         };
 
-        //TODO(max): Create placed resource to map heap
-
         Ok(Self {
             heap,
             sub_allocator,
