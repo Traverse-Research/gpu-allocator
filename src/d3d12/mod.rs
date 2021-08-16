@@ -197,7 +197,7 @@ impl MemoryBlock {
                 return Err(AllocationError::OutOfMemory);
             } else if hr != winerror::S_OK {
                 return Err(AllocationError::Internal(format!(
-                    "ID3D12Device::CreateHeap failed with hr 0x{:x}",
+                    "ID3D12Device::CreateHeap failed with hr {:#x}",
                     hr
                 )));
             }

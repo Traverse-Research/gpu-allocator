@@ -229,7 +229,7 @@ fn main() {
                 &mut swapchain as *mut _ as *mut _,
             );
             if FAILED(hr) {
-                panic!("Failed to create swapchain. hr: 0x{:x}", hr);
+                panic!("Failed to create swapchain. hr: {:#x}", hr);
             }
             swapchain.as_mut().unwrap()
         };

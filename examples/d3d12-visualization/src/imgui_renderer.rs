@@ -118,7 +118,7 @@ impl ImGuiRenderer {
                 &mut error_blob as *mut _ as *mut _,
             );
             if FAILED(hr) {
-                panic!("Failed to serialize root signature. hr: 0x{:x}", hr); //TODO(max): Output error blob
+                panic!("Failed to serialize root signature. hr: {:#x}", hr); //TODO(max): Output error blob
             }
 
             let blob = blob.as_ref().unwrap();
@@ -131,7 +131,7 @@ impl ImGuiRenderer {
                 &mut rsig as *mut _ as *mut _,
             );
             if FAILED(hr) {
-                panic!("Failed to create root signature. hr: 0x{:x}", hr);
+                panic!("Failed to create root signature. hr: {:#x}", hr);
             }
 
             rsig.as_mut().unwrap()
@@ -313,7 +313,7 @@ impl ImGuiRenderer {
                     &mut font_image as *mut _ as *mut _,
                 );
                 if FAILED(hr) {
-                    panic!("Failed to create font image. hr: 0x{:x}", hr);
+                    panic!("Failed to create font image. hr: {:#x}", hr);
                 }
 
                 font_image
