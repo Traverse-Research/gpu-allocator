@@ -1,7 +1,6 @@
 use winapi::shared::{dxgiformat, winerror};
 use winapi::um::{d3d12, d3dcommon};
 
-#[cfg(windows)]
 mod all_dxgi {
     pub use winapi::shared::{dxgi1_3::*, dxgi1_6::*, dxgitype::*};
 }

@@ -227,7 +227,6 @@ impl MemoryBlock {
 unsafe impl Send for MemoryBlock {}
 unsafe impl Sync for MemoryBlock {}
 
-#[cfg(windows)]
 struct MemoryType {
     memory_blocks: Vec<Option<MemoryBlock>>,
     memory_location: MemoryLocation,
@@ -239,7 +238,6 @@ struct MemoryType {
 
 const DEFAULT_DEVICE_MEMBLOCK_SIZE: u64 = 256 * 1024 * 1024;
 const DEFAULT_HOST_MEMBLOCK_SIZE: u64 = 64 * 1024 * 1024;
-#[cfg(windows)]
 impl MemoryType {
     fn allocate(
         &mut self,
@@ -620,7 +618,6 @@ impl Allocator {
     }
 }
 
-#[cfg(windows)]
 impl Drop for Allocator {
     fn drop(&mut self) {
         if self.debug_settings.log_leaks_on_shutdown {
