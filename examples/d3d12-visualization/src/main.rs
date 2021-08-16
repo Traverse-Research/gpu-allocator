@@ -36,12 +36,11 @@ fn find_hardware_adapter(
     dxgi_factory: &all_dxgi::IDXGIFactory6,
 ) -> Option<*mut all_dxgi::IDXGIAdapter4> {
     let mut adapter: *mut all_dxgi::IDXGIAdapter4 = std::ptr::null_mut();
-    let mut adapater_index = 0;
-    loop {
+    for adapter_index in 0.. {
         let hr =
-            unsafe { dxgi_factory.EnumAdapters1(adapater_index, &mut adapter as *mut _ as *mut _) };
+            unsafe { dxgi_factory.EnumAdapters1(adapter_index, &mut adapter as *mut _ as *mut _) };
         if hr == winerror::DXGI_ERROR_NOT_FOUND {
-            break None;
+            return None;
         }
 
         let mut desc = all_dxgi::DXGI_ADAPTER_DESC3::default();
@@ -53,7 +52,6 @@ fn find_hardware_adapter(
         };
 
         if (desc.Flags & all_dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
-            adapater_index += 1;
             continue;
         }
 
@@ -66,11 +64,11 @@ fn find_hardware_adapter(
             )
         };
         if SUCCEEDED(hr) {
-            break Some(adapter);
+            return Some(adapter);
         }
-
-        adapater_index += 1;
     }
+
+    None // Unreachable
 }
 
 fn enable_d3d12_debug_layer() -> bool {
