@@ -157,7 +157,9 @@ fn main() {
                 &mut resource as *mut _ as *mut _,
             )
         };
-        if hr != winerror::S_OK {}
+        if hr != winerror::S_OK {
+            panic!("Failed to create placed resource.");
+        }
 
         unsafe { resource.as_ref().unwrap().Release() };
 
@@ -212,7 +214,9 @@ fn main() {
                 &mut resource as *mut _ as *mut _,
             )
         };
-        if hr != winerror::S_OK {}
+        if hr != winerror::S_OK {
+            panic!("Failed to create placed resource.");
+        }
 
         unsafe { resource.as_ref().unwrap().Release() };
 
@@ -267,7 +271,9 @@ fn main() {
                 &mut resource as *mut _ as *mut _,
             )
         };
-        if hr != winerror::S_OK {}
+        if hr != winerror::S_OK {
+            panic!("Failed to create placed resource.");
+        }
 
         unsafe { resource.as_ref().unwrap().Release() };
 
