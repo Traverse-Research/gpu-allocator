@@ -193,17 +193,18 @@ impl MemoryBlock {
             let hr =
                 device.CreateHeap(&desc, &d3d12::IID_ID3D12Heap, &mut heap as *mut _ as *mut _);
 
-            assert_eq!(
-                //TODO(max): Return error
-                hr,
-                winerror::S_OK,
-                "Failed to allocate ID3D12Heap of {} bytes",
-                size,
-            );
+            if hr == winerror::E_OUTOFMEMORY {
+                return Err(AllocationError::OutOfMemory);
+            } else if hr != winerror::S_OK {
+                return Err(AllocationError::Internal(format!(
+                    "ID3D12Device::CreateHeap failed with hr 0x{:x}",
+                    hr
+                )));
+            }
 
-            //TODO(max): What type of error should this be? It's more like an OOM error
-            std::ptr::NonNull::new(heap)
-                .ok_or_else(|| AllocationError::Internal("Failed to create ID3D12Heap".into()))?
+            std::ptr::NonNull::new(heap).ok_or_else(|| {
+                AllocationError::Internal("ID3D12Heap pointer is null, but should not be.".into())
+            })?
         };
 
         let sub_allocator: Box<dyn allocator::SubAllocator> = if dedicated {
