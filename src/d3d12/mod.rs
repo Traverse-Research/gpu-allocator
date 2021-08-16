@@ -593,8 +593,8 @@ impl Allocator {
             let name = allocation.name.as_deref().unwrap_or("<null>");
             log!(Level::Debug, "Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
-                let backtrace = format!("{:?}", backtrace::Backtrace::new());
-                log!(Level::Debug, "Free stack trace: {}", backtrace);
+                let backtrace = backtrace::Backtrace::new();
+                log!(Level::Debug, "Free stack trace: {:?}", backtrace);
             }
         }
 
