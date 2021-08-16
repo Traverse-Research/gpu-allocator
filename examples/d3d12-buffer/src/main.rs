@@ -162,7 +162,7 @@ fn main() {
         unsafe { resource.as_ref().unwrap().Release() };
 
         allocator.free(allocation).unwrap();
-        println!("Allocation and deallocation of GpuOnly memory was successful.");
+        info!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
     // Test allocating CPU to GPU memory
@@ -217,7 +217,7 @@ fn main() {
         unsafe { resource.as_ref().unwrap().Release() };
 
         allocator.free(allocation).unwrap();
-        println!("Allocation and deallocation of CpuToGpu memory was successful.");
+        info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     // Test allocating GPU to CPU memory
@@ -272,7 +272,7 @@ fn main() {
         unsafe { resource.as_ref().unwrap().Release() };
 
         allocator.free(allocation).unwrap();
-        println!("Allocation and deallocation of CpuToGpu memory was successful.");
+        info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     drop(allocator); // Explicitly drop before destruction of device.
