@@ -163,7 +163,7 @@ impl Default for Allocation {
 }
 
 struct MemoryBlock {
-    heap: *mut d3d12::ID3D12Heap,
+    heap: std::ptr::NonNull<d3d12::ID3D12Heap>,
     sub_allocator: Box<dyn allocator::SubAllocator>,
 }
 impl MemoryBlock {
@@ -175,10 +175,12 @@ impl MemoryBlock {
         dedicated: bool,
     ) -> Result<Self> {
         let heap = unsafe {
-            let mut desc = d3d12::D3D12_HEAP_DESC::default();
-            desc.SizeInBytes = size;
-            desc.Properties = *heap_properties;
-            desc.Alignment = d3d12::D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as u64;
+            let mut desc = d3d12::D3D12_HEAP_DESC {
+                SizeInBytes: size,
+                Properties: *heap_properties,
+                Alignment: d3d12::D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as u64,
+                ..Default::default()
+            };
             desc.Flags = match heap_category {
                 HeapCategory::All => d3d12::D3D12_HEAP_FLAG_NONE,
                 HeapCategory::Buffer => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
@@ -190,6 +192,7 @@ impl MemoryBlock {
 
             let hr =
                 device.CreateHeap(&desc, &d3d12::IID_ID3D12Heap, &mut heap as *mut _ as *mut _);
+
             assert_eq!(
                 //TODO(max): Return error
                 hr,
@@ -197,7 +200,10 @@ impl MemoryBlock {
                 "Failed to allocate ID3D12Heap of {} bytes",
                 size,
             );
-            heap
+
+            //TODO(max): What type of error should this be? It's more like an OOM error
+            std::ptr::NonNull::new(heap)
+                .ok_or_else(|| AllocationError::Internal("Failed to create ID3D12Heap".into()))?
         };
 
         let sub_allocator: Box<dyn allocator::SubAllocator> = if dedicated {
@@ -215,7 +221,7 @@ impl MemoryBlock {
     }
 
     fn destroy(self) {
-        unsafe { self.heap.as_mut().unwrap().Release() };
+        unsafe { self.heap.as_ref().Release() };
     }
 }
 
@@ -303,10 +309,9 @@ impl MemoryType {
                 offset,
                 memory_block_index: block_index,
                 memory_type_index: self.memory_type_index as usize,
-                heap: mem_block.heap,
+                heap: mem_block.heap.as_ptr(),
                 name: Some(desc.name.to_owned()),
                 backtrace: backtrace.map(|s| s.to_owned()),
-                ..Allocation::default()
             });
         }
 
@@ -330,10 +335,9 @@ impl MemoryType {
                             size,
                             memory_block_index: mem_block_i,
                             memory_type_index: self.memory_type_index as usize,
-                            heap: mem_block.heap,
+                            heap: mem_block.heap.as_ptr(),
                             name: Some(desc.name.to_owned()),
                             backtrace: backtrace.map(|s| s.to_owned()),
-                            ..Default::default()
                         });
                     }
                     Err(err) => match err {
@@ -394,10 +398,9 @@ impl MemoryType {
             size,
             memory_block_index: new_block_index,
             memory_type_index: self.memory_type_index as usize,
-            heap: mem_block.heap,
+            heap: mem_block.heap.as_ptr(),
             name: Some(desc.name.to_owned()),
             backtrace: backtrace.map(|s| s.to_owned()),
-            ..Default::default()
         })
     }
 
@@ -435,27 +438,25 @@ impl MemoryType {
 }
 
 pub struct Allocator {
-    device: *mut d3d12::ID3D12Device,
+    device: std::ptr::NonNull<d3d12::ID3D12Device>,
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
 }
 
 impl Allocator {
     pub fn device(&self) -> &d3d12::ID3D12Device {
-        unsafe { self.device.as_ref().unwrap() }
+        unsafe { self.device.as_ref() }
     }
 
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
-        if desc.device.is_null() {
-            return Err(AllocationError::InvalidAllocatorCreateDesc(
-                "Device pointer is null.".to_owned(),
-            ));
-        }
+        let device = std::ptr::NonNull::new(desc.device).ok_or_else(|| {
+            AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
+        })?;
 
         // Query device for feature level
         let mut options = d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS::default();
         let hr = unsafe {
-            desc.device.as_ref().unwrap().CheckFeatureSupport(
+            device.as_ref().CheckFeatureSupport(
                 d3d12::D3D12_FEATURE_D3D12_OPTIONS,
                 &mut options as *mut _ as *mut _,
                 std::mem::size_of_val(&options) as u32,
@@ -503,20 +504,16 @@ impl Allocator {
                 .iter()
                 .flat_map(|(memory_location, heap_properties)| {
                     [
-                        (
-                            HeapCategory::Buffer,
-                            *memory_location,
-                            heap_properties.clone(),
-                        ),
+                        (HeapCategory::Buffer, *memory_location, *heap_properties),
                         (
                             HeapCategory::RtvDsvTexture,
                             *memory_location,
-                            heap_properties.clone(),
+                            *heap_properties,
                         ),
                         (
                             HeapCategory::OtherTexture,
                             *memory_location,
-                            heap_properties.clone(),
+                            *heap_properties,
                         ),
                     ]
                     .to_vec()
@@ -526,7 +523,7 @@ impl Allocator {
             heap_types
                 .iter()
                 .map(|(memory_location, heap_properties)| {
-                    (HeapCategory::All, *memory_location, heap_properties.clone())
+                    (HeapCategory::All, *memory_location, *heap_properties)
                 })
                 .collect::<Vec<_>>()
         };
@@ -548,7 +545,7 @@ impl Allocator {
 
         Ok(Self {
             memory_types,
-            device: desc.device,
+            device,
             debug_settings: desc.debug_settings,
         })
     }
@@ -598,11 +595,7 @@ impl Allocator {
             })
             .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
 
-        memory_type.allocate(
-            unsafe { self.device.as_mut().unwrap() },
-            desc,
-            backtrace.as_deref(),
-        )
+        memory_type.allocate(unsafe { self.device.as_mut() }, desc, backtrace.as_deref())
     }
 
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
