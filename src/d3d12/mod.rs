@@ -62,11 +62,11 @@ pub struct AllocationCreateDesc<'a> {
     /// Location where the memory allocation should be stored
     pub location: MemoryLocation,
 
-    /// Size of allocation, should be queried using `ID3D12Device::GetResourceAllocationInfo`
+    /// Size of allocation, should be queried using [`d3d12::ID3D12Device::GetResourceAllocationInfo()`]
     pub size: u64,
-    /// Alignment of allocation, should be queried using `ID3D12Device::GetResourceAllocationInfo`
+    /// Alignment of allocation, should be queried using [`d3d12::ID3D12Device::GetResourceAllocationInfo()`]
     pub alignment: u64,
-    /// Resource category based on resource dimension and flags. Can be created from a `D3D12_RESOURCE_DESC`
+    /// Resource category based on resource dimension and flags. Can be created from a [`d3d12::D3D12_RESOURCE_DESC()`]
     /// using the helper into function. The resource category is ignored when Resource Heap Tier 2 or higher
     /// is supported.
     pub resource_category: ResourceCategory,
