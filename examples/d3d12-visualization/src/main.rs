@@ -347,8 +347,7 @@ fn main() {
                 panic!("Failed to create command list.");
             }
 
-            let command_list = command_list.as_mut().unwrap();
-            command_list
+            command_list.as_mut().unwrap()
         };
 
         let mut allocator = Allocator::new(&AllocatorCreateDesc {
