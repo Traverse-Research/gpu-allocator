@@ -271,12 +271,7 @@ impl MemoryType {
                 true,
             )?;
 
-            let block_index = self
-                .memory_blocks
-                .iter()
-                .enumerate()
-                .find_map(|(i, block)| if block.is_some() { Some(i) } else { None });
-
+            let block_index = self.memory_blocks.iter().position(|block| block.is_none());
             let block_index = match block_index {
                 Some(i) => {
                     self.memory_blocks[i].replace(mem_block);
