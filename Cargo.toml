@@ -57,8 +57,8 @@ required-features = ["d3d12", "visualizer"]
 
 
 [features]
-visualizer = [ "imgui" ]
-vulkan = [ "ash" ]
+visualizer = ["imgui"]
+vulkan = ["ash"]
 d3d12 = ["winapi"]
 
-default = [ "d3d12", "vulkan" ]
+default = ["d3d12", "vulkan"]
