@@ -146,7 +146,7 @@ fn main() {
     let (event_send, event_recv) = std::sync::mpsc::sync_channel(1);
     let quit_send = event_loop.create_proxy();
 
-    std::thread::spawn(move || -> () {
+    std::thread::spawn(move || {
         let mut dxgi_factory_flags = 0;
         if ENABLE_DEBUG_LAYER && enable_d3d12_debug_layer() {
             println!("Enabled D3D12 debug layer");

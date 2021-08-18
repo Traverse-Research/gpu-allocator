@@ -41,7 +41,7 @@ fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> String {
         "D3D12_HEAP_TYPE_CUSTOM",
     ];
 
-    return names[heap_type as usize].to_owned();
+    names[heap_type as usize].to_owned()
 }
 
 fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> String {
@@ -52,7 +52,7 @@ fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> String {
         "D3D12_CPU_PAGE_PROPERTY_WRITE_BACK",
     ];
 
-    return names[prop as usize].to_owned();
+    names[prop as usize].to_owned()
 }
 fn format_memory_pool(pool: D3D12_MEMORY_POOL) -> String {
     let names = [
@@ -61,7 +61,7 @@ fn format_memory_pool(pool: D3D12_MEMORY_POOL) -> String {
         "D3D12_MEMORY_POOL_L1",
     ];
 
-    return names[pool as usize].to_owned();
+    names[pool as usize].to_owned()
 }
 
 impl AllocatorVisualizer {
@@ -81,7 +81,7 @@ impl AllocatorVisualizer {
         imgui::Window::new(imgui::im_str!("Allocator visualization"))
             .collapsed(true, Condition::FirstUseEver)
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
-            .build(&ui, || {
+            .build(ui, || {
                 use imgui::*;
 
                 if CollapsingHeader::new(&ImString::new(format!(
@@ -215,7 +215,7 @@ impl AllocatorVisualizer {
             .scrollable(true)
             .focused(focus)
             .opened(&mut is_open)
-            .build(&ui, || {
+            .build(ui, || {
                 use imgui::*;
 
                 let memblock = &alloc.memory_types[window.memory_type_index].memory_blocks
@@ -255,7 +255,7 @@ impl AllocatorVisualizer {
                     .scroll_bar(true)
                     .build(ui, || {
                         memblock.sub_allocator.draw_visualization(
-                            &color_scheme,
+                            color_scheme,
                             ui,
                             window.bytes_per_unit,
                             window.show_backtraces,
@@ -294,7 +294,7 @@ impl AllocatorVisualizer {
     }
 
     pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui) {
-        self.render_main_window(ui, &allocator);
-        self.render_memory_block_windows(ui, &allocator);
+        self.render_main_window(ui, allocator);
+        self.render_memory_block_windows(ui, allocator);
     }
 }

@@ -129,7 +129,6 @@
 //! unsafe { resource.as_ref().unwrap().Release() };
 //! allocator.free(allocation).unwrap();
 //! ```
-//!
 
 mod result;
 pub use result::*;
