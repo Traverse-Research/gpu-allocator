@@ -101,15 +101,11 @@ impl AllocatorVisualizer {
                 ));
 
                 let heap_count = alloc.memory_heaps.len();
-                if CollapsingHeader::new(&ImString::new(format!(
-                    "Memory Heaps ({} heaps)",
-                    heap_count
-                )))
-                .build(ui)
+                if CollapsingHeader::new(&im_str!("Memory Heaps ({} heaps)", heap_count)).build(ui)
                 {
                     for (i, heap) in alloc.memory_heaps.iter().enumerate() {
                         ui.indent();
-                        if CollapsingHeader::new(&ImString::new(format!("Heap: {}", i))).build(ui) {
+                        if CollapsingHeader::new(&im_str!("Heap: {}", i)).build(ui) {
                             ui.indent();
                             ui.text(&format!(
                                 "flags: {} (0x{:x})",
@@ -126,21 +122,21 @@ impl AllocatorVisualizer {
                     }
                 }
 
-                if CollapsingHeader::new(&ImString::new(format!(
+                if CollapsingHeader::new(&im_str!(
                     "Memory Types: ({} types)",
                     alloc.memory_types.len()
-                )))
+                ))
                 .flags(TreeNodeFlags::DEFAULT_OPEN)
                 .build(ui)
                 {
                     ui.indent();
                     for (mem_type_i, mem_type) in alloc.memory_types.iter().enumerate() {
-                        if CollapsingHeader::new(&ImString::new(format!(
+                        if CollapsingHeader::new(&im_str!(
                             "Type: {} ({} blocks)###Type{}",
                             mem_type_i,
                             mem_type.memory_blocks.len(),
                             mem_type_i,
-                        )))
+                        ))
                         .build(ui)
                         {
                             let mut total_block_size = 0;
@@ -169,11 +165,12 @@ impl AllocatorVisualizer {
                             ui.text(&format!("block count: {}", active_block_count));
                             for (block_i, block) in mem_type.memory_blocks.iter().enumerate() {
                                 if let Some(block) = block {
-                                    TreeNode::new(&ImString::new(format!(
+                                    TreeNode::new(&im_str!(
                                         "Block: {}##memtype({})",
-                                        block_i, mem_type_i
-                                    )))
-                                    .label(&ImString::new(format!("Block: {}", block_i)))
+                                        block_i,
+                                        mem_type_i
+                                    ))
+                                    .label(&im_str!("Block: {}", block_i))
                                     .build(ui, || {
                                         use ash::vk::Handle;
                                         ui.indent();
@@ -248,10 +245,11 @@ impl AllocatorVisualizer {
                 false
             };
             let mut is_open = true;
-            imgui::Window::new(&imgui::ImString::new(format!(
+            imgui::Window::new(&imgui::im_str!(
                 "Block Visualizer##memtype({})block({})",
-                window.memory_type_index, window.block_index
-            )))
+                window.memory_type_index,
+                window.block_index
+            ))
             .size([1920.0 * 0.5, 1080.0 * 0.5], imgui::Condition::FirstUseEver)
             .title_bar(true)
             .scroll_bar(true)
@@ -290,10 +288,11 @@ impl AllocatorVisualizer {
                         .max(BYTES_PER_UNIT_MIN);
 
                     // Draw the visualization in a child window.
-                    imgui::ChildWindow::new(&ImString::new(format!(
+                    imgui::ChildWindow::new(&im_str!(
                         "Visualization Sub-window##memtype({})block({})",
-                        window.memory_type_index, window.block_index
-                    )))
+                        window.memory_type_index,
+                        window.block_index
+                    ))
                     .scrollable(true)
                     .scroll_bar(true)
                     .build(ui, || {

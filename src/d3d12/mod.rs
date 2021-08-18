@@ -131,7 +131,7 @@ impl Allocation {
         self.heap
     }
 
-    /// Returns the offset of the allocation on the ID3D12Heap.
+    /// Returns the offset of the allocation on the [`d3d12::ID3D12Heap`].
     /// When creating a placed resources, this offset needs to be supplied as well.
     pub fn offset(&self) -> u64 {
         self.offset
