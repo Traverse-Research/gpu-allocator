@@ -123,7 +123,6 @@ unsafe { resource.as_ref().unwrap().Release() };
 allocator.free(allocation).unwrap();
 ```
 
-
 ### License
 
 Licensed under either of

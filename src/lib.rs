@@ -3,6 +3,8 @@
 //! ## Setting up the Vulkan memory allocator
 //!
 //! ```no_run
+//! # #[cfg(feature = "vulkan")]
+//! # fn main() {
 //! use gpu_allocator::vulkan::*;
 //! # use ash::vk;
 //! # let device = todo!();
@@ -16,11 +18,16 @@
 //!     debug_settings: Default::default(),
 //!     buffer_device_address: true,  // Ideally, check the BufferDeviceAddressFeatures struct.
 //! });
+//! # }
+//! # #[cfg(not(feature = "vulkan"))]
+//! # fn main() {}
 //! ```
 //!
 //! ## Simple Vulkan allocation example
 //!
 //! ```no_run
+//! # #[cfg(feature = "vulkan")]
+//! # fn main() {
 //! use gpu_allocator::vulkan::*;
 //! use gpu_allocator::MemoryLocation;
 //! # use ash::vk;
@@ -58,11 +65,16 @@
 //! // Cleanup
 //! allocator.free(allocation).unwrap();
 //! unsafe { device.destroy_buffer(buffer, None) };
+//! # }
+//! # #[cfg(not(feature = "vulkan"))]
+//! # fn main() {}
 //! ```
 //!
 //! ## Setting up the D3D12 memory allocator
 //!
 //! ```no_run
+//! # #[cfg(feature = "d3d12")]
+//! # fn main() {
 //! use gpu_allocator::d3d12::*;
 //! # use winapi::um::d3d12;
 //! # let device = todo!();
@@ -71,11 +83,16 @@
 //!     device,
 //!     debug_settings: Default::default(),
 //! });
+//! # }
+//! # #[cfg(not(feature = "d3d12"))]
+//! # fn main() {}
 //! ```
 //!
 //! ## Simple d3d12 allocation example
 //!
 //! ```no_run
+//! # #[cfg(feature = "d3d12")]
+//! # fn main() {
 //! use gpu_allocator::d3d12::*;
 //! use gpu_allocator::MemoryLocation;
 //! # use winapi::um::d3d12;
@@ -128,6 +145,9 @@
 //! // Cleanup
 //! unsafe { resource.as_ref().unwrap().Release() };
 //! allocator.free(allocation).unwrap();
+//! # }
+//! # #[cfg(not(feature = "d3d12"))]
+//! # fn main() {}
 //! ```
 
 mod result;
