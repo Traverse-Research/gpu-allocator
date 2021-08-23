@@ -328,10 +328,8 @@ impl MemoryType {
                             backtrace: backtrace.map(|s| s.to_owned()),
                         });
                     }
-                    Err(err) => match err {
-                        AllocationError::OutOfMemory => {} // Block is full, continue search.
-                        _ => return Err(err),              // Unhandled error, return.
-                    },
+                    Err(AllocationError::OutOfMemory) => {} // Block is full, continue search.
+                    Err(err) => return Err(err),            // Unhandled error, return.
                 }
             } else if empty_block_index == None {
                 empty_block_index = Some(mem_block_i);
@@ -369,15 +367,12 @@ impl MemoryType {
         );
         let (offset, chunk_id) = match allocation {
             Ok(value) => value,
-            Err(err) => match err {
-                AllocationError::OutOfMemory => {
-                    return Err(AllocationError::Internal(
-                        "Allocation that must succeed failed. This is a bug in the allocator."
-                            .into(),
-                    ))
-                }
-                _ => return Err(err),
-            },
+            Err(AllocationError::OutOfMemory) => {
+                return Err(AllocationError::Internal(
+                    "Allocation that must succeed failed. This is a bug in the allocator.".into(),
+                ))
+            }
+            Err(err) => return Err(err),
         };
 
         Ok(Allocation {
