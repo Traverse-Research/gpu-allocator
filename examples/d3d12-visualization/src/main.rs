@@ -392,7 +392,7 @@ fn main() {
         unsafe {
             let lists: [*mut ID3D12CommandList; 1] =
                 [command_list as *mut _ as *mut ID3D12CommandList];
-            queue.ExecuteCommandLists(1, lists.as_ptr());
+            queue.ExecuteCommandLists(lists.len() as u32, lists.as_ptr());
             fence_value += 1;
             queue.Signal(fence as *mut _, fence_value);
 
@@ -472,7 +472,7 @@ fn main() {
                 }
 
                 let mut heaps = [descriptor_heap as *mut _];
-                command_list.SetDescriptorHeaps(1, heaps.as_mut_ptr());
+                command_list.SetDescriptorHeaps(heaps.len() as u32, heaps.as_mut_ptr());
 
                 imgui_renderer.render(
                     imgui_draw_data,
@@ -496,7 +496,7 @@ fn main() {
 
                 let lists: [*mut ID3D12CommandList; 1] =
                     [command_list as *mut _ as *mut ID3D12CommandList];
-                queue.ExecuteCommandLists(1, lists.as_ptr());
+                queue.ExecuteCommandLists(lists.len() as u32, lists.as_ptr());
             }
 
             unsafe { swapchain.Present(0, 0) };
