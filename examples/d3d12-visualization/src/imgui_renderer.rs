@@ -349,8 +349,6 @@ impl ImGuiRenderer {
                 srv_index
             };
 
-            //TODO(max): Upload texture data
-
             let mut layouts = [D3D12_PLACED_SUBRESOURCE_FOOTPRINT::default()];
             let mut num_rows: u32 = 0;
             let mut row_size_in_bytes: u64 = 0;
@@ -358,9 +356,9 @@ impl ImGuiRenderer {
             unsafe {
                 device.GetCopyableFootprints(
                     &font_image.as_ref().unwrap().GetDesc(),
-                    0, // first sub
-                    1, // num sub
-                    0, // intermediate offset
+                    0,                    // first sub
+                    layouts.len() as u32, // num sub
+                    0,                    // intermediate offset
                     layouts.as_mut_ptr(),
                     &mut num_rows as *mut _,
                     &mut row_size_in_bytes as *mut _,
