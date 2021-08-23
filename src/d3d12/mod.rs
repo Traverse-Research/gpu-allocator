@@ -67,7 +67,7 @@ pub struct AllocationCreateDesc<'a> {
     pub size: u64,
     /// Alignment of allocation, should be queried using [`d3d12::ID3D12Device::GetResourceAllocationInfo()`]
     pub alignment: u64,
-    /// Resource category based on resource dimension and flags. Can be created from a [`d3d12::D3D12_RESOURCE_DESC()`]
+    /// Resource category based on resource dimension and flags. Can be created from a [`d3d12::D3D12_RESOURCE_DESC`]
     /// using the helper into function. The resource category is ignored when Resource Heap Tier 2 or higher
     /// is supported.
     pub resource_category: ResourceCategory,
@@ -125,13 +125,13 @@ impl Allocation {
     /// without this library, because that will lead to undefined behavior.
     ///
     /// # Safety
-    /// The result of this function can safely be used to pass into [`CreatePlacedResource()`]. It's exposed
-    /// for this reason. Keep in mind to also pass [`Self::offset()`] along to it.
+    /// The result of this function can safely be used to pass into [`d3d12::ID3D12Device::CreatePlacedResource()`].
+    /// It's exposed for this reason. Keep in mind to also pass [`Self::offset()`] along to it.
     pub unsafe fn heap(&self) -> *mut d3d12::ID3D12Heap {
         self.heap
     }
 
-    /// Returns the offset of the allocation on the ID3D12Heap.
+    /// Returns the offset of the allocation on the [`d3d12::ID3D12Heap`].
     /// When creating a placed resources, this offset needs to be supplied as well.
     pub fn offset(&self) -> u64 {
         self.offset

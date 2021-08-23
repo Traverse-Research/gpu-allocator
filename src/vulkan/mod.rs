@@ -60,19 +60,19 @@ impl Allocation {
         self.chunk_id
     }
 
-    /// Returns the `vk::DeviceMemory` object that is backing this allocation.
+    /// Returns the [`vk::DeviceMemory`] object that is backing this allocation.
     /// This memory object can be shared with multiple other allocations and shouldn't be freed (or allocated from)
     /// without this library, because that will lead to undefined behavior.
     ///
     /// # Safety
-    /// The result of this function can safely be used to pass into `bind_buffer_memory` (`vkBindBufferMemory`),
-    /// `bind_texture_memory` (`vkBindTextureMemory`) etc. It's exposed for this reason. Keep in mind to also
-    /// pass `Self::offset()` along to those.
+    /// The result of this function can safely be used to pass into [`vk::DeviceFnV1_0::bind_buffer_memory()`],
+    /// [`vk::DeviceFnV1_0::bind_image_memory()`] etc. It is exposed for this reason. Keep in mind to also
+    /// pass [`Self::offset()`] along to those.
     pub unsafe fn memory(&self) -> vk::DeviceMemory {
         self.device_memory
     }
 
-    /// Returns the offset of the allocation on the vk::DeviceMemory.
+    /// Returns the offset of the allocation on the [`vk::DeviceMemory`].
     /// When binding the memory to a buffer or image, this offset needs to be supplied as well.
     pub fn offset(&self) -> u64 {
         self.offset

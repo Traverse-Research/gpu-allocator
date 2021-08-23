@@ -106,7 +106,7 @@ impl FreeListAllocator {
             AllocationError::Internal("New chunk id was 0, which is not allowed.".into())
         })
     }
-    /// Finds the specified chunk_id in the list of free chunks and removes if from the list
+    /// Finds the specified `chunk_id` in the list of free chunks and removes if from the list
     fn remove_id_from_free_list(&mut self, chunk_id: std::num::NonZeroU64) {
         self.free_chunks.remove(&chunk_id);
     }
