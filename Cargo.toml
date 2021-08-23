@@ -33,6 +33,8 @@ imgui-winit-support = { version = "0.8", optional = true }
 ash-window = "0.7"
 raw-window-handle = "0.3"
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
+windows = "0.19"
+windows_bindings = { path = "windows_bindings" }
 winit = "0.25"
 
 [[example]]
@@ -51,6 +53,11 @@ path = "examples/d3d12-buffer/src/main.rs"
 required-features = ["d3d12", "public-winapi"]
 
 [[example]]
+name = "d3d12-buffer-winrs"
+path = "examples/d3d12-buffer-winrs/src/main.rs"
+required-features = ["d3d12"]
+
+[[example]]
 name = "d3d12-visualization"
 path = "examples/d3d12-visualization/src/main.rs"
 required-features = ["d3d12", "public-winapi", "visualizer"]
@@ -63,3 +70,8 @@ d3d12 = ["winapi"]
 public-winapi = ["winapi"]
 
 default = ["d3d12", "vulkan", "public-winapi"]
+
+[workspace]
+members = [
+    "windows_bindings",
+]

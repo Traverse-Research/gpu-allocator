@@ -1,0 +1,10 @@
+[package]
+name = "windows_bindings"
+version = "0.0.0"
+edition = "2018"
+
+[dependencies]
+windows = "0.19"
+
+[build-dependencies]
+windows = "0.19"

@@ -189,7 +189,7 @@ fn main() {
             device
                 .as_ref()
                 .unwrap()
-                .GetResourceAllocationInfo(0, 1, &test_buffer_desc as *const _)
+                .GetResourceAllocationInfo(0, 1, &test_buffer_desc)
         };
 
         let allocation = allocator
@@ -246,7 +246,7 @@ fn main() {
             device
                 .as_ref()
                 .unwrap()
-                .GetResourceAllocationInfo(0, 1, &test_buffer_desc as *const _)
+                .GetResourceAllocationInfo(0, 1, &test_buffer_desc)
         };
 
         let allocation = allocator
