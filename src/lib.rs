@@ -100,7 +100,7 @@
 //! # let device = todo!();
 //!
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
-//! #     device,
+//! #     Dx12DevicePtr(device as *const _),
 //! #     debug_settings: Default::default(),
 //! # }).unwrap();
 //!
@@ -129,7 +129,7 @@
 //! let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
 //! let hr = unsafe {
 //!     device.as_ref().unwrap().CreatePlacedResource(
-//!         allocation.heap(),
+//!         allocation.heap().0 as *mut _,
 //!         allocation.offset(),
 //!         &buffer_desc,
 //!         d3d12::D3D12_RESOURCE_STATE_COMMON,
