@@ -430,18 +430,29 @@ impl ImGuiRenderer {
                 (upload_buffer, upload_buffer_memory)
             };
 
-            // TODO(max): Will this work correctly with strides and stuff?
             unsafe {
                 let mut mapped_ptr = std::ptr::null_mut();
                 upload_buffer
                     .as_ref()
                     .unwrap()
-                    .Map(0, std::ptr::null(), &mut mapped_ptr as *mut _);
-                std::ptr::copy_nonoverlapping(
-                    font_atlas.data.as_ptr(),
-                    mapped_ptr as *mut u8,
-                    font_atlas.data.len(),
-                );
+                    .Map(0, std::ptr::null(), &mut mapped_ptr);
+                let mapped_ptr = mapped_ptr.cast::<u8>();
+
+                let layout = &layouts[0];
+                let mapped_ptr = mapped_ptr.add(layout.Offset as usize);
+                let source_ptr = font_atlas.data.as_ptr();
+
+                for y in 0..layout.Footprint.Height {
+                    let mapped_ptr = mapped_ptr.add((y * layout.Footprint.RowPitch) as usize);
+                    let source_ptr = source_ptr.add((y * font_atlas.width * 4) as usize);
+
+                    std::ptr::copy_nonoverlapping(
+                        source_ptr,
+                        mapped_ptr as *mut u8,
+                        (layout.Footprint.Width * 4) as usize,
+                    );
+                }
+
                 upload_buffer.as_ref().unwrap().Unmap(0, std::ptr::null())
             };
 
