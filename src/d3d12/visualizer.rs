@@ -100,34 +100,31 @@ impl AllocatorVisualizer {
                                 total_block_size += block.sub_allocator.size();
                                 total_allocated += block.sub_allocator.allocated();
                             }
-                            ui.text(&format!("heap category: {:?}", mem_type.heap_category));
-                            ui.text(&format!(
+                            ui.text(format!("heap category: {:?}", mem_type.heap_category));
+                            ui.text(format!(
                                 "Heap Type: {} ({})",
                                 format_heap_type(mem_type.heap_properties.Type),
                                 mem_type.heap_properties.Type
                             ));
-                            ui.text(&format!(
+                            ui.text(format!(
                                 "CpuPageProperty: {} ({})",
                                 format_cpu_page_property(mem_type.heap_properties.CPUPageProperty),
                                 mem_type.heap_properties.CPUPageProperty
                             ));
-                            ui.text(&format!(
+                            ui.text(format!(
                                 "MemoryPoolPreference: {} ({})",
                                 format_memory_pool(mem_type.heap_properties.MemoryPoolPreference),
                                 mem_type.heap_properties.MemoryPoolPreference
                             ));
-                            ui.text(&format!(
-                                "total block size: {} KiB",
-                                total_block_size / 1024
-                            ));
-                            ui.text(&format!("total allocated:  {} KiB", total_allocated / 1024));
+                            ui.text(format!("total block size: {} KiB", total_block_size / 1024));
+                            ui.text(format!("total allocated:  {} KiB", total_allocated / 1024));
 
                             let active_block_count = mem_type
                                 .memory_blocks
                                 .iter()
                                 .filter(|block| block.is_some())
                                 .count();
-                            ui.text(&format!("block count: {}", active_block_count));
+                            ui.text(format!("block count: {}", active_block_count));
                             for (block_i, block) in mem_type.memory_blocks.iter().enumerate() {
                                 if let Some(block) = block {
                                     TreeNode::new(&im_str!(
@@ -138,15 +135,15 @@ impl AllocatorVisualizer {
                                     .label(&im_str!("Block: {}", block_i))
                                     .build(ui, || {
                                         ui.indent();
-                                        ui.text(&format!(
+                                        ui.text(format!(
                                             "size: {} KiB",
                                             block.sub_allocator.size() / 1024
                                         ));
-                                        ui.text(&format!(
+                                        ui.text(format!(
                                             "allocated: {} KiB",
                                             block.sub_allocator.allocated() / 1024
                                         ));
-                                        ui.text(&format!("D3D12 heap: {:?}", block.heap));
+                                        ui.text(format!("D3D12 heap: {:?}", block.heap));
                                         block.sub_allocator.draw_base_info(ui);
 
                                         if block.sub_allocator.supports_visualization() {
@@ -222,7 +219,7 @@ impl AllocatorVisualizer {
                     [window.block_index]
                     .as_ref();
                 if let Some(memblock) = memblock {
-                    ui.text(&format!(
+                    ui.text(format!(
                         "Memory type {}, Memory block {}, Block size: {} KiB",
                         window.memory_type_index,
                         window.block_index,

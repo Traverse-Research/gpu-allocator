@@ -95,7 +95,7 @@ impl AllocatorVisualizer {
             .build(ui, || {
                 use imgui::*;
 
-                ui.text(&format!(
+                ui.text(format!(
                     "buffer image granularity: {:?}",
                     alloc.buffer_image_granularity
                 ));
@@ -107,12 +107,12 @@ impl AllocatorVisualizer {
                         ui.indent();
                         if CollapsingHeader::new(&im_str!("Heap: {}", i)).build(ui) {
                             ui.indent();
-                            ui.text(&format!(
+                            ui.text(format!(
                                 "flags: {} (0x{:x})",
                                 format_heap_flags(heap.flags),
                                 heap.flags.as_raw()
                             ));
-                            ui.text(&format!(
+                            ui.text(format!(
                                 "size:  {} MiB",
                                 heap.size as f64 / (1024 * 1024) as f64
                             ));
@@ -145,24 +145,21 @@ impl AllocatorVisualizer {
                                 total_block_size += block.size;
                                 total_allocated += block.sub_allocator.allocated();
                             }
-                            ui.text(&format!(
+                            ui.text(format!(
                                 "properties: {} (0x{:x})",
                                 format_memory_properties(mem_type.memory_properties),
                                 mem_type.memory_properties.as_raw()
                             ));
-                            ui.text(&format!("heap index: {}", mem_type.heap_index));
-                            ui.text(&format!(
-                                "total block size: {} KiB",
-                                total_block_size / 1024
-                            ));
-                            ui.text(&format!("total allocated:  {} KiB", total_allocated / 1024));
+                            ui.text(format!("heap index: {}", mem_type.heap_index));
+                            ui.text(format!("total block size: {} KiB", total_block_size / 1024));
+                            ui.text(format!("total allocated:  {} KiB", total_allocated / 1024));
 
                             let active_block_count = mem_type
                                 .memory_blocks
                                 .iter()
                                 .filter(|block| block.is_some())
                                 .count();
-                            ui.text(&format!("block count: {}", active_block_count));
+                            ui.text(format!("block count: {}", active_block_count));
                             for (block_i, block) in mem_type.memory_blocks.iter().enumerate() {
                                 if let Some(block) = block {
                                     TreeNode::new(&im_str!(
@@ -174,16 +171,16 @@ impl AllocatorVisualizer {
                                     .build(ui, || {
                                         use ash::vk::Handle;
                                         ui.indent();
-                                        ui.text(&format!("size: {} KiB", block.size / 1024));
-                                        ui.text(&format!(
+                                        ui.text(format!("size: {} KiB", block.size / 1024));
+                                        ui.text(format!(
                                             "allocated: {} KiB",
                                             block.sub_allocator.allocated() / 1024
                                         ));
-                                        ui.text(&format!(
+                                        ui.text(format!(
                                             "vk device memory: 0x{:x}",
                                             block.device_memory.as_raw()
                                         ));
-                                        ui.text(&format!(
+                                        ui.text(format!(
                                             "mapped pointer: 0x{:x}",
                                             block.mapped_ptr as usize
                                         ));
@@ -263,7 +260,7 @@ impl AllocatorVisualizer {
                     [window.block_index]
                     .as_ref();
                 if let Some(memblock) = memblock {
-                    ui.text(&format!(
+                    ui.text(format!(
                         "Memory type {}, Memory block {}, Block size: {} KiB",
                         window.memory_type_index,
                         window.block_index,

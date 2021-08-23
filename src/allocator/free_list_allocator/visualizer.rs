@@ -8,8 +8,8 @@ impl SubAllocatorVisualizer for FreeListAllocator {
 
     fn draw_base_info(&self, ui: &imgui::Ui) {
         ui.text("free list sub-allocator");
-        ui.text(&format!("chunk count: {}", self.chunks.len()));
-        ui.text(&format!("chunk id counter: {}", self.chunk_id_counter));
+        ui.text(format!("chunk count: {}", self.chunks.len()));
+        ui.text(format!("chunk id counter: {}", self.chunk_id_counter));
     }
 
     fn draw_visualization(
@@ -69,16 +69,16 @@ impl SubAllocatorVisualizer for FreeListAllocator {
                     // Show chunk information in a tool tip when hovering over the chunk.
                     if ui.is_mouse_hovering_rect(top_left, bottom_right) {
                         ui.tooltip(|| {
-                            ui.text(&format!("chunk_id: {}", chunk.chunk_id));
-                            ui.text(&format!("size: 0x{:x}", chunk.size));
-                            ui.text(&format!("offset: 0x{:x}", chunk.offset));
-                            ui.text(&format!("allocation_type: {:?}", chunk.allocation_type));
+                            ui.text(format!("chunk_id: {}", chunk.chunk_id));
+                            ui.text(format!("size: 0x{:x}", chunk.size));
+                            ui.text(format!("offset: 0x{:x}", chunk.offset));
+                            ui.text(format!("allocation_type: {:?}", chunk.allocation_type));
                             if let Some(name) = &chunk.name {
-                                ui.text(&format!("name: {:?}", name));
+                                ui.text(format!("name: {:?}", name));
                             }
                             if show_backtraces {
                                 if let Some(backtrace) = &chunk.backtrace {
-                                    ui.text(&format!("backtrace: {:}", backtrace));
+                                    ui.text(format!("backtrace: {:}", backtrace));
                                 }
                             }
                         })
