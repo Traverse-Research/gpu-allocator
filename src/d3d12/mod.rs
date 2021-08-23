@@ -5,11 +5,13 @@ use winapi::um::d3d12;
 
 #[cfg(feature = "public-winapi")]
 pub trait AbstractWinapiPtr<T> {
+    #[allow(clippy::mut_from_ref)]
     fn as_winapi(&self) -> &mut T;
 }
 
 #[cfg(not(feature = "public-winapi"))]
 trait AbstractWinapiPtr<T> {
+    #[allow(clippy::mut_from_ref)]
     fn as_winapi(&self) -> &mut T;
 }
 
@@ -18,7 +20,11 @@ pub struct Dx12DevicePtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Device> for Dx12DevicePtr {
     fn as_winapi(&self) -> &mut d3d12::ID3D12Device {
         let device = self.0 as *mut d3d12::ID3D12Device;
-        unsafe { device.as_mut() }.unwrap()
+        if let Some(device) = unsafe { device.as_mut() } {
+            device
+        } else {
+            panic!("Attempting to cast device null pointer to reference.")
+        }
     }
 }
 #[derive(Debug)]
@@ -26,7 +32,11 @@ pub struct Dx12HeapPtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Heap> for Dx12HeapPtr {
     fn as_winapi(&self) -> &mut d3d12::ID3D12Heap {
         let heap = self.0 as *mut d3d12::ID3D12Heap;
-        unsafe { heap.as_mut() }.unwrap()
+        if let Some(heap) = unsafe { heap.as_mut() } {
+            heap
+        } else {
+            panic!("Attempting to cast heap null pointer to reference.")
+        }
     }
 }
 
