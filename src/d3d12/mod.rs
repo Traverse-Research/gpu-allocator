@@ -13,7 +13,8 @@ use super::allocator::AllocationType;
 
 use crate::{AllocationError, AllocatorDebugSettings, MemoryLocation, Result};
 
-///
+/// `ResourceCategory` is used for supporting [`d3d12::D3D12_RESOURCE_HEAP_TIER_1`].
+/// `ResourceCategory` will be ignored if device supports [`d3d12::D3D12_RESOURCE_HEAP_TIER_2`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResourceCategory {
     Buffer,
