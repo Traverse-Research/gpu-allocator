@@ -74,7 +74,6 @@ pub struct AllocationCreateDesc<'a> {
 }
 
 impl<'a> AllocationCreateDesc<'a> {
-    #[cfg(feature = "winapi")]
     pub fn from_d3d12_resource_desc(
         device: &d3d12::ID3D12Device,
         desc: &d3d12::D3D12_RESOURCE_DESC,
