@@ -655,27 +655,25 @@ impl ImGuiRenderer {
             root_signature,
             pipeline,
 
-            font_image,
-            font_image_memory,
-            font_image_srv_index,
-            font_image_upload_buffer,
-            font_image_upload_buffer_memory,
+            vb_capacity,
+            ib_capacity,
+            vb_allocation,
+            ib_allocation,
+            vb_pointer,
+            ib_pointer,
+            vertex_buffer,
+            index_buffer,
 
             cb_allocation,
             cb_pointer,
             constant_buffer,
 
-            vb_capacity,
-            ib_capacity,
+            font_image,
+            font_image_memory,
+            font_image_srv_index,
 
-            vb_pointer,
-            ib_pointer,
-
-            vb_allocation,
-            ib_allocation,
-
-            vertex_buffer,
-            index_buffer,
+            font_image_upload_buffer,
+            font_image_upload_buffer_memory,
         }
     }
 
