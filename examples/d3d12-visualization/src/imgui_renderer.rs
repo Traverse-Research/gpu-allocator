@@ -55,7 +55,7 @@ impl ImGuiRenderer {
         descriptor_heap_counter: &mut usize,
         cmd: &mut ID3D12GraphicsCommandList,
     ) -> Self {
-        let root_signature = unsafe {
+        let root_signature = {
             let mut root_parameters = [
                 D3D12_ROOT_PARAMETER {
                     ParameterType: D3D12_ROOT_PARAMETER_TYPE_CBV,
@@ -76,14 +76,15 @@ impl ImGuiRenderer {
                 RegisterSpace: 0,
                 OffsetInDescriptorsFromTableStart: 0,
             }];
-
-            root_parameters[0].u.Descriptor_mut().ShaderRegister = 0;
-            root_parameters[0].u.Descriptor_mut().RegisterSpace = 0;
-            root_parameters[1]
-                .u
-                .DescriptorTable_mut()
-                .NumDescriptorRanges = ranges.len() as u32;
-            root_parameters[1].u.DescriptorTable_mut().pDescriptorRanges = ranges.as_ptr();
+            unsafe {
+                root_parameters[0].u.Descriptor_mut().ShaderRegister = 0;
+                root_parameters[0].u.Descriptor_mut().RegisterSpace = 0;
+                root_parameters[1]
+                    .u
+                    .DescriptorTable_mut()
+                    .NumDescriptorRanges = ranges.len() as u32;
+                root_parameters[1].u.DescriptorTable_mut().pDescriptorRanges = ranges.as_ptr();
+            }
 
             let static_samplers = [D3D12_STATIC_SAMPLER_DESC {
                 Filter: D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -111,30 +112,46 @@ impl ImGuiRenderer {
 
             let mut blob = std::ptr::null_mut() as *mut ID3DBlob;
             let mut error_blob = std::ptr::null_mut() as *mut ID3DBlob;
-            let hr = D3D12SerializeRootSignature(
-                &rsig_desc,
-                D3D_ROOT_SIGNATURE_VERSION_1,
-                &mut blob as *mut _ as *mut _,
-                &mut error_blob as *mut _ as *mut _,
-            );
+            let hr = unsafe {
+                D3D12SerializeRootSignature(
+                    &rsig_desc,
+                    D3D_ROOT_SIGNATURE_VERSION_1,
+                    &mut blob as *mut _ as *mut _,
+                    &mut error_blob as *mut _ as *mut _,
+                )
+            };
             if FAILED(hr) {
-                panic!("Failed to serialize root signature. hr: {:#x}", hr); //TODO(max): Output error blob
+                let error = unsafe {
+                    let error_blob = error_blob.as_ref().unwrap();
+                    std::slice::from_raw_parts(
+                        error_blob.GetBufferPointer() as *const u8,
+                        error_blob.GetBufferSize(),
+                    )
+                };
+
+                panic!(
+                    "Failed to serialize root signature: '{}'. hr: {:#x}",
+                    std::str::from_utf8(&error).unwrap(),
+                    hr
+                );
             }
 
-            let blob = blob.as_ref().unwrap();
+            let blob = unsafe { blob.as_ref() }.unwrap();
             let mut rsig = std::ptr::null_mut() as *mut ID3D12RootSignature;
-            let hr = device.CreateRootSignature(
-                0,
-                blob.GetBufferPointer(),
-                blob.GetBufferSize(),
-                &ID3D12RootSignature::uuidof(),
-                &mut rsig as *mut _ as *mut _,
-            );
+            let hr = unsafe {
+                device.CreateRootSignature(
+                    0,
+                    blob.GetBufferPointer(),
+                    blob.GetBufferSize(),
+                    &ID3D12RootSignature::uuidof(),
+                    &mut rsig as *mut _ as *mut _,
+                )
+            };
             if FAILED(hr) {
                 panic!("Failed to create root signature. hr: {:#x}", hr);
             }
 
-            rsig.as_mut().unwrap()
+            unsafe { rsig.as_mut() }.unwrap()
         };
 
         let pipeline = unsafe {
