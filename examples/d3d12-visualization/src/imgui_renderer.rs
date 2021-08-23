@@ -131,7 +131,7 @@ impl ImGuiRenderer {
 
                 panic!(
                     "Failed to serialize root signature: '{}'. hr: {:#x}",
-                    std::str::from_utf8(&error).unwrap(),
+                    std::str::from_utf8(error).unwrap(),
                     hr
                 );
             }
