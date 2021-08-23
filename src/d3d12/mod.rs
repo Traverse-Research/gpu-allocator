@@ -453,10 +453,9 @@ impl Allocator {
     }
 
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
-        let device = std::ptr::NonNull::new(desc.device.to_winapi() as *mut d3d12::ID3D12Device)
-            .ok_or_else(|| {
-                AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
-            })?;
+        let device = std::ptr::NonNull::new(desc.device.to_winapi()).ok_or_else(|| {
+            AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
+        })?;
 
         unsafe { device.as_ref().AddRef() };
 
