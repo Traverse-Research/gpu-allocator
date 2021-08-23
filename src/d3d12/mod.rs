@@ -94,6 +94,7 @@ pub struct AllocationCreateDesc<'a> {
     pub resource_category: ResourceCategory,
 }
 
+#[cfg(feature = "public-winapi")]
 impl<'a> AllocationCreateDesc<'a> {
     pub fn from_d3d12_resource_desc(
         device: Dx12DevicePtr,
