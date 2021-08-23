@@ -189,11 +189,8 @@ impl MemoryBlock {
                 HeapCategory::OtherTexture => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
             };
 
-            let mut heap: *mut d3d12::ID3D12Heap = std::ptr::null_mut();
-
-            let hr = unsafe {
-                device.CreateHeap(&desc, &d3d12::IID_ID3D12Heap, &mut heap as *mut _ as *mut _)
-            };
+            let mut heap = std::ptr::null_mut();
+            let hr = unsafe { device.CreateHeap(&desc, &d3d12::IID_ID3D12Heap, &mut heap) };
 
             if hr == winerror::E_OUTOFMEMORY {
                 return Err(AllocationError::OutOfMemory);
@@ -204,6 +201,7 @@ impl MemoryBlock {
                 )));
             }
 
+            let heap = heap.cast::<d3d12::ID3D12Heap>();
             std::ptr::NonNull::new(heap).ok_or_else(|| {
                 AllocationError::Internal("ID3D12Heap pointer is null, but should not be.".into())
             })?
