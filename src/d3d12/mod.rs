@@ -3,13 +3,20 @@ use log::{debug, Level};
 use winapi::shared::winerror;
 use winapi::um::d3d12;
 
-trait AbstractWinapiPtr<T> {
-    fn to_winapi(&self) -> &mut T;
+#[cfg(feature = "public-winapi")]
+pub trait AbstractWinapiPtr<T> {
+    fn as_winapi(&self) -> &mut T;
 }
+
+#[cfg(not(feature = "public-winapi"))]
+trait AbstractWinapiPtr<T> {
+    fn as_winapi(&self) -> &mut T;
+}
+
 #[derive(Debug)]
 pub struct Dx12DevicePtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Device> for Dx12DevicePtr {
-    fn to_winapi(&self) -> &mut d3d12::ID3D12Device {
+    fn as_winapi(&self) -> &mut d3d12::ID3D12Device {
         let device = self.0 as *mut d3d12::ID3D12Device;
         unsafe { device.as_mut() }.unwrap()
     }
@@ -17,7 +24,7 @@ impl AbstractWinapiPtr<d3d12::ID3D12Device> for Dx12DevicePtr {
 #[derive(Debug)]
 pub struct Dx12HeapPtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Heap> for Dx12HeapPtr {
-    fn to_winapi(&self) -> &mut d3d12::ID3D12Heap {
+    fn as_winapi(&self) -> &mut d3d12::ID3D12Heap {
         let heap = self.0 as *mut d3d12::ID3D12Heap;
         unsafe { heap.as_mut() }.unwrap()
     }
@@ -102,7 +109,7 @@ impl<'a> AllocationCreateDesc<'a> {
         name: &'a str,
         location: MemoryLocation,
     ) -> AllocationCreateDesc<'a> {
-        let device = device.to_winapi();
+        let device = device.as_winapi();
         let allocation_info = unsafe { device.GetResourceAllocationInfo(0, 1, desc as *const _) };
         let resource_category: ResourceCategory = desc.into();
 
@@ -454,7 +461,7 @@ impl Allocator {
     }
 
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
-        let device = std::ptr::NonNull::new(desc.device.to_winapi()).ok_or_else(|| {
+        let device = std::ptr::NonNull::new(desc.device.as_winapi()).ok_or_else(|| {
             AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
         })?;
 
