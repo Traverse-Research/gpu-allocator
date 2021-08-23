@@ -8,7 +8,7 @@ pub use visualizer::AllocatorVisualizer;
 use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;
-use log::{log, Level};
+use log::{debug, warn, Level};
 use std::fmt;
 
 use crate::{AllocationError, AllocatorDebugSettings, MemoryLocation, Result};
@@ -476,21 +476,12 @@ impl Allocator {
         let memory_heaps = mem_props.memory_heaps[..mem_props.memory_heap_count as _].to_vec();
 
         if desc.debug_settings.log_memory_information {
-            log!(
-                Level::Debug,
-                "memory type count: {}",
-                mem_props.memory_type_count
-            );
-            log!(
-                Level::Debug,
-                "memory heap count: {}",
-                mem_props.memory_heap_count
-            );
+            debug!("memory type count: {}", mem_props.memory_type_count);
+            debug!("memory heap count: {}", mem_props.memory_heap_count);
 
             for (i, mem_type) in memory_types.iter().enumerate() {
                 let flags = mem_type.property_flags;
-                log!(
-                    Level::Debug,
+                debug!(
                     "memory type[{}]: prop flags: 0x{:x}, heap[{}]",
                     i,
                     flags.as_raw(),
@@ -498,8 +489,7 @@ impl Allocator {
                 );
             }
             for (i, heap) in memory_heaps.iter().enumerate() {
-                log!(
-                    Level::Debug,
+                debug!(
                     "heap[{}] flags: 0x{:x}, size: {} MiB",
                     i,
                     heap.flags.as_raw(),
@@ -518,7 +508,7 @@ impl Allocator {
                 && !flags.contains(vk::MemoryPropertyFlags::HOST_COHERENT)
         });
         if host_visible_not_coherent {
-            log!(Level::Warn, "There is a memory type that is host visible, but not host coherent. It's time to upgrade our memory allocator to take advantage of this type of memory :)");
+            warn!("There is a memory type that is host visible, but not host coherent. It's time to upgrade our memory allocator to take advantage of this type of memory :)");
         }
 
         let memory_types = memory_types
@@ -564,18 +554,15 @@ impl Allocator {
         };
 
         if self.debug_settings.log_allocations {
-            log!(
-                Level::Debug,
+            debug!(
                 "Allocating `{}` of {} bytes with an alignment of {}.",
-                &desc.name,
-                size,
-                alignment
+                &desc.name, size, alignment
             );
             if self.debug_settings.log_stack_traces {
                 let backtrace = backtrace
                     .clone()
                     .unwrap_or(format!("{:?}", backtrace::Backtrace::new()));
-                log!(Level::Debug, "Allocation stack trace: {}", &backtrace);
+                debug!("Allocation stack trace: {}", &backtrace);
             }
         }
 
@@ -658,10 +645,10 @@ impl Allocator {
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
-            log!(Level::Debug, "Freeing `{}`.", name);
+            debug!("Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
                 let backtrace = format!("{:?}", backtrace::Backtrace::new());
-                log!(Level::Debug, "Free stack trace: {}", backtrace);
+                debug!("Free stack trace: {}", backtrace);
             }
         }
 

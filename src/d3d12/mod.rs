@@ -1,5 +1,5 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
-use log::{log, Level};
+use log::{debug, Level};
 use winapi::shared::winerror;
 use winapi::um::d3d12;
 
@@ -545,18 +545,15 @@ impl Allocator {
         };
 
         if self.debug_settings.log_allocations {
-            log!(
-                Level::Debug,
+            debug!(
                 "Allocating `{}` of {} bytes with an alignment of {}.",
-                &desc.name,
-                size,
-                alignment
+                &desc.name, size, alignment
             );
             if self.debug_settings.log_stack_traces {
                 let backtrace = backtrace
                     .clone()
                     .unwrap_or(format!("{:?}", backtrace::Backtrace::new()));
-                log!(Level::Debug, "Allocation stack trace: {}", &backtrace);
+                debug!("Allocation stack trace: {}", &backtrace);
             }
         }
 
@@ -585,10 +582,10 @@ impl Allocator {
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
-            log!(Level::Debug, "Freeing `{}`.", name);
+            debug!("Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
                 let backtrace = backtrace::Backtrace::new();
-                log!(Level::Debug, "Free stack trace: {:?}", backtrace);
+                debug!("Free stack trace: {:?}", backtrace);
             }
         }
 
