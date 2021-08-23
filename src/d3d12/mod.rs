@@ -60,7 +60,7 @@ impl From<ResourceCategory> for HeapCategory {
     }
 }
 
-#[cfg(feature = "winapi-helper")]
+#[cfg(feature = "public-winapi")]
 impl From<&d3d12::D3D12_RESOURCE_DESC> for ResourceCategory {
     fn from(desc: &d3d12::D3D12_RESOURCE_DESC) -> Self {
         if desc.Dimension == d3d12::D3D12_RESOURCE_DIMENSION_BUFFER {
