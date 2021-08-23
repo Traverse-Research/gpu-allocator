@@ -435,6 +435,8 @@ impl Allocator {
             AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
         })?;
 
+        unsafe { device.as_ref().AddRef() };
+
         // Query device for feature level
         let mut options = d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS::default();
         let hr = unsafe {
@@ -627,5 +629,7 @@ impl Drop for Allocator {
                 }
             }
         }
+
+        unsafe { self.device.as_ref().Release() };
     }
 }
