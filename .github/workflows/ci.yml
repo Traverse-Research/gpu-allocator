@@ -63,7 +63,7 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: rustup component add rustfmt
+          components: rustfmt
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
@@ -86,13 +86,32 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: rustup component add clippy
+          components: clippy
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: --workspace --all-targets --features ${{ matrix.features }} --no-default-features -- -D warnings
 
   doc:
+    name: Build documentation
+    # Windows supports the entire feature surface
+    runs-on: windows-latest
+    env:
+      RUSTDOCFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Build documentation
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps --workspace --all-features
+
+  readme:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
