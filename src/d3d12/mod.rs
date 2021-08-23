@@ -3,6 +3,26 @@ use log::{debug, Level};
 use winapi::shared::winerror;
 use winapi::um::d3d12;
 
+trait AbstractWinapiPtr<T> {
+    fn to_winapi(&self) -> &mut T;
+}
+#[derive(Debug)]
+pub struct Dx12DevicePtr(pub *mut std::ffi::c_void);
+impl AbstractWinapiPtr<d3d12::ID3D12Device> for Dx12DevicePtr {
+    fn to_winapi(&self) -> &mut d3d12::ID3D12Device {
+        let device = self.0 as *mut d3d12::ID3D12Device;
+        unsafe { device.as_mut() }.unwrap()
+    }
+}
+#[derive(Debug)]
+pub struct Dx12HeapPtr(pub *mut std::ffi::c_void);
+impl AbstractWinapiPtr<d3d12::ID3D12Heap> for Dx12HeapPtr {
+    fn to_winapi(&self) -> &mut d3d12::ID3D12Heap {
+        let heap = self.0 as *mut d3d12::ID3D12Heap;
+        unsafe { heap.as_mut() }.unwrap()
+    }
+}
+
 #[cfg(feature = "visualizer")]
 mod visualizer;
 #[cfg(feature = "visualizer")]
@@ -40,6 +60,7 @@ impl From<ResourceCategory> for HeapCategory {
     }
 }
 
+#[cfg(feature = "winapi-helper")]
 impl From<&d3d12::D3D12_RESOURCE_DESC> for ResourceCategory {
     fn from(desc: &d3d12::D3D12_RESOURCE_DESC) -> Self {
         if desc.Dimension == d3d12::D3D12_RESOURCE_DIMENSION_BUFFER {
@@ -75,11 +96,12 @@ pub struct AllocationCreateDesc<'a> {
 
 impl<'a> AllocationCreateDesc<'a> {
     pub fn from_d3d12_resource_desc(
-        device: &d3d12::ID3D12Device,
+        device: Dx12DevicePtr,
         desc: &d3d12::D3D12_RESOURCE_DESC,
         name: &'a str,
         location: MemoryLocation,
     ) -> AllocationCreateDesc<'a> {
+        let device = device.to_winapi();
         let allocation_info = unsafe { device.GetResourceAllocationInfo(0, 1, desc as *const _) };
         let resource_category: ResourceCategory = desc.into();
 
@@ -95,7 +117,7 @@ impl<'a> AllocationCreateDesc<'a> {
 
 #[derive(Debug)]
 pub struct AllocatorCreateDesc {
-    pub device: *mut d3d12::ID3D12Device,
+    pub device: Dx12DevicePtr,
     pub debug_settings: AllocatorDebugSettings,
 }
 
@@ -127,8 +149,8 @@ impl Allocation {
     /// # Safety
     /// The result of this function can safely be used to pass into [`d3d12::ID3D12Device::CreatePlacedResource()`].
     /// It's exposed for this reason. Keep in mind to also pass [`Self::offset()`] along to it.
-    pub unsafe fn heap(&self) -> *mut d3d12::ID3D12Heap {
-        self.heap
+    pub unsafe fn heap(&self) -> Dx12HeapPtr {
+        Dx12HeapPtr(self.heap as *mut _)
     }
 
     /// Returns the offset of the allocation on the [`d3d12::ID3D12Heap`].
@@ -426,14 +448,15 @@ pub struct Allocator {
 }
 
 impl Allocator {
-    pub fn device(&self) -> &d3d12::ID3D12Device {
-        unsafe { self.device.as_ref() }
+    pub fn device(&self) -> Dx12DevicePtr {
+        Dx12DevicePtr(self.device.as_ptr() as *mut _)
     }
 
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
-        let device = std::ptr::NonNull::new(desc.device).ok_or_else(|| {
-            AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
-        })?;
+        let device = std::ptr::NonNull::new(desc.device.to_winapi() as *mut d3d12::ID3D12Device)
+            .ok_or_else(|| {
+                AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
+            })?;
 
         unsafe { device.as_ref().AddRef() };
 

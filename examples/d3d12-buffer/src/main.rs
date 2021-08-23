@@ -8,7 +8,7 @@ mod all_dxgi {
 use log::*;
 
 use gpu_allocator::d3d12::{
-    AllocationCreateDesc, Allocator, AllocatorCreateDesc, ResourceCategory,
+    AllocationCreateDesc, Allocator, AllocatorCreateDesc, Dx12DevicePtr, ResourceCategory,
 };
 use gpu_allocator::MemoryLocation;
 
@@ -113,7 +113,7 @@ fn main() {
 
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
-        device,
+        device: Dx12DevicePtr(device as *mut _),
         debug_settings: Default::default(),
     })
     .unwrap();
@@ -147,7 +147,7 @@ fn main() {
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
             device.as_ref().unwrap().CreatePlacedResource(
-                allocation.heap(),
+                allocation.heap().0 as *mut _,
                 allocation.offset(),
                 &test_buffer_desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -204,7 +204,7 @@ fn main() {
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
             device.as_ref().unwrap().CreatePlacedResource(
-                allocation.heap(),
+                allocation.heap().0 as *mut _,
                 allocation.offset(),
                 &test_buffer_desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -261,7 +261,7 @@ fn main() {
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
             device.as_ref().unwrap().CreatePlacedResource(
-                allocation.heap(),
+                allocation.heap().0 as *mut _,
                 allocation.offset(),
                 &test_buffer_desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
