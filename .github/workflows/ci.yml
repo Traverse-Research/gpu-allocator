@@ -11,7 +11,7 @@ jobs:
         - os: ubuntu-latest
           features: vulkan,visualizer
         - os: windows-latest
-          features: vulkan,visualizer
+          features: vulkan,visualizer,d3d12
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v1
@@ -23,7 +23,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --workspace --all-targets --features ${{ matrix.features }}
+          args: --workspace --all-targets --features ${{ matrix.features }} --no-default-features
 
   test:
     name: Test Suite
@@ -33,7 +33,7 @@ jobs:
         - os: ubuntu-latest
           features: vulkan,visualizer
         - os: windows-latest
-          features: vulkan,visualizer
+          features: vulkan,visualizer,d3d12
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v1
@@ -46,12 +46,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --workspace --all-targets --features ${{ matrix.features }}
+          args: --workspace --all-targets --features ${{ matrix.features }} --no-default-features
       - name: Test docs
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --workspace --doc --features ${{ matrix.features }}
+          args: --workspace --doc --features ${{ matrix.features }} --no-default-features
 
   fmt:
     name: Rustfmt
@@ -77,7 +77,7 @@ jobs:
         - os: ubuntu-latest
           features: vulkan,visualizer
         - os: windows-latest
-          features: vulkan,visualizer
+          features: vulkan,visualizer,d3d12
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v1
@@ -90,7 +90,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --workspace --all-targets --features ${{ matrix.features }} -- -D warnings
+          args: --workspace --all-targets --features ${{ matrix.features }} --no-default-features -- -D warnings
 
   doc:
     runs-on: ubuntu-latest

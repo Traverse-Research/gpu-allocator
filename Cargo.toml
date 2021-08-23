@@ -17,15 +17,23 @@ include = [
 ]
 
 [dependencies]
-ash = { version = "0.33", optional = true }
 backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
+# Only needed for vulkan.
+ash = { version = "0.33", optional = true }
+# Only needed for d3d12.
+winapi = { git = "https://github.com/Traverse-Research/winapi-rs.git", rev = "b30c725", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
+# Only needed for visualizer.
 imgui = { version = "0.7", optional = true }
 
 [dev-dependencies]
 ash-window = "0.7"
 winit = "0.25"
+winapi = { git = "https://github.com/Traverse-Research/winapi-rs.git", rev = "b30c725", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
+widestring = "0.4.3"
+hassle-rs = "0.5.2"
+raw-window-handle = "0.3"
 
 [[example]]
 name = "vulkan-buffer"
@@ -37,7 +45,20 @@ name = "vulkan-visualization"
 path = "examples/vulkan-visualization/src/main.rs"
 required-features = ["vulkan", "visualizer"]
 
+[[example]]
+name = "d3d12-buffer"
+path = "examples/d3d12-buffer/src/main.rs"
+required-features = ["d3d12"]
+
+[[example]]
+name = "d3d12-visualization"
+path = "examples/d3d12-visualization/src/main.rs"
+required-features = ["d3d12", "visualizer"]
+
 
 [features]
-visualizer = [ "imgui" ]
-vulkan = [ "ash" ]
+visualizer = ["imgui"]
+vulkan = ["ash"]
+d3d12 = ["winapi"]
+
+default = ["d3d12", "vulkan"]
