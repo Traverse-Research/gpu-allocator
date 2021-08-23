@@ -15,8 +15,7 @@ use gpu_allocator::MemoryLocation;
 fn create_d3d12_device(
     dxgi_factory: *mut all_dxgi::IDXGIFactory6,
 ) -> Option<*mut d3d12::ID3D12Device> {
-    let mut idx = 0;
-    loop {
+    for idx in 0.. {
         let mut adapter4: *mut all_dxgi::IDXGIAdapter4 = std::ptr::null_mut();
         let hr = unsafe {
             dxgi_factory
@@ -24,10 +23,9 @@ fn create_d3d12_device(
                 .unwrap()
                 .EnumAdapters1(idx, &mut adapter4 as *mut _ as *mut *mut _)
         };
-        idx += 1;
 
         if hr == winerror::DXGI_ERROR_NOT_FOUND {
-            break None;
+            return None;
         }
 
         assert_eq!(hr, winerror::S_OK);
@@ -85,9 +83,11 @@ fn create_d3d12_device(
                     }
                 });
         if device.is_some() {
-            break device;
+            return device;
         }
     }
+
+    None
 }
 
 fn main() {
