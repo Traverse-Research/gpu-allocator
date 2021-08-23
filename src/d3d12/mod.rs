@@ -175,7 +175,7 @@ impl MemoryBlock {
         heap_category: HeapCategory,
         dedicated: bool,
     ) -> Result<Self> {
-        let heap = unsafe {
+        let heap = {
             let mut desc = d3d12::D3D12_HEAP_DESC {
                 SizeInBytes: size,
                 Properties: *heap_properties,
@@ -191,8 +191,9 @@ impl MemoryBlock {
 
             let mut heap: *mut d3d12::ID3D12Heap = std::ptr::null_mut();
 
-            let hr =
-                device.CreateHeap(&desc, &d3d12::IID_ID3D12Heap, &mut heap as *mut _ as *mut _);
+            let hr = unsafe {
+                device.CreateHeap(&desc, &d3d12::IID_ID3D12Heap, &mut heap as *mut _ as *mut _)
+            };
 
             if hr == winerror::E_OUTOFMEMORY {
                 return Err(AllocationError::OutOfMemory);
