@@ -3,17 +3,17 @@ use log::{debug, Level};
 use winapi::shared::winerror;
 use winapi::um::d3d12;
 
-#[cfg(feature = "public-winapi")]
-pub trait AbstractWinapiPtr<T> {
-    #[allow(clippy::mut_from_ref)]
-    fn as_winapi(&self) -> &mut T;
+mod cond_pub_mod {
+    pub trait AbstractWinapiPtr<T> {
+        #[allow(clippy::mut_from_ref)]
+        fn as_winapi(&self) -> &mut T;
+    }
 }
+#[cfg(feature = "public-winapi")]
+pub use cond_pub_mod::*;
 
 #[cfg(not(feature = "public-winapi"))]
-trait AbstractWinapiPtr<T> {
-    #[allow(clippy::mut_from_ref)]
-    fn as_winapi(&self) -> &mut T;
-}
+use cond_pub_mod::*;
 
 #[derive(Debug)]
 pub struct Dx12DevicePtr(pub *mut std::ffi::c_void);
