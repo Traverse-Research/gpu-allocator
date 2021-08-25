@@ -321,7 +321,7 @@ impl ImGuiRenderer {
             let font_image = unsafe {
                 let mut font_image: *mut ID3D12Resource = std::ptr::null_mut();
                 let hr = device.CreatePlacedResource(
-                    font_image_memory.heap().as_winapi(),
+                    font_image_memory.heap().as_winapi_mut(),
                     font_image_memory.offset(),
                     &desc,
                     D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
@@ -413,7 +413,7 @@ impl ImGuiRenderer {
                 let mut upload_buffer: *mut ID3D12Resource = std::ptr::null_mut();
                 let hr = unsafe {
                     device.CreatePlacedResource(
-                        upload_buffer_memory.heap().as_winapi(),
+                        upload_buffer_memory.heap().as_winapi_mut(),
                         upload_buffer_memory.offset(),
                         &desc,
                         D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -518,7 +518,7 @@ impl ImGuiRenderer {
             let mut buffer: *mut ID3D12Resource = std::ptr::null_mut();
             let hr = unsafe {
                 device.CreatePlacedResource(
-                    allocation.heap().as_winapi(),
+                    allocation.heap().as_winapi_mut(),
                     allocation.offset(),
                     &desc,
                     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
@@ -573,7 +573,7 @@ impl ImGuiRenderer {
             let mut buffer: *mut ID3D12Resource = std::ptr::null_mut();
             let hr = unsafe {
                 device.CreatePlacedResource(
-                    allocation.heap().as_winapi(),
+                    allocation.heap().as_winapi_mut(),
                     allocation.offset(),
                     &desc,
                     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
@@ -627,7 +627,7 @@ impl ImGuiRenderer {
             let mut buffer: *mut ID3D12Resource = std::ptr::null_mut();
             let hr = unsafe {
                 device.CreatePlacedResource(
-                    allocation.heap().as_winapi(),
+                    allocation.heap().as_winapi_mut(),
                     allocation.offset(),
                     &desc,
                     D3D12_RESOURCE_STATE_INDEX_BUFFER,

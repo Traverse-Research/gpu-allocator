@@ -5,8 +5,8 @@ use winapi::um::d3d12;
 
 mod cond_pub_mod {
     pub trait AbstractWinapiPtr<T> {
-        #[allow(clippy::mut_from_ref)]
-        fn as_winapi(&self) -> &mut T;
+        fn as_winapi(&self) -> &T;
+        fn as_winapi_mut(&mut self) -> &mut T;
     }
 }
 #[cfg(feature = "public-winapi")]
@@ -18,7 +18,11 @@ use cond_pub_mod::*;
 #[derive(Debug)]
 pub struct Dx12DevicePtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Device> for Dx12DevicePtr {
-    fn as_winapi(&self) -> &mut d3d12::ID3D12Device {
+    fn as_winapi(&self) -> &d3d12::ID3D12Device {
+        let device = self.0 as *const d3d12::ID3D12Device;
+        unsafe { device.as_ref() }.expect("Attempting to cast device null pointer to reference.")
+    }
+    fn as_winapi_mut(&mut self) -> &mut d3d12::ID3D12Device {
         let device = self.0 as *mut d3d12::ID3D12Device;
         unsafe { device.as_mut() }.expect("Attempting to cast device null pointer to reference.")
     }
@@ -26,7 +30,11 @@ impl AbstractWinapiPtr<d3d12::ID3D12Device> for Dx12DevicePtr {
 #[derive(Debug)]
 pub struct Dx12HeapPtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Heap> for Dx12HeapPtr {
-    fn as_winapi(&self) -> &mut d3d12::ID3D12Heap {
+    fn as_winapi(&self) -> &d3d12::ID3D12Heap {
+        let heap = self.0 as *const d3d12::ID3D12Heap;
+        unsafe { heap.as_ref() }.expect("Attempting to cast heap null pointer to reference.")
+    }
+    fn as_winapi_mut(&mut self) -> &mut d3d12::ID3D12Heap {
         let heap = self.0 as *mut d3d12::ID3D12Heap;
         unsafe { heap.as_mut() }.expect("Attempting to cast heap null pointer to reference.")
     }
@@ -463,9 +471,10 @@ impl Allocator {
     }
 
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
-        let device = std::ptr::NonNull::new(desc.device.as_winapi()).ok_or_else(|| {
-            AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
-        })?;
+        let device =
+            std::ptr::NonNull::new(desc.device.0 as *mut d3d12::ID3D12Device).ok_or_else(|| {
+                AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
+            })?;
 
         unsafe { device.as_ref().AddRef() };
 

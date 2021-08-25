@@ -148,7 +148,7 @@ fn main() {
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
             device.as_ref().unwrap().CreatePlacedResource(
-                allocation.heap().as_winapi(),
+                allocation.heap().as_winapi_mut(),
                 allocation.offset(),
                 &test_buffer_desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -205,7 +205,7 @@ fn main() {
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
             device.as_ref().unwrap().CreatePlacedResource(
-                allocation.heap().as_winapi(),
+                allocation.heap().as_winapi_mut(),
                 allocation.offset(),
                 &test_buffer_desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -262,7 +262,7 @@ fn main() {
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
             device.as_ref().unwrap().CreatePlacedResource(
-                allocation.heap().as_winapi(),
+                allocation.heap().as_winapi_mut(),
                 allocation.offset(),
                 &test_buffer_desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
