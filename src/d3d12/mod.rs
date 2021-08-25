@@ -20,11 +20,7 @@ pub struct Dx12DevicePtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Device> for Dx12DevicePtr {
     fn as_winapi(&self) -> &mut d3d12::ID3D12Device {
         let device = self.0 as *mut d3d12::ID3D12Device;
-        if let Some(device) = unsafe { device.as_mut() } {
-            device
-        } else {
-            panic!("Attempting to cast device null pointer to reference.")
-        }
+        unsafe { device.as_mut() }.expect("Attempting to cast device null pointer to reference.")
     }
 }
 #[derive(Debug)]
@@ -32,11 +28,7 @@ pub struct Dx12HeapPtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Heap> for Dx12HeapPtr {
     fn as_winapi(&self) -> &mut d3d12::ID3D12Heap {
         let heap = self.0 as *mut d3d12::ID3D12Heap;
-        if let Some(heap) = unsafe { heap.as_mut() } {
-            heap
-        } else {
-            panic!("Attempting to cast heap null pointer to reference.")
-        }
+        unsafe { heap.as_mut() }.expect("Attempting to cast heap null pointer to reference.")
     }
 }
 
