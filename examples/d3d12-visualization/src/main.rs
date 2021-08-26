@@ -2,7 +2,7 @@
 
 use raw_window_handle::HasRawWindowHandle;
 
-use gpu_allocator::d3d12::{Allocator, AllocatorCreateDesc};
+use gpu_allocator::d3d12::{Allocator, AllocatorCreateDesc, Dx12DevicePtr};
 
 mod all_dxgi {
     pub use winapi::shared::{
@@ -351,7 +351,7 @@ fn main() {
         };
 
         let mut allocator = Allocator::new(&AllocatorCreateDesc {
-            device: device as *mut _,
+            device: Dx12DevicePtr(device as *mut _ as *mut _),
             debug_settings: Default::default(),
         })
         .unwrap();

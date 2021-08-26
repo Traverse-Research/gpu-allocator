@@ -91,7 +91,7 @@
 //! ## Simple d3d12 allocation example
 //!
 //! ```no_run
-//! # #[cfg(feature = "d3d12")]
+//! # #[cfg(all(feature = "d3d12", feature = "public-winapi"))]
 //! # fn main() {
 //! use gpu_allocator::d3d12::*;
 //! use gpu_allocator::MemoryLocation;
@@ -100,7 +100,7 @@
 //! # let device = todo!();
 //!
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
-//! #     device,
+//! #     device: Dx12DevicePtr(device as *const _),
 //! #     debug_settings: Default::default(),
 //! # }).unwrap();
 //!
@@ -129,7 +129,7 @@
 //! let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
 //! let hr = unsafe {
 //!     device.as_ref().unwrap().CreatePlacedResource(
-//!         allocation.heap(),
+//!         allocation.heap().as_winapi(),
 //!         allocation.offset(),
 //!         &buffer_desc,
 //!         d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -146,7 +146,7 @@
 //! unsafe { resource.as_ref().unwrap().Release() };
 //! allocator.free(allocation).unwrap();
 //! # }
-//! # #[cfg(not(feature = "d3d12"))]
+//! # #[cfg(not(all(feature = "d3d12", feature="public-winapi")))]
 //! # fn main() {}
 //! ```
 

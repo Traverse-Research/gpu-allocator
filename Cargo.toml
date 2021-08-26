@@ -48,17 +48,18 @@ required-features = ["vulkan", "visualizer"]
 [[example]]
 name = "d3d12-buffer"
 path = "examples/d3d12-buffer/src/main.rs"
-required-features = ["d3d12"]
+required-features = ["d3d12", "public-winapi"]
 
 [[example]]
 name = "d3d12-visualization"
 path = "examples/d3d12-visualization/src/main.rs"
-required-features = ["d3d12", "visualizer"]
+required-features = ["d3d12", "public-winapi", "visualizer"]
 
 
 [features]
 visualizer = ["imgui"]
 vulkan = ["ash"]
 d3d12 = ["winapi"]
+public-winapi = ["winapi"]
 
-default = ["d3d12", "vulkan"]
+default = ["d3d12", "vulkan", "public-winapi"]
