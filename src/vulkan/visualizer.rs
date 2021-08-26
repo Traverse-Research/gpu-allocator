@@ -3,7 +3,6 @@
 use super::Allocator;
 use crate::visualizer::ColorScheme;
 
-use ash::vk;
 use imgui::*;
 
 // Default value for block visualizer granularity.
@@ -29,50 +28,6 @@ pub struct AllocatorVisualizer {
     selected_blocks: Vec<AllocatorVisualizerBlockWindow>,
     focus: Option<usize>,
     color_scheme: ColorScheme,
-}
-
-fn format_heap_flags(flags: vk::MemoryHeapFlags) -> String {
-    let flag_names = ["DEVICE_LOCAL", "MULTI_INSTANCE"];
-
-    let mut result = String::new();
-    let mut mask = 0x1;
-    for flag in flag_names.iter() {
-        if (flags.as_raw() & mask) != 0 {
-            if !result.is_empty() {
-                result += " | "
-            }
-            result += flag;
-        }
-
-        mask <<= 1;
-    }
-    result
-}
-fn format_memory_properties(props: vk::MemoryPropertyFlags) -> String {
-    let flag_names = [
-        "DEVICE_LOCAL",
-        "HOST_VISIBLE",
-        "HOST_COHERENT",
-        "HOST_CACHED",
-        "LAZILY_ALLOCATED",
-        "PROTECTED",
-        "DEVICE_COHERENT",
-        "DEVICE_UNCACHED",
-    ];
-
-    let mut result = String::new();
-    let mut mask = 0x1;
-    for flag in flag_names.iter() {
-        if (props.as_raw() & mask) != 0 {
-            if !result.is_empty() {
-                result += " | "
-            }
-            result += flag;
-        }
-
-        mask <<= 1;
-    }
-    result
 }
 
 impl AllocatorVisualizer {
@@ -107,11 +62,7 @@ impl AllocatorVisualizer {
                         ui.indent();
                         if CollapsingHeader::new(&im_str!("Heap: {}", i)).build(ui) {
                             ui.indent();
-                            ui.text(format!(
-                                "flags: {} (0x{:x})",
-                                format_heap_flags(heap.flags),
-                                heap.flags.as_raw()
-                            ));
+                            ui.text(format!("flags: {:?}", heap.flags));
                             ui.text(format!(
                                 "size:  {} MiB",
                                 heap.size as f64 / (1024 * 1024) as f64
@@ -145,11 +96,7 @@ impl AllocatorVisualizer {
                                 total_block_size += block.size;
                                 total_allocated += block.sub_allocator.allocated();
                             }
-                            ui.text(format!(
-                                "properties: {} (0x{:x})",
-                                format_memory_properties(mem_type.memory_properties),
-                                mem_type.memory_properties.as_raw()
-                            ));
+                            ui.text(format!("properties: {:?}", mem_type.memory_properties));
                             ui.text(format!("heap index: {}", mem_type.heap_index));
                             ui.text(format!("total block size: {} KiB", total_block_size / 1024));
                             ui.text(format!("total allocated:  {} KiB", total_allocated / 1024));
