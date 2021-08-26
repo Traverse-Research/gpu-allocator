@@ -31,50 +31,6 @@ pub struct AllocatorVisualizer {
     color_scheme: ColorScheme,
 }
 
-fn format_heap_flags(flags: vk::MemoryHeapFlags) -> String {
-    let flag_names = ["DEVICE_LOCAL", "MULTI_INSTANCE"];
-
-    let mut result = String::new();
-    let mut mask = 0x1;
-    for flag in flag_names.iter() {
-        if (flags.as_raw() & mask) != 0 {
-            if !result.is_empty() {
-                result += " | "
-            }
-            result += flag;
-        }
-
-        mask <<= 1;
-    }
-    result
-}
-fn format_memory_properties(props: vk::MemoryPropertyFlags) -> String {
-    let flag_names = [
-        "DEVICE_LOCAL",
-        "HOST_VISIBLE",
-        "HOST_COHERENT",
-        "HOST_CACHED",
-        "LAZILY_ALLOCATED",
-        "PROTECTED",
-        "DEVICE_COHERENT",
-        "DEVICE_UNCACHED",
-    ];
-
-    let mut result = String::new();
-    let mut mask = 0x1;
-    for flag in flag_names.iter() {
-        if (props.as_raw() & mask) != 0 {
-            if !result.is_empty() {
-                result += " | "
-            }
-            result += flag;
-        }
-
-        mask <<= 1;
-    }
-    result
-}
-
 impl AllocatorVisualizer {
     pub fn new() -> Self {
         Self {
@@ -108,8 +64,8 @@ impl AllocatorVisualizer {
                         if CollapsingHeader::new(&im_str!("Heap: {}", i)).build(ui) {
                             ui.indent();
                             ui.text(format!(
-                                "flags: {} (0x{:x})",
-                                format_heap_flags(heap.flags),
+                                "flags: {:?} (0x{:x})",
+                                heap.flags,
                                 heap.flags.as_raw()
                             ));
                             ui.text(format!(
@@ -146,8 +102,8 @@ impl AllocatorVisualizer {
                                 total_allocated += block.sub_allocator.allocated();
                             }
                             ui.text(format!(
-                                "properties: {} (0x{:x})",
-                                format_memory_properties(mem_type.memory_properties),
+                                "properties: {:?} (0x{:x})",
+                                mem_type.memory_properties,
                                 mem_type.memory_properties.as_raw()
                             ));
                             ui.text(format!("heap index: {}", mem_type.heap_index));
