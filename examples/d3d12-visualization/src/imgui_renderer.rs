@@ -353,16 +353,21 @@ impl ImGuiRenderer {
                 let mut srv_desc = D3D12_SHADER_RESOURCE_VIEW_DESC {
                     Format: all_dxgi::DXGI_FORMAT_R8G8B8A8_UNORM,
                     ViewDimension: D3D12_SRV_DIMENSION_TEXTURE2D,
-                    Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING(),
+                    Shader4ComponentMapping: (0 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
+                        | ((1 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
+                            << D3D12_SHADER_COMPONENT_MAPPING_SHIFT)
+                        | ((2 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
+                            << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT * 2))
+                        | ((3 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
+                            << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT * 3))
+                        | D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES,
                     ..Default::default()
                 };
                 srv_desc.u.Texture2D_mut().MostDetailedMip = 0;
                 srv_desc.u.Texture2D_mut().MipLevels = 1;
                 srv_desc.u.Texture2D_mut().PlaneSlice = 0;
                 srv_desc.u.Texture2D_mut().ResourceMinLODClamp = 0.0;
-
                 device.CreateShaderResourceView(font_image, &srv_desc, desc_heap_handle);
-
                 srv_index
             };
 
