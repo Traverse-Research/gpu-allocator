@@ -92,7 +92,7 @@ fn main() {
         device: device.clone(),
         physical_device: pdevice,
         debug_settings: Default::default(),
-        buffer_device_address: false, // Check for device support and enable feature accordingly
+        buffer_device_address: false,
     })
     .unwrap();
 
