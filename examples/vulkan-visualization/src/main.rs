@@ -231,7 +231,7 @@ fn main() {
             device: device.clone(),
             physical_device: pdevice,
             debug_settings: AllocatorDebugSettings::default(),
-            buffer_device_address: true,
+            buffer_device_address: false,
         })
         .unwrap();
 
