@@ -111,11 +111,31 @@ pub struct AllocationCreateDesc<'a> {
     pub resource_category: ResourceCategory,
 }
 
-#[cfg(feature = "public-winapi")]
 impl<'a> AllocationCreateDesc<'a> {
+    #[cfg(feature = "public-winapi")]
     pub fn from_d3d12_resource_desc(
         device: Dx12DevicePtr,
         desc: &d3d12::D3D12_RESOURCE_DESC,
+        name: &'a str,
+        location: MemoryLocation,
+    ) -> AllocationCreateDesc<'a> {
+        let device = device.as_winapi();
+        let allocation_info = unsafe { device.GetResourceAllocationInfo(0, 1, desc) };
+        let resource_category: ResourceCategory = desc.into();
+
+        AllocationCreateDesc {
+            name,
+            location,
+            size: allocation_info.SizeInBytes,
+            alignment: allocation_info.Alignment,
+            resource_category,
+        }
+    }
+
+    #[cfg(not(feature = "public-winapi"))]
+    pub fn from_d3d12_resource_desc(
+        device: Dx12DevicePtr,
+        desc: *const std::ffi::c_void,
         name: &'a str,
         location: MemoryLocation,
     ) -> AllocationCreateDesc<'a> {
