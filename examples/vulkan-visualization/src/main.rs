@@ -3,10 +3,7 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 
-use gpu_allocator::{
-    vulkan::{Allocator, AllocatorCreateDesc},
-    AllocatorDebugSettings,
-};
+use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 
 mod helper;
 use helper::record_and_submit_command_buffer;
@@ -14,7 +11,7 @@ use helper::record_and_submit_command_buffer;
 mod imgui_renderer;
 use imgui_renderer::{handle_imgui_event, ImGuiRenderer};
 
-fn main() {
+fn main() -> ash::prelude::VkResult<()> {
     let entry = unsafe { ash::Entry::new() }.unwrap();
 
     let event_loop = winit::event_loop::EventLoop::new();
@@ -31,10 +28,6 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let (event_send, event_recv) = std::sync::mpsc::sync_channel(1);
-    let quit_send = event_loop.create_proxy();
-
-    std::thread::spawn(move || -> Result<(), vk::Result> {
     // Create vulkan instance
     let instance = {
         let app_name = CString::new("gpu-allocator examples vulkan-visualization").unwrap();
@@ -108,7 +101,7 @@ fn main() {
 
     // Create vulkan device
     let device = {
-        let device_extension_names_raw = vec![ash::extensions::khr::Swapchain::name().as_ptr()];
+        let device_extension_names_raw = [ash::extensions::khr::Swapchain::name().as_ptr()];
         let features = vk::PhysicalDeviceFeatures {
             shader_clip_distance: 1,
             ..Default::default()
@@ -124,7 +117,7 @@ fn main() {
             .enabled_extension_names(&device_extension_names_raw)
             .enabled_features(&features);
 
-        unsafe { instance.create_device(pdevice, &create_info, None).unwrap() }
+        unsafe { instance.create_device(pdevice, &create_info, None) }.unwrap()
     };
 
     let present_queue = unsafe { device.get_device_queue(queue_family_index as u32, 0) };
@@ -198,7 +191,7 @@ fn main() {
     let draw_command_buffer = command_buffers[1];
 
     let present_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }.unwrap();
-    let present_image_views = present_images
+    let mut present_image_views = present_images
         .iter()
         .map(|&image| {
             let create_view_info = vk::ImageViewCreateInfo::builder()
@@ -223,14 +216,16 @@ fn main() {
         .collect::<Vec<_>>();
 
     // Setting up the allocator
-    let mut allocator = Allocator::new(&AllocatorCreateDesc {
-        instance: instance.clone(),
-        device: device.clone(),
-        physical_device: pdevice,
-        debug_settings: AllocatorDebugSettings::default(),
-        buffer_device_address: false,
-    })
-    .unwrap();
+    let mut allocator = Some(
+        Allocator::new(&AllocatorCreateDesc {
+            instance: instance.clone(),
+            device: device.clone(),
+            physical_device: pdevice,
+            debug_settings: Default::default(),
+            buffer_device_address: false,
+        })
+        .unwrap(),
+    );
 
     let fence_create_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
     let draw_commands_reuse_fence =
@@ -269,22 +264,22 @@ fn main() {
         unsafe { device.create_descriptor_pool(&create_info, None) }?
     };
 
-    let mut imgui_renderer = ImGuiRenderer::new(
+    let mut imgui_renderer = Some(ImGuiRenderer::new(
         &mut imgui,
         &device,
         descriptor_pool,
         surface_format.format,
-        &mut allocator,
+        allocator.as_mut().unwrap(),
         setup_command_buffer,
         setup_commands_reuse_fence,
         present_queue,
-    )?;
+    )?);
 
-    let framebuffers = present_image_views
+    let mut framebuffers = present_image_views
         .iter()
         .map(|&view| {
             let create_info = vk::FramebufferCreateInfo::builder()
-                .render_pass(imgui_renderer.render_pass)
+                .render_pass(imgui_renderer.as_ref().unwrap().render_pass)
                 .attachments(std::slice::from_ref(&view))
                 .width(window_width)
                 .height(window_height)
@@ -294,40 +289,34 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let mut visualizer = gpu_allocator::vulkan::AllocatorVisualizer::new();
+    let mut visualizer = Some(gpu_allocator::vulkan::AllocatorVisualizer::new());
 
-        loop {
-            let mut should_quit = false;
-            loop {
-                let event = event_recv.recv().unwrap();
-                if let winit::event::Event::MainEventsCleared = event {
-                    break;
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = winit::event_loop::ControlFlow::Wait;
+
+        handle_imgui_event(imgui.io_mut(), &window, &event);
+
+        let mut ready_for_rendering = false;
+        match event {
+            winit::event::Event::WindowEvent { event, .. } => match event {
+                winit::event::WindowEvent::CloseRequested
+                | winit::event::WindowEvent::KeyboardInput {
+                    input:
+                        winit::event::KeyboardInput {
+                            virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
+                            ..
+                        },
+                    ..
+                } => {
+                    *control_flow = winit::event_loop::ControlFlow::Exit;
                 }
+                _ => {}
+            },
+            winit::event::Event::MainEventsCleared => ready_for_rendering = true,
+            _ => {}
+        }
 
-                handle_imgui_event(imgui.io_mut(), &window, &event);
-
-                if let winit::event::Event::WindowEvent { event, .. } = event {
-                    match event {
-                        winit::event::WindowEvent::KeyboardInput { input, .. } => {
-                            if let Some(winit::event::VirtualKeyCode::Escape) =
-                                input.virtual_keycode
-                            {
-                                should_quit = true;
-                            }
-                        }
-                        winit::event::WindowEvent::CloseRequested => {
-                            should_quit = true;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            if should_quit {
-                quit_send.send_event(()).unwrap();
-                break;
-            }
-
+        if ready_for_rendering {
             let (present_index, _) = unsafe {
                 swapchain_loader.acquire_next_image(
                     swapchain,
@@ -342,7 +331,10 @@ fn main() {
             let ui = imgui.frame();
 
             // Submit visualizer ImGui commands
-            visualizer.render(&allocator, &ui);
+            visualizer
+                .as_mut()
+                .unwrap()
+                .render(allocator.as_ref().unwrap(), &ui);
 
             // Finish ImGui Frame
             let imgui_draw_data = ui.render();
@@ -357,7 +349,7 @@ fn main() {
                 &[rendering_complete_semaphore],
                 |device, cmd| {
                     // Render ImGui to swapchain image
-                    imgui_renderer.render(
+                    imgui_renderer.as_mut().unwrap().render(
                         imgui_draw_data,
                         device,
                         window_width,
@@ -401,21 +393,22 @@ fn main() {
                 .swapchains(std::slice::from_ref(&swapchain))
                 .image_indices(std::slice::from_ref(&present_index));
 
-            unsafe { swapchain_loader.queue_present(present_queue, &present_create_info) }?;
-            //break;
-        }
+            unsafe { swapchain_loader.queue_present(present_queue, &present_create_info) }.unwrap();
+        } else if *control_flow == winit::event_loop::ControlFlow::Exit {
+            unsafe { device.queue_wait_idle(present_queue) }.unwrap();
 
-            unsafe { device.queue_wait_idle(present_queue) }?;
+            visualizer.take();
 
-            drop(visualizer);
-
-            for fb in framebuffers {
-                unsafe {
-                    device.destroy_framebuffer(fb, None);
-                }
+            for fb in framebuffers.drain(..) {
+                unsafe { device.destroy_framebuffer(fb, None) };
             }
 
-            imgui_renderer.destroy(&device, &mut allocator);
+            let mut allocator = allocator.take().unwrap();
+
+            imgui_renderer
+                .take()
+                .unwrap()
+                .destroy(&device, &mut allocator);
 
             unsafe { device.destroy_descriptor_pool(descriptor_pool, None) };
             unsafe { device.destroy_semaphore(rendering_complete_semaphore, None) };
@@ -423,7 +416,7 @@ fn main() {
             unsafe { device.destroy_fence(setup_commands_reuse_fence, None) };
             unsafe { device.destroy_fence(draw_commands_reuse_fence, None) };
             drop(allocator);
-            for view in present_image_views {
+            for view in present_image_views.drain(..) {
                 unsafe { device.destroy_image_view(view, None) };
             }
             unsafe { device.free_command_buffers(command_pool, &command_buffers) };
@@ -434,18 +427,6 @@ fn main() {
                 surface_loader.destroy_surface(surface, None);
             }
             unsafe { instance.destroy_instance(None) };
-        Ok(())
-    });
-
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = winit::event_loop::ControlFlow::Poll;
-
-        if event == winit::event::Event::UserEvent(()) {
-            *control_flow = winit::event_loop::ControlFlow::Exit;
-        } else if let Some(event) = event.to_static() {
-            let _ = event_send.send(event);
-        } else {
-            *control_flow = winit::event_loop::ControlFlow::Exit;
         }
     });
 }
