@@ -608,12 +608,18 @@ impl Allocator {
             None => return Err(AllocationError::NoCompatibleMemoryTypeFound),
         };
 
-        let allocation = self.memory_types[memory_type_index].allocate(
-            &self.device,
-            desc,
-            self.buffer_image_granularity,
-            backtrace.as_deref(),
-        );
+        //Do not try to create a block if the heap is smaller than the required size (avoids validation warnings).
+        let memory_type = &mut self.memory_types[memory_type_index];
+        let allocation = if size > self.memory_heaps[memory_type.heap_index].size {
+            Err(AllocationError::OutOfMemory)
+        } else {
+            memory_type.allocate(
+                &self.device,
+                desc,
+                self.buffer_image_granularity,
+                backtrace.as_deref(),
+            )
+        };
 
         if desc.location == MemoryLocation::CpuToGpu {
             if allocation.is_err() {
