@@ -608,7 +608,7 @@ impl Allocator {
             None => return Err(AllocationError::NoCompatibleMemoryTypeFound),
         };
 
-        //Do not try create a block if the heap is smaller than the required size (avoids validation warnings).
+        //Do not try to create a block if the heap is smaller than the required size (avoids validation warnings).
         let memory_type = &mut self.memory_types[memory_type_index];
         let allocation = if size > self.memory_heaps[memory_type.heap_index].size {
             Err(AllocationError::OutOfMemory)
