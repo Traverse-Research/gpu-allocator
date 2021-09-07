@@ -301,21 +301,29 @@ fn main() {
         let mut visualizer = gpu_allocator::vulkan::AllocatorVisualizer::new();
 
         loop {
-            let event = event_recv.recv().unwrap();
-            handle_imgui_event(imgui.io_mut(), &window, &event);
-
             let mut should_quit = false;
-            if let winit::event::Event::WindowEvent { event, .. } = event {
-                match event {
-                    winit::event::WindowEvent::KeyboardInput { input, .. } => {
-                        if let Some(winit::event::VirtualKeyCode::Escape) = input.virtual_keycode {
+            loop {
+                let event = event_recv.recv().unwrap();
+                if let winit::event::Event::MainEventsCleared = event {
+                    break;
+                }
+
+                handle_imgui_event(imgui.io_mut(), &window, &event);
+
+                if let winit::event::Event::WindowEvent { event, .. } = event {
+                    match event {
+                        winit::event::WindowEvent::KeyboardInput { input, .. } => {
+                            if let Some(winit::event::VirtualKeyCode::Escape) =
+                                input.virtual_keycode
+                            {
+                                should_quit = true;
+                            }
+                        }
+                        winit::event::WindowEvent::CloseRequested => {
                             should_quit = true;
                         }
+                        _ => {}
                     }
-                    winit::event::WindowEvent::CloseRequested => {
-                        should_quit = true;
-                    }
-                    _ => {}
                 }
             }
 
@@ -434,7 +442,7 @@ fn main() {
     });
 
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = winit::event_loop::ControlFlow::Wait;
+        *control_flow = winit::event_loop::ControlFlow::Poll;
 
         if event == winit::event::Event::UserEvent(()) {
             *control_flow = winit::event_loop::ControlFlow::Exit;
