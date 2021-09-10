@@ -350,17 +350,29 @@ impl ImGuiRenderer {
                     ptr: desc_heap_handle.ptr + srv_index * srv_size,
                 };
 
+                const fn d3d12_encode_shader_4_component_mapping(
+                    src0: u32,
+                    src1: u32,
+                    src2: u32,
+                    src3: u32,
+                ) -> u32 {
+                    (src0 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
+                        | ((src1 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
+                            << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT))
+                        | ((src2 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
+                            << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT * 2))
+                        | ((src3 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
+                            << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT * 3))
+                        | D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES
+                }
+                const fn d3d12_default_shader_4_component_mapping() -> u32 {
+                    d3d12_encode_shader_4_component_mapping(0, 1, 2, 3)
+                }
+
                 let mut srv_desc = D3D12_SHADER_RESOURCE_VIEW_DESC {
                     Format: all_dxgi::DXGI_FORMAT_R8G8B8A8_UNORM,
                     ViewDimension: D3D12_SRV_DIMENSION_TEXTURE2D,
-                    Shader4ComponentMapping: (0 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
-                        | ((1 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
-                            << D3D12_SHADER_COMPONENT_MAPPING_SHIFT)
-                        | ((2 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
-                            << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT * 2))
-                        | ((3 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
-                            << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT * 3))
-                        | D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES,
+                    Shader4ComponentMapping: d3d12_default_shader_4_component_mapping(),
                     ..Default::default()
                 };
                 srv_desc.u.Texture2D_mut().MostDetailedMip = 0;
