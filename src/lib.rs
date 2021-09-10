@@ -100,7 +100,7 @@
 //! # let device = todo!();
 //!
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
-//! #     device: Dx12DevicePtr(device as *const _),
+//! #     device: Dx12DevicePtr(device as *mut _),
 //! #     debug_settings: Default::default(),
 //! # }).unwrap();
 //!
