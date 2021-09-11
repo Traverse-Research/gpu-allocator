@@ -97,7 +97,7 @@
 //! use gpu_allocator::MemoryLocation;
 //! # use winapi::um::d3d12;
 //! # use winapi::shared::{dxgiformat, dxgitype, winerror};
-//! # let device = todo!();
+//! # let device: *mut d3d12::ID3D12Device = todo!();
 //!
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
 //! #     device: Dx12DevicePtr(device as *mut _),
