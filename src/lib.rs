@@ -97,7 +97,7 @@
 //! use gpu_allocator::MemoryLocation;
 //! # use winapi::um::d3d12;
 //! # use winapi::shared::{dxgiformat, dxgitype, winerror};
-//! # let device = todo!();
+//! # let device: *mut d3d12::ID3D12Device = todo!();
 //!
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
 //! #     device: Dx12DevicePtr(device as *mut _),
@@ -129,7 +129,7 @@
 //! let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
 //! let hr = unsafe {
 //!     device.as_ref().unwrap().CreatePlacedResource(
-//!         allocation.heap().as_winapi(),
+//!         allocation.heap().as_winapi_mut(),
 //!         allocation.offset(),
 //!         &buffer_desc,
 //!         d3d12::D3D12_RESOURCE_STATE_COMMON,
