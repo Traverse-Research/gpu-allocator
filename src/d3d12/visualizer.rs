@@ -78,13 +78,13 @@ impl AllocatorVisualizer {
     }
 
     fn render_main_window(&mut self, ui: &imgui::Ui, alloc: &Allocator) {
-        imgui::Window::new(imgui::im_str!("Allocator visualization"))
+        imgui::Window::new("Allocator visualization")
             .collapsed(true, Condition::FirstUseEver)
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
             .build(ui, || {
                 use imgui::*;
 
-                if CollapsingHeader::new(&im_str!(
+                if CollapsingHeader::new(format!(
                     "Memory Types: ({} types)",
                     alloc.memory_types.len()
                 ))
@@ -93,7 +93,7 @@ impl AllocatorVisualizer {
                 {
                     ui.indent();
                     for (mem_type_i, mem_type) in alloc.memory_types.iter().enumerate() {
-                        if CollapsingHeader::new(&im_str!("Type: {}", mem_type_i)).build(ui) {
+                        if CollapsingHeader::new(format!("Type: {}", mem_type_i)).build(ui) {
                             let mut total_block_size = 0;
                             let mut total_allocated = 0;
                             for block in mem_type.memory_blocks.iter().flatten() {
@@ -127,13 +127,7 @@ impl AllocatorVisualizer {
                             ui.text(format!("block count: {}", active_block_count));
                             for (block_i, block) in mem_type.memory_blocks.iter().enumerate() {
                                 if let Some(block) = block {
-                                    TreeNode::new(&im_str!(
-                                        "Block: {}##memtype({})",
-                                        block_i,
-                                        mem_type_i
-                                    ))
-                                    .label(&im_str!("Block: {}", block_i))
-                                    .build(ui, || {
+                                    TreeNode::new(format!("Block: {}", block_i)).build(ui, || {
                                         ui.indent();
                                         ui.text(format!(
                                             "size: {} KiB",
@@ -147,11 +141,7 @@ impl AllocatorVisualizer {
                                         block.sub_allocator.draw_base_info(ui);
 
                                         if block.sub_allocator.supports_visualization() {
-                                            let button_name = format!(
-                                                "visualize##memtype({})block({})",
-                                                mem_type_i, block_i
-                                            );
-                                            if ui.small_button(&ImString::new(button_name)) {
+                                            if ui.small_button("visualize") {
                                                 match self
                                                     .selected_blocks
                                                     .iter()
@@ -186,7 +176,6 @@ impl AllocatorVisualizer {
     }
 
     fn render_memory_block_windows(&mut self, ui: &imgui::Ui, alloc: &Allocator) {
-        use imgui::*;
         // Copy here to workaround the borrow checker.
         let focus_opt = self.focus;
         // Keep track of a list of windows that are signaled by imgui to be closed.
@@ -201,10 +190,9 @@ impl AllocatorVisualizer {
                 false
             };
             let mut is_open = true;
-            imgui::Window::new(&imgui::im_str!(
+            imgui::Window::new(format!(
                 "Block Visualizer##memtype({})block({})",
-                window.memory_type_index,
-                window.block_index
+                window.memory_type_index, window.block_index
             ))
             .size([1920.0 * 0.5, 1080.0 * 0.5], imgui::Condition::FirstUseEver)
             .title_bar(true)
@@ -227,13 +215,13 @@ impl AllocatorVisualizer {
                     ));
 
                     if alloc.debug_settings.store_stack_traces {
-                        ui.checkbox(im_str!("Show backtraces"), &mut window.show_backtraces);
+                        ui.checkbox("Show backtraces", &mut window.show_backtraces);
                     }
                     // Slider for changing the 'zoom' level of the visualizer.
                     const BYTES_PER_UNIT_MIN: i32 = 1;
                     const BYTES_PER_UNIT_MAX: i32 = 1024 * 1024;
-                    Drag::new(im_str!("Bytes per Pixel (zoom)"))
-                        .range(BYTES_PER_UNIT_MIN..=BYTES_PER_UNIT_MAX)
+                    Drag::new("Bytes per Pixel (zoom)")
+                        .range(BYTES_PER_UNIT_MIN, BYTES_PER_UNIT_MAX)
                         .speed(10.0f32)
                         .build(ui, &mut window.bytes_per_unit);
 
@@ -244,10 +232,9 @@ impl AllocatorVisualizer {
                         .max(BYTES_PER_UNIT_MIN);
 
                     // Draw the visualization in a child window.
-                    imgui::ChildWindow::new(&im_str!(
+                    imgui::ChildWindow::new(&format!(
                         "Visualization Sub-window##memtype({})block({})",
-                        window.memory_type_index,
-                        window.block_index
+                        window.memory_type_index, window.block_index
                     ))
                     .scrollable(true)
                     .scroll_bar(true)

@@ -25,8 +25,8 @@ ash = { version = "0.33", optional = true }
 # Only needed for d3d12.
 winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
 # Only needed for visualizer.
-imgui = { version = "0.7", optional = true }
-imgui-winit-support = { version = "0.7", optional = true }
+imgui = { version = "0.8", optional = true }
+imgui-winit-support = { version = "0.8", optional = true }
 
 [dev-dependencies]
 ash-window = "0.7"
@@ -34,7 +34,7 @@ hassle-rs = "0.5.2"
 raw-window-handle = "0.3"
 widestring = "0.4.3"
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
-winit = "0.24"
+winit = "0.25"
 
 [[example]]
 name = "vulkan-buffer"
