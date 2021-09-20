@@ -202,6 +202,7 @@ impl Default for Allocation {
     }
 }
 
+#[derive(Debug)]
 struct MemoryBlock {
     heap: std::ptr::NonNull<d3d12::ID3D12Heap>,
     sub_allocator: Box<dyn allocator::SubAllocator>,
@@ -273,6 +274,35 @@ struct MemoryType {
     heap_properties: d3d12::D3D12_HEAP_PROPERTIES,
     memory_type_index: usize,
     active_general_blocks: usize,
+}
+
+impl std::fmt::Debug for MemoryType {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.debug_struct("MemoryType")
+            .field("memory_blocks", &self.memory_blocks)
+            .field("memory_location", &self.memory_location)
+            .field("heap_category", &self.heap_category)
+            .field("heap_properties.Type", &self.heap_properties.Type)
+            .field(
+                "heap_properties.CPUPageProperty",
+                &self.heap_properties.CPUPageProperty,
+            )
+            .field(
+                "heap_properties.MemoryPoolPreference",
+                &self.heap_properties.MemoryPoolPreference,
+            )
+            .field(
+                "heap_properties.CreationNodeMask",
+                &self.heap_properties.CreationNodeMask,
+            )
+            .field(
+                "heap_properties.VisibleNodeMask",
+                &self.heap_properties.VisibleNodeMask,
+            )
+            .field("memory_type_index", &self.memory_type_index)
+            .field("active_general_blocks", &self.active_general_blocks)
+            .finish()
+    }
 }
 
 const DEFAULT_DEVICE_MEMBLOCK_SIZE: u64 = 256 * 1024 * 1024;
@@ -459,6 +489,7 @@ impl MemoryType {
     }
 }
 
+#[derive(Debug)]
 pub struct Allocator {
     device: std::ptr::NonNull<d3d12::ID3D12Device>,
     debug_settings: AllocatorDebugSettings,
