@@ -70,8 +70,12 @@ impl SubAllocator for DedicatedBlockAllocator {
         chunk_id: Option<std::num::NonZeroU64>,
         name: &str,
     ) -> Result<()> {
-        self.name = Some(name.into());
-        Ok(())
+        if chunk_id != std::num::NonZeroU64::new(1) {
+            Err(AllocationError::Internal("Chunk ID must be 1.".into()))
+        } else {
+            self.name = Some(name.into());
+            Ok(())
+        }
     }
 
     fn report_memory_leaks(
