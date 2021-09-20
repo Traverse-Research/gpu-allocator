@@ -34,6 +34,12 @@ pub(crate) trait SubAllocator: SubAllocatorBase + std::fmt::Debug {
 
     fn free(&mut self, chunk_id: Option<std::num::NonZeroU64>) -> Result<()>;
 
+    fn rename_allocation(
+        &mut self,
+        chunk_id: Option<std::num::NonZeroU64>,
+        name: &str,
+    ) -> Result<()>;
+
     fn report_memory_leaks(
         &self,
         log_level: Level,

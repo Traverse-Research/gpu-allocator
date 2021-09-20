@@ -319,6 +319,31 @@ impl SubAllocator for FreeListAllocator {
         Ok(())
     }
 
+    fn rename_allocation(
+        &mut self,
+        chunk_id: Option<std::num::NonZeroU64>,
+        name: &str,
+    ) -> Result<()> {
+        let chunk_id = chunk_id
+            .ok_or_else(|| AllocationError::Internal("Chunk ID must be a valid value.".into()))?;
+
+        let chunk = self.chunks.get_mut(&chunk_id).ok_or_else(|| {
+            AllocationError::Internal(
+                "Attempting to rename chunk that is not in chunk list.".into(),
+            )
+        })?;
+
+        if chunk.allocation_type == AllocationType::Free {
+            return Err(AllocationError::Internal(
+                "Attempting to rename a freed allocation.".into(),
+            ));
+        }
+
+        chunk.name = Some(name.into());
+
+        Ok(())
+    }
+
     fn report_memory_leaks(
         &self,
         log_level: Level,
