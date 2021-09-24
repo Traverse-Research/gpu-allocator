@@ -158,7 +158,6 @@ pub(crate) mod allocator;
 #[cfg(feature = "visualizer")]
 pub mod visualizer;
 
-#[cfg(all(not(any(target_os = "macos", target_os = "ios")), feature = "vulkan"))]
 pub mod vulkan;
 
 #[cfg(all(windows, feature = "d3d12"))]
