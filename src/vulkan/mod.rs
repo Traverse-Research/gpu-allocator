@@ -43,8 +43,8 @@ pub struct Allocation {
     device_memory: vk::DeviceMemory,
     mapped_ptr: Option<std::ptr::NonNull<std::ffi::c_void>>,
 
-    name: Option<String>,
-    backtrace: Option<String>,
+    name: Option<Box<str>>,
+    backtrace: Option<Box<str>>,
 }
 
 // Sending is fine because mapped_ptr does not change based on the thread we are in
@@ -297,8 +297,8 @@ impl MemoryType {
                 memory_type_index: self.memory_type_index as usize,
                 device_memory: mem_block.device_memory,
                 mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
-                name: Some(desc.name.to_owned()),
-                backtrace: backtrace.map(|s| s.to_owned()),
+                name: Some(desc.name.into()),
+                backtrace: backtrace.map(|s| s.into()),
             });
         }
 
@@ -330,8 +330,8 @@ impl MemoryType {
                             memory_type_index: self.memory_type_index as usize,
                             device_memory: mem_block.device_memory,
                             mapped_ptr,
-                            name: Some(desc.name.to_owned()),
-                            backtrace: backtrace.map(|s| s.to_owned()),
+                            name: Some(desc.name.into()),
+                            backtrace: backtrace.map(|s| s.into()),
                         });
                     }
                     Err(err) => match err {
@@ -402,8 +402,8 @@ impl MemoryType {
             memory_type_index: self.memory_type_index as usize,
             device_memory: mem_block.device_memory,
             mapped_ptr,
-            name: Some(desc.name.to_owned()),
-            backtrace: backtrace.map(|s| s.to_owned()),
+            name: Some(desc.name.into()),
+            backtrace: backtrace.map(|s| s.into()),
         })
     }
 

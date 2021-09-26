@@ -148,8 +148,8 @@ pub struct Allocation {
     memory_type_index: usize,
     heap: *mut d3d12::ID3D12Heap,
 
-    name: Option<String>,
-    backtrace: Option<String>,
+    name: Option<Box<str>>,
+    backtrace: Option<Box<str>>,
 }
 
 unsafe impl Send for Allocation {}
@@ -337,8 +337,8 @@ impl MemoryType {
                 memory_block_index: block_index,
                 memory_type_index: self.memory_type_index as usize,
                 heap: mem_block.heap.as_ptr(),
-                name: Some(desc.name.to_owned()),
-                backtrace: backtrace.map(|s| s.to_owned()),
+                name: Some(desc.name.into()),
+                backtrace: backtrace.map(|s| s.into()),
             });
         }
 
@@ -363,8 +363,8 @@ impl MemoryType {
                             memory_block_index: mem_block_i,
                             memory_type_index: self.memory_type_index as usize,
                             heap: mem_block.heap.as_ptr(),
-                            name: Some(desc.name.to_owned()),
-                            backtrace: backtrace.map(|s| s.to_owned()),
+                            name: Some(desc.name.into()),
+                            backtrace: backtrace.map(|s| s.into()),
                         });
                     }
                     Err(AllocationError::OutOfMemory) => {} // Block is full, continue search.
@@ -421,8 +421,8 @@ impl MemoryType {
             memory_block_index: new_block_index,
             memory_type_index: self.memory_type_index as usize,
             heap: mem_block.heap.as_ptr(),
-            name: Some(desc.name.to_owned()),
-            backtrace: backtrace.map(|s| s.to_owned()),
+            name: Some(desc.name.into()),
+            backtrace: backtrace.map(|s| s.into()),
         })
     }
 
