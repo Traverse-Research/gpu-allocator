@@ -65,6 +65,19 @@ impl SubAllocator for DedicatedBlockAllocator {
         }
     }
 
+    fn rename_allocation(
+        &mut self,
+        chunk_id: Option<std::num::NonZeroU64>,
+        name: &str,
+    ) -> Result<()> {
+        if chunk_id != std::num::NonZeroU64::new(1) {
+            Err(AllocationError::Internal("Chunk ID must be 1.".into()))
+        } else {
+            self.name = Some(name.into());
+            Ok(())
+        }
+    }
+
     fn report_memory_leaks(
         &self,
         log_level: Level,

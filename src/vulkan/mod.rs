@@ -667,6 +667,25 @@ impl Allocator {
         Ok(())
     }
 
+    pub fn rename_allocation(&mut self, allocation: &mut Allocation, name: &str) -> Result<()> {
+        allocation.name = Some(name.into());
+
+        if allocation.is_null() {
+            return Ok(());
+        }
+
+        let mem_type = &mut self.memory_types[allocation.memory_type_index];
+        let mem_block = mem_type.memory_blocks[allocation.memory_block_index]
+            .as_mut()
+            .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
+
+        mem_block
+            .sub_allocator
+            .rename_allocation(allocation.chunk_id, name)?;
+
+        Ok(())
+    }
+
     pub fn report_memory_leaks(&self, log_level: Level) {
         for (mem_type_i, mem_type) in self.memory_types.iter().enumerate() {
             for (block_i, mem_block) in mem_type.memory_blocks.iter().enumerate() {
