@@ -5,6 +5,9 @@ mod visualizer;
 #[cfg(feature = "visualizer")]
 pub use visualizer::AllocatorVisualizer;
 
+#[cfg(test)]
+mod tests;
+
 use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;
@@ -38,8 +41,20 @@ pub struct Allocation {
     chunk_id: Option<std::num::NonZeroU64>,
     offset: u64,
     size: u64,
-    memory_block_index: usize,
-    memory_type_index: usize,
+    /// Bit-packed memory information.
+    ///
+    /// |tttttbbb bbbbbbbbb bbbbbbbb bbbbbbbb|
+    ///
+    /// Lower 27 bits is the memory block index (`b`), which indicates which
+    /// memory block this allocation is part of. 27 bits allows for up to 2**27
+    /// memory regions to at worst allow be addressible allowing for 9EB with
+    /// the current DEFAULT_HOST_MEMBLOCK_SIZE configuration (which designates
+    /// the minimum block size).
+    ///
+    /// The high 5 bits (`t`) is the memory type index, which indicate the type
+    /// of the memory. It is defined to be at most 32
+    /// (<https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_MAX_MEMORY_TYPES.html>).
+    memory_bits: u32,
     device_memory: vk::DeviceMemory,
     mapped_ptr: Option<std::ptr::NonNull<std::ffi::c_void>>,
 
@@ -56,6 +71,16 @@ unsafe impl Send for Allocation {}
 unsafe impl Sync for Allocation {}
 
 impl Allocation {
+    /// Unpack memory block index.
+    pub(crate) fn memory_block_index(&self) -> usize {
+        unpack_memory_block_index(self.memory_bits)
+    }
+
+    /// Unpack memory type index.
+    pub(crate) fn memory_type_index(&self) -> usize {
+        unpack_memory_type_index(self.memory_bits)
+    }
+
     pub fn chunk_id(&self) -> Option<std::num::NonZeroU64> {
         self.chunk_id
     }
@@ -116,8 +141,7 @@ impl Default for Allocation {
             chunk_id: None,
             offset: 0,
             size: 0,
-            memory_block_index: !0,
-            memory_type_index: !0,
+            memory_bits: !0,
             device_memory: vk::DeviceMemory::null(),
             mapped_ptr: None,
             name: None,
@@ -293,8 +317,7 @@ impl MemoryType {
                 chunk_id: Some(chunk_id),
                 offset,
                 size,
-                memory_block_index: block_index,
-                memory_type_index: self.memory_type_index as usize,
+                memory_bits: pack_memory_bits(block_index, self.memory_type_index),
                 device_memory: mem_block.device_memory,
                 mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
                 name: Some(desc.name.into()),
@@ -326,8 +349,7 @@ impl MemoryType {
                             chunk_id: Some(chunk_id),
                             offset,
                             size,
-                            memory_block_index: mem_block_i,
-                            memory_type_index: self.memory_type_index as usize,
+                            memory_bits: pack_memory_bits(mem_block_i, self.memory_type_index),
                             device_memory: mem_block.device_memory,
                             mapped_ptr,
                             name: Some(desc.name.into()),
@@ -398,8 +420,7 @@ impl MemoryType {
             chunk_id: Some(chunk_id),
             offset,
             size,
-            memory_block_index: new_block_index,
-            memory_type_index: self.memory_type_index as usize,
+            memory_bits: pack_memory_bits(new_block_index, self.memory_type_index),
             device_memory: mem_block.device_memory,
             mapped_ptr,
             name: Some(desc.name.into()),
@@ -408,7 +429,7 @@ impl MemoryType {
     }
 
     fn free(&mut self, allocation: Allocation, device: &ash::Device) -> Result<()> {
-        let block_idx = allocation.memory_block_index;
+        let block_idx = allocation.memory_block_index();
 
         let mem_block = self.memory_blocks[block_idx]
             .as_mut()
@@ -662,7 +683,7 @@ impl Allocator {
             return Ok(());
         }
 
-        self.memory_types[allocation.memory_type_index].free(allocation, &self.device)?;
+        self.memory_types[allocation.memory_type_index()].free(allocation, &self.device)?;
 
         Ok(())
     }
@@ -674,8 +695,8 @@ impl Allocator {
             return Ok(());
         }
 
-        let mem_type = &mut self.memory_types[allocation.memory_type_index];
-        let mem_block = mem_type.memory_blocks[allocation.memory_block_index]
+        let mem_type = &mut self.memory_types[allocation.memory_type_index()];
+        let mem_block = mem_type.memory_blocks[allocation.memory_block_index()]
             .as_mut()
             .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
 
@@ -729,4 +750,25 @@ impl Drop for Allocator {
             }
         }
     }
+}
+
+/// Utility for packing memory bits.
+#[inline]
+fn pack_memory_bits(memory_block_index: usize, memory_type_index: usize) -> u32 {
+    assert!(memory_block_index < 0x8000000);
+    assert!(memory_type_index < 0x20);
+
+    (memory_block_index as u32) | (memory_type_index as u32) << 27
+}
+
+/// Utility for unpacking the memory block index from memory bits.
+#[inline]
+fn unpack_memory_block_index(bits: u32) -> usize {
+    (bits & 0x7ffffff) as usize
+}
+
+/// Utility for unpacking the memory type index from memory bits.
+#[inline]
+fn unpack_memory_type_index(bits: u32) -> usize {
+    (bits >> 27) as usize
 }
