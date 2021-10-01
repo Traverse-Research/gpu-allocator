@@ -140,28 +140,26 @@ impl AllocatorVisualizer {
                                         ui.text(format!("D3D12 heap: {:?}", block.heap));
                                         block.sub_allocator.draw_base_info(ui);
 
-                                        if block.sub_allocator.supports_visualization() {
-                                            if ui.small_button("visualize") {
-                                                match self
-                                                    .selected_blocks
-                                                    .iter()
-                                                    .enumerate()
-                                                    .find_map(|(i, x)| {
-                                                        if x.memory_type_index == mem_type_i
-                                                            && x.block_index == block_i
-                                                        {
-                                                            Some((i, (x)))
-                                                        } else {
-                                                            None
-                                                        }
-                                                    }) {
-                                                    Some(x) => self.focus = Some(x.0),
-                                                    None => self.selected_blocks.push(
-                                                        AllocatorVisualizerBlockWindow::new(
-                                                            mem_type_i, block_i,
-                                                        ),
+                                        if block.sub_allocator.supports_visualization()
+                                            && ui.small_button("visualize")
+                                        {
+                                            match self.selected_blocks.iter().enumerate().find_map(
+                                                |(i, x)| {
+                                                    if x.memory_type_index == mem_type_i
+                                                        && x.block_index == block_i
+                                                    {
+                                                        Some((i, (x)))
+                                                    } else {
+                                                        None
+                                                    }
+                                                },
+                                            ) {
+                                                Some(x) => self.focus = Some(x.0),
+                                                None => self.selected_blocks.push(
+                                                    AllocatorVisualizerBlockWindow::new(
+                                                        mem_type_i, block_i,
                                                     ),
-                                                }
+                                                ),
                                             }
                                         }
                                         ui.unindent();
