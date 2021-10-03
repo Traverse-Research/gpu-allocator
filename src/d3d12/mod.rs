@@ -276,28 +276,29 @@ struct MemoryType {
     active_general_blocks: usize,
 }
 
+struct HeapPropertiesDebug(d3d12::D3D12_HEAP_PROPERTIES);
+
+impl std::fmt::Debug for HeapPropertiesDebug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("D3D12_HEAP_PROPERTIES")
+            .field("Type", &self.0.Type)
+            .field("CPUPageProperty", &self.0.CPUPageProperty)
+            .field("MemoryPoolPreference", &self.0.MemoryPoolPreference)
+            .field("CreationNodeMask", &self.0.CreationNodeMask)
+            .field("VisibleNodeMask", &self.0.VisibleNodeMask)
+            .finish()
+    }
+}
+
 impl std::fmt::Debug for MemoryType {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        fmt.debug_struct("MemoryType")
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("MemoryType")
             .field("memory_blocks", &self.memory_blocks)
             .field("memory_location", &self.memory_location)
             .field("heap_category", &self.heap_category)
-            .field("heap_properties.Type", &self.heap_properties.Type)
             .field(
-                "heap_properties.CPUPageProperty",
-                &self.heap_properties.CPUPageProperty,
-            )
-            .field(
-                "heap_properties.MemoryPoolPreference",
-                &self.heap_properties.MemoryPoolPreference,
-            )
-            .field(
-                "heap_properties.CreationNodeMask",
-                &self.heap_properties.CreationNodeMask,
-            )
-            .field(
-                "heap_properties.VisibleNodeMask",
-                &self.heap_properties.VisibleNodeMask,
+                "heap_properties",
+                &HeapPropertiesDebug(self.heap_properties),
             )
             .field("memory_type_index", &self.memory_type_index)
             .field("active_general_blocks", &self.active_general_blocks)
