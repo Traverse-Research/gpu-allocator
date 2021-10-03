@@ -135,7 +135,7 @@ impl AllocatorVisualizer {
                                                     if x.memory_type_index == mem_type_i
                                                         && x.block_index == block_i
                                                     {
-                                                        Some((i, (x)))
+                                                        Some((i, x))
                                                     } else {
                                                         None
                                                     }
