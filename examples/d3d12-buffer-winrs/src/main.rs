@@ -48,10 +48,11 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
                 .iter()
                 .rev()
                 .find_map(|&(feature_level, feature_level_name)| {
-                    match unsafe { D3D12CreateDevice(&adapter4, feature_level) } {
-                        Ok(device) => {
+                    let mut device = None;
+                    match unsafe { D3D12CreateDevice(&adapter4, feature_level, &mut device) } {
+                        Ok(()) => {
                             info!("Using D3D12 feature level: {}", feature_level_name);
-                            Some(device)
+                            Some(device.unwrap())
                         }
                         Err(e) if e.code() == E_NOINTERFACE => {
                             error!("ID3D12Device interface not supported");
@@ -78,10 +79,12 @@ fn main() -> Result<()> {
     let dxgi_factory = unsafe { CreateDXGIFactory2(0) }?;
 
     let device = create_d3d12_device(&dxgi_factory).expect("Failed to create D3D12 device.");
+    let device_ptr =
+        unsafe { windows::runtime::IntoParam::<ID3D12Device>::into_param(device.clone()).abi() };
 
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
-        device: Dx12DevicePtr(device.abi()),
+        device: Dx12DevicePtr(device_ptr),
         debug_settings: Default::default(),
     })
     .unwrap();
@@ -113,13 +116,15 @@ fn main() -> Result<()> {
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
 
-        let resource: ID3D12Resource = unsafe {
+        let mut resource: Option<ID3D12Resource> = None;
+        unsafe {
             device.CreatePlacedResource(
                 ID3D12Heap::from_abi(allocation.heap().0)?,
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
                 std::ptr::null(),
+                &mut resource,
             )
         }?;
 
@@ -159,13 +164,15 @@ fn main() -> Result<()> {
             })
             .unwrap();
 
-        let resource: ID3D12Resource = unsafe {
+        let mut resource: Option<ID3D12Resource> = None;
+        unsafe {
             device.CreatePlacedResource(
                 ID3D12Heap::from_abi(allocation.heap().0)?,
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
                 std::ptr::null(),
+                &mut resource,
             )
         }?;
 
@@ -205,13 +212,15 @@ fn main() -> Result<()> {
             })
             .unwrap();
 
-        let resource: ID3D12Resource = unsafe {
+        let mut resource: Option<ID3D12Resource> = None;
+        unsafe {
             device.CreatePlacedResource(
                 ID3D12Heap::from_abi(allocation.heap().0)?,
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
                 std::ptr::null(),
+                &mut resource,
             )
         }?;
 
