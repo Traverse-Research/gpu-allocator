@@ -12,7 +12,7 @@
 
 ```toml
 [dependencies]
-gpu-allocator = "0.9.0"
+gpu-allocator = "0.9.1"
 ```
 
 {{readme}}
