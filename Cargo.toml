@@ -12,8 +12,9 @@ keywords = ["vulkan", "memory", "allocator"]
 documentation = "https://docs.rs/gpu-allocator/"
 
 include = [
-    "src/**",
     "Cargo.toml",
+    "LICENSE-*",
+    "src/**",
 ]
 
 [dependencies]
