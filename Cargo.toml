@@ -31,9 +31,7 @@ imgui-winit-support = { version = "0.8", optional = true }
 
 [dev-dependencies]
 ash-window = "0.7"
-hassle-rs = "0.5.2"
 raw-window-handle = "0.3"
-widestring = "0.5"
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
 winit = "0.25"
 
