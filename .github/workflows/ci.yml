@@ -109,7 +109,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: doc
-          args: --no-deps --workspace --all-features
+          args: --no-deps --workspace --all-features --document-private-items
 
   readme:
     runs-on: ubuntu-latest
