@@ -3,8 +3,8 @@ use gpu_allocator::d3d12::{
 };
 use gpu_allocator::MemoryLocation;
 use log::*;
-use windows::{Abi, Interface, Result};
-use windows_api::Win32::{
+use windows::runtime::{Abi, Interface, Result};
+use windows::Win32::{
     Foundation::E_NOINTERFACE,
     Graphics::{
         Direct3D11::{D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_12_0},

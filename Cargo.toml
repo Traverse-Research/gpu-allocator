@@ -33,13 +33,10 @@ imgui-winit-support = { version = "0.8", optional = true }
 ash-window = "0.7"
 raw-window-handle = "0.3"
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
-# windows = "0.21"
-windows = { path = "../../Rust/windows-rs" }
-# windows_bindings = { path = "windows_bindings" }
 winit = "0.25"
 
-[dependencies.windows-api]
-path = "../../Rust/windows-api-rs"
+[dependencies.windows]
+path = "../../Rust/windows-rs"
 features = [
     "Win32_Foundation",
     "Win32_Graphics",
@@ -83,8 +80,3 @@ d3d12 = ["winapi"]
 public-winapi = ["winapi"]
 
 default = ["d3d12", "vulkan", "public-winapi"]
-
-[workspace]
-members = [
-    # "windows_bindings",
-]
