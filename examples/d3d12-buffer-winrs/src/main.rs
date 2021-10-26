@@ -51,7 +51,7 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
                     let mut device = None;
                     match unsafe { D3D12CreateDevice(&adapter4, feature_level, &mut device) } {
                         Ok(()) => {
-                            info!("Using D3D12 feature level: {}", feature_level_name);
+                            println!("Using D3D12 feature level: {}", feature_level_name);
                             Some(device.unwrap())
                         }
                         Err(e) if e.code() == E_NOINTERFACE => {
@@ -59,7 +59,7 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
                             None
                         }
                         Err(e) => {
-                            info!(
+                            println!(
                                 "D3D12 feature level {} not supported: {}",
                                 feature_level_name, e
                             );
@@ -131,7 +131,7 @@ fn main() -> Result<()> {
         drop(resource);
 
         allocator.free(allocation).unwrap();
-        info!("Allocation and deallocation of GpuOnly memory was successful.");
+        println!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
     // Test allocating CPU to GPU memory
@@ -179,7 +179,7 @@ fn main() -> Result<()> {
         drop(resource);
 
         allocator.free(allocation).unwrap();
-        info!("Allocation and deallocation of CpuToGpu memory was successful.");
+        println!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     // Test allocating GPU to CPU memory
@@ -227,7 +227,7 @@ fn main() -> Result<()> {
         drop(resource);
 
         allocator.free(allocation).unwrap();
-        info!("Allocation and deallocation of CpuToGpu memory was successful.");
+        println!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     drop(allocator); // Explicitly drop before destruction of device.
