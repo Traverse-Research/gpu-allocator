@@ -3,7 +3,7 @@ use gpu_allocator::d3d12::{
 };
 use gpu_allocator::MemoryLocation;
 use log::*;
-use windows::runtime::{Abi, Interface, Result};
+use windows::runtime::{Interface, Result};
 use windows::Win32::{
     Foundation::E_NOINTERFACE,
     Graphics::{
@@ -79,12 +79,12 @@ fn main() -> Result<()> {
     let dxgi_factory = unsafe { CreateDXGIFactory2(0) }?;
 
     let device = create_d3d12_device(&dxgi_factory).expect("Failed to create D3D12 device.");
-    let device_ptr =
-        unsafe { windows::runtime::IntoParam::<ID3D12Device>::into_param(device.clone()).abi() };
+
+    let device_ptr: Dx12DevicePtr = unsafe { std::mem::transmute_copy(&device) };
 
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
-        device: Dx12DevicePtr(device_ptr),
+        device: device_ptr,
         debug_settings: Default::default(),
     })
     .unwrap();
@@ -117,9 +117,10 @@ fn main() -> Result<()> {
         let allocation = allocator.allocate(&allocation_desc).unwrap();
 
         let mut resource: Option<ID3D12Resource> = None;
+        let heap: &ID3D12Heap = unsafe { std::mem::transmute(&allocation.heap()) };
         unsafe {
             device.CreatePlacedResource(
-                ID3D12Heap::from_abi(allocation.heap().0)?,
+                heap,
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
@@ -165,9 +166,10 @@ fn main() -> Result<()> {
             .unwrap();
 
         let mut resource: Option<ID3D12Resource> = None;
+        let heap: &ID3D12Heap = unsafe { std::mem::transmute(&allocation.heap()) };
         unsafe {
             device.CreatePlacedResource(
-                ID3D12Heap::from_abi(allocation.heap().0)?,
+                heap,
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
@@ -213,9 +215,10 @@ fn main() -> Result<()> {
             .unwrap();
 
         let mut resource: Option<ID3D12Resource> = None;
+        let heap: &ID3D12Heap = unsafe { std::mem::transmute(&allocation.heap()) };
         unsafe {
             device.CreatePlacedResource(
-                ID3D12Heap::from_abi(allocation.heap().0)?,
+                heap,
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
