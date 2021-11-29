@@ -3,9 +3,6 @@
 use super::Allocator;
 use crate::visualizer::ColorScheme;
 
-use __core::ops::Deref;
-use imgui::*;
-
 // Default value for block visualizer granularity.
 const DEFAULT_BYTES_PER_UNIT: i32 = 1024;
 
@@ -56,7 +53,6 @@ impl AllocatorVisualizer {
         }
 
         window
-            .collapsed(true, Condition::FirstUseEver)
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
             .build(ui, || {
                 use imgui::*;
@@ -271,7 +267,7 @@ impl AllocatorVisualizer {
 
     pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui, opened: Option<&mut bool>) {
         let draw = if let Some(o) = opened.as_ref() {
-            *o.deref()
+            **o
         } else {
             true
         };
