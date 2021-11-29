@@ -43,8 +43,9 @@ impl AllocatorVisualizer {
         self.color_scheme = color_scheme;
     }
 
-    fn render_main_window(&mut self, ui: &imgui::Ui, alloc: &Allocator) {
+    fn render_main_window(&mut self, ui: &imgui::Ui, active: &mut bool, alloc: &Allocator) {
         imgui::Window::new("Allocator visualization")
+            .opened(active)
             .collapsed(true, Condition::FirstUseEver)
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
             .build(ui, || {
@@ -258,8 +259,10 @@ impl AllocatorVisualizer {
         self.focus = None;
     }
 
-    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui) {
-        self.render_main_window(ui, allocator);
-        self.render_memory_block_windows(ui, allocator);
+    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui, active: &mut bool) {
+        if *active {
+            self.render_main_window(ui, active, allocator);
+            self.render_memory_block_windows(ui, allocator);
+        }
     }
 }
