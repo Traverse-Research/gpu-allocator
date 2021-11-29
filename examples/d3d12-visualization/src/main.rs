@@ -429,7 +429,7 @@ fn main() {
             let current_backbuffer = &backbuffers[buffer_index as usize];
 
             let ui = imgui.frame();
-            visualizer.render(&allocator, &ui);
+            visualizer.render(&allocator, &ui, None);
             let imgui_draw_data = ui.render();
 
             unsafe {

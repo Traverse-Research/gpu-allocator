@@ -3,6 +3,7 @@
 use super::Allocator;
 use crate::visualizer::ColorScheme;
 
+use __core::ops::Deref;
 use winapi::um::d3d12::*;
 
 use imgui::*;
@@ -77,9 +78,18 @@ impl AllocatorVisualizer {
         self.color_scheme = color_scheme;
     }
 
-    fn render_main_window(&mut self, ui: &imgui::Ui, active: &mut bool, alloc: &Allocator) {
-        imgui::Window::new("Allocator visualization")
-            .opened(active)
+    fn render_main_window(&mut self, ui: &imgui::Ui, opened: Option<&mut bool>, alloc: &Allocator) {
+        let mut window = imgui::Window::new("Allocator visualization");
+
+        if let Some(opened) = opened {
+            if *opened {
+                window = window.opened(opened);
+            } else {
+                return;
+            }
+        }
+
+        window
             .collapsed(true, Condition::FirstUseEver)
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
             .build(ui, || {
@@ -272,9 +282,16 @@ impl AllocatorVisualizer {
         self.focus = None;
     }
 
-    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui, active: &mut bool) {
-        if *active {
-            self.render_main_window(ui, active, allocator);
+    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui, opened: Option<&mut bool>) {
+        let draw = if let Some(o) = opened.as_ref() {
+            *o.deref()
+        } else {
+            true
+        };
+
+        self.render_main_window(ui, opened, allocator);
+
+        if draw {
             self.render_memory_block_windows(ui, allocator);
         }
     }
