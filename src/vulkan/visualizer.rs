@@ -45,11 +45,7 @@ impl AllocatorVisualizer {
         let mut window = imgui::Window::new("Allocator visualization");
 
         if let Some(opened) = opened {
-            if *opened {
-                window = window.opened(opened);
-            } else {
-                return;
-            }
+            window = window.opened(opened);
         }
 
         window
@@ -265,16 +261,15 @@ impl AllocatorVisualizer {
         self.focus = None;
     }
 
+    /// Renders imgui widgets.
+    /// The `Option<&mut bool>` can be used control and track changes to the opened/closed status of the widget.
+    /// Pass `None` if no control and read-back information is required. This will always render the widget.
+    /// When passing `Some(&mut bool)`:
+    ///  - If the bool is false, the widget won't be drawn.
+    ///  - If the bool is true the widget will be drawn and an (X) closing button will be added to the widget bar.
     pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui, opened: Option<&mut bool>) {
-        let draw = if let Some(o) = opened.as_ref() {
-            **o
-        } else {
-            true
-        };
-
-        self.render_main_window(ui, opened, allocator);
-
-        if draw {
+        if opened != Some(&mut false) {
+            self.render_main_window(ui, opened, allocator);
             self.render_memory_block_windows(ui, allocator);
         }
     }
