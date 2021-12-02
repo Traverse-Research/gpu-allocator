@@ -263,7 +263,7 @@ impl AllocatorVisualizer {
 
     /// Renders imgui widgets.
     ///
-    /// The `Option<&mut bool>` can be used control and track changes to the opened/closed status of the widget.
+    /// The [`Option<&mut bool>`] can be used control and track changes to the opened/closed status of the widget.
     /// Pass [`None`] if no control and readback information is required. This will always render the widget.
     /// When passing `Some(&mut bool)`:
     /// - If [`false`], the widget won't be drawn.
