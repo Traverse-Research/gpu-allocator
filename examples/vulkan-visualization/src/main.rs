@@ -351,7 +351,7 @@ fn main() -> ash::prelude::VkResult<()> {
             visualizer
                 .as_mut()
                 .unwrap()
-                .render(allocator.as_ref().unwrap(), &ui);
+                .render(allocator.as_ref().unwrap(), &ui, None);
 
             // Finish ImGui Frame
             platform.prepare_render(&ui, &window);

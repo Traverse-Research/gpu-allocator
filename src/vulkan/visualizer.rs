@@ -3,8 +3,6 @@
 use super::Allocator;
 use crate::visualizer::ColorScheme;
 
-use imgui::*;
-
 // Default value for block visualizer granularity.
 const DEFAULT_BYTES_PER_UNIT: i32 = 1024;
 
@@ -43,9 +41,14 @@ impl AllocatorVisualizer {
         self.color_scheme = color_scheme;
     }
 
-    fn render_main_window(&mut self, ui: &imgui::Ui, alloc: &Allocator) {
-        imgui::Window::new("Allocator visualization")
-            .collapsed(true, Condition::FirstUseEver)
+    fn render_main_window(&mut self, ui: &imgui::Ui, opened: Option<&mut bool>, alloc: &Allocator) {
+        let mut window = imgui::Window::new("Allocator visualization");
+
+        if let Some(opened) = opened {
+            window = window.opened(opened);
+        }
+
+        window
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
             .build(ui, || {
                 use imgui::*;
@@ -258,8 +261,17 @@ impl AllocatorVisualizer {
         self.focus = None;
     }
 
-    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui) {
-        self.render_main_window(ui, allocator);
-        self.render_memory_block_windows(ui, allocator);
+    /// Renders imgui widgets.
+    ///
+    /// The [`Option<&mut bool>`] can be used control and track changes to the opened/closed status of the widget.
+    /// Pass [`None`] if no control and readback information is required. This will always render the widget.
+    /// When passing `Some(&mut bool)`:
+    /// - If [`false`], the widget won't be drawn.
+    /// - If [`true`], the widget will be drawn and an (X) closing button will be added to the widget bar.
+    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui, opened: Option<&mut bool>) {
+        if opened != Some(&mut false) {
+            self.render_main_window(ui, opened, allocator);
+            self.render_memory_block_windows(ui, allocator);
+        }
     }
 }
