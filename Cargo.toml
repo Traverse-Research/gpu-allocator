@@ -22,7 +22,7 @@ backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
 # Only needed for vulkan.
-ash = { version = "0.33", optional = true }
+ash = { version = "0.34", optional = true }
 # Only needed for d3d12.
 winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
 # Only needed for visualizer.
@@ -30,7 +30,7 @@ imgui = { version = "0.8", optional = true }
 imgui-winit-support = { version = "0.8", optional = true }
 
 [dev-dependencies]
-ash-window = "0.7"
+ash-window = "0.8"
 raw-window-handle = "0.3"
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
 winit = "0.25"
