@@ -44,7 +44,6 @@ pub struct Allocation {
     mapped_ptr: Option<std::ptr::NonNull<std::ffi::c_void>>,
 
     name: Option<Box<str>>,
-    backtrace: Option<Box<str>>,
 }
 
 // Sending is fine because mapped_ptr does not change based on the thread we are in
@@ -121,7 +120,6 @@ impl Default for Allocation {
             device_memory: vk::DeviceMemory::null(),
             mapped_ptr: None,
             name: None,
-            backtrace: None,
         }
     }
 }
@@ -298,7 +296,6 @@ impl MemoryType {
                 device_memory: mem_block.device_memory,
                 mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
                 name: Some(desc.name.into()),
-                backtrace: backtrace.map(|s| s.into()),
             });
         }
 
@@ -331,7 +328,6 @@ impl MemoryType {
                             device_memory: mem_block.device_memory,
                             mapped_ptr,
                             name: Some(desc.name.into()),
-                            backtrace: backtrace.map(|s| s.into()),
                         });
                     }
                     Err(err) => match err {
@@ -403,7 +399,6 @@ impl MemoryType {
             device_memory: mem_block.device_memory,
             mapped_ptr,
             name: Some(desc.name.into()),
-            backtrace: backtrace.map(|s| s.into()),
         })
     }
 
