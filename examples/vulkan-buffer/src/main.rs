@@ -7,7 +7,7 @@ use gpu_allocator::vulkan::{AllocationCreateDesc, Allocator, AllocatorCreateDesc
 use gpu_allocator::MemoryLocation;
 
 fn main() {
-    let entry = unsafe { ash::Entry::new() }.unwrap();
+    let entry = ash::Entry::new();
 
     // Create vulkan instance
     let instance = {
