@@ -21,8 +21,10 @@ include = [
 backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
-# Only needed for vulkan.
-ash = { version = "0.33", optional = true }
+# Only needed for vulkan. Disable the default "linked" feature to prevent forcibly
+# dynamic-linking against a Vulkan library on the system.  This linking, and loading
+# an entrypoint for it is only needed by the examples.
+ash = { version = "0.34", optional = true, default-features = false, features = ["debug"] }
 # Only needed for d3d12.
 winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
 # Only needed for visualizer.
@@ -30,7 +32,7 @@ imgui = { version = "0.8", optional = true }
 imgui-winit-support = { version = "0.8", optional = true }
 
 [dev-dependencies]
-ash-window = "0.7"
+ash-window = "0.8"
 raw-window-handle = "0.3"
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
 winit = "0.25"
@@ -38,12 +40,12 @@ winit = "0.25"
 [[example]]
 name = "vulkan-buffer"
 path = "examples/vulkan-buffer/src/main.rs"
-required-features = ["vulkan"]
+required-features = ["vulkan", "ash/linked"]
 
 [[example]]
 name = "vulkan-visualization"
 path = "examples/vulkan-visualization/src/main.rs"
-required-features = ["vulkan", "visualizer"]
+required-features = ["vulkan", "ash/linked", "visualizer"]
 
 [[example]]
 name = "d3d12-buffer"

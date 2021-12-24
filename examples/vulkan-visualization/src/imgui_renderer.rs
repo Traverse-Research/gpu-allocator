@@ -215,7 +215,10 @@ impl ImGuiRenderer {
                 .src_alpha_blend_factor(vk::BlendFactor::ZERO)
                 .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
                 .alpha_blend_op(vk::BlendOp::ADD)
-                .color_write_mask(vk::ColorComponentFlags::all());
+                .color_write_mask({
+                    use vk::ColorComponentFlags::*;
+                    R | G | B | A
+                });
             let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
                 .logic_op(vk::LogicOp::CLEAR)
                 .attachments(std::slice::from_ref(&attachments));
