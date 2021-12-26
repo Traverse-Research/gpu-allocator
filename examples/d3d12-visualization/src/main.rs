@@ -213,7 +213,7 @@ fn main() {
             };
 
             let raw_window_haver: &dyn HasRawWindowHandle = &window;
-            let hwnd = if let raw_window_handle::RawWindowHandle::Windows(handle) =
+            let hwnd = if let raw_window_handle::RawWindowHandle::Win32(handle) =
                 raw_window_haver.raw_window_handle()
             {
                 handle.hwnd
