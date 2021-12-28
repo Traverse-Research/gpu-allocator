@@ -2,20 +2,21 @@ use gpu_allocator::d3d12::{
     AllocationCreateDesc, Allocator, AllocatorCreateDesc, Dx12DevicePtr, ResourceCategory,
 };
 use gpu_allocator::MemoryLocation;
-use log::*;
-use windows::runtime::{Interface, Result};
+use log::error;
+use windows::core::{Interface, Result};
 use windows::Win32::{
     Foundation::E_NOINTERFACE,
     Graphics::{
-        Direct3D11::{D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_12_0},
+        Direct3D::{D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_12_0},
         Direct3D12::{
             D3D12CreateDevice, ID3D12Device, ID3D12Heap, ID3D12Resource, D3D12_RESOURCE_DESC,
             D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON,
             D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         },
+        Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
         Dxgi::{
             CreateDXGIFactory2, IDXGIAdapter4, IDXGIFactory6, DXGI_ADAPTER_FLAG3_SOFTWARE,
-            DXGI_ERROR_NOT_FOUND, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC,
+            DXGI_ERROR_NOT_FOUND,
         },
     },
 };
@@ -89,7 +90,7 @@ fn main() -> Result<()> {
     })
     .unwrap();
 
-    // Test allocating GPU Only memory
+    // Test allocating Gpu Only memory
     {
         let test_buffer_desc = D3D12_RESOURCE_DESC {
             Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
@@ -111,7 +112,7 @@ fn main() -> Result<()> {
             allocator.device(),
             // Raw structs are binary-compatible
             unsafe { std::mem::transmute(&test_buffer_desc) },
-            "test allocation",
+            "Test allocation (Gpu only)",
             MemoryLocation::GpuOnly,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
@@ -157,7 +158,7 @@ fn main() -> Result<()> {
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
-                name: "test allocation",
+                name: "Test allocation (Cpu To Gpu)",
                 location: MemoryLocation::CpuToGpu,
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,
@@ -206,7 +207,7 @@ fn main() -> Result<()> {
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
-                name: "test allocation",
+                name: "Test allocation (Gpu to Cpu)",
                 location: MemoryLocation::GpuToCpu,
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,
