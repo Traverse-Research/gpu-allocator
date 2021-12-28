@@ -11,7 +11,7 @@ use windows::Win32::{
         Direct3D12::{
             D3D12CreateDevice, ID3D12Device, ID3D12Heap, ID3D12Resource, D3D12_RESOURCE_DESC,
             D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON,
-            D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            D3D12_TEXTURE_LAYOUT_ROW_MAJOR, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
         },
         Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
         Dxgi::{
@@ -94,7 +94,7 @@ fn main() -> Result<()> {
     {
         let test_buffer_desc = D3D12_RESOURCE_DESC {
             Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0, // alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
+            Alignment: D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
             Width: 512,
             Height: 1,
             DepthOrArraySize: 1,
@@ -140,7 +140,7 @@ fn main() -> Result<()> {
     {
         let test_buffer_desc = D3D12_RESOURCE_DESC {
             Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0, // alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
+            Alignment: D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
             Width: 512,
             Height: 1,
             DepthOrArraySize: 1,
@@ -189,7 +189,7 @@ fn main() -> Result<()> {
     {
         let test_buffer_desc = D3D12_RESOURCE_DESC {
             Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0, // alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
+            Alignment: D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
             Width: 512,
             Height: 1,
             DepthOrArraySize: 1,

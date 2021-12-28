@@ -123,7 +123,7 @@ fn main() {
     {
         let test_buffer_desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0, // alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
+            Alignment: d3d12::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
             Width: 512,
             Height: 1,
             DepthOrArraySize: 1,
@@ -171,7 +171,7 @@ fn main() {
     {
         let test_buffer_desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0, // Alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
+            Alignment: d3d12::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
             Width: 512,
             Height: 1,
             DepthOrArraySize: 1,
@@ -228,7 +228,7 @@ fn main() {
     {
         let test_buffer_desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0, // Alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
+            Alignment: d3d12::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
             Width: 512,
             Height: 1,
             DepthOrArraySize: 1,
