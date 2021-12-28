@@ -14,7 +14,7 @@ use imgui_renderer::ImGuiRenderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
 fn main() -> ash::prelude::VkResult<()> {
-    let entry = ash::Entry::new();
+    let entry = unsafe { ash::Entry::load() }.unwrap();
 
     let event_loop = winit::event_loop::EventLoop::new();
 
