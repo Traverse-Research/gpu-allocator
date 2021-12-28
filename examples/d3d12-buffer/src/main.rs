@@ -119,7 +119,7 @@ fn main() {
     })
     .unwrap();
 
-    // Test allocating GPU Only memory
+    // Test allocating Gpu Only memory
     {
         let test_buffer_desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
@@ -140,7 +140,7 @@ fn main() {
         let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
             allocator.device(),
             &test_buffer_desc,
-            "test allocation",
+            "Test allocation (Gpu Only)",
             MemoryLocation::GpuOnly,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
@@ -167,11 +167,11 @@ fn main() {
         info!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
-    // Test allocating CPU to GPU memory
+    // Test allocating Cpu to Gpu memory
     {
         let test_buffer_desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0, // alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
+            Alignment: 0, // Alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
             Width: 512,
             Height: 1,
             DepthOrArraySize: 1,
@@ -194,7 +194,7 @@ fn main() {
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
-                name: "test allocation",
+                name: "Test allocation (Cpu to Gpu)",
                 location: MemoryLocation::CpuToGpu,
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,
@@ -224,11 +224,11 @@ fn main() {
         info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
-    // Test allocating GPU to CPU memory
+    // Test allocating Gpu to Cpu memory
     {
         let test_buffer_desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0, // alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
+            Alignment: 0, // Alias for D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
             Width: 512,
             Height: 1,
             DepthOrArraySize: 1,
@@ -251,7 +251,7 @@ fn main() {
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
-                name: "test allocation",
+                name: "Test allocation (Gpu to Cpu)",
                 location: MemoryLocation::GpuToCpu,
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,

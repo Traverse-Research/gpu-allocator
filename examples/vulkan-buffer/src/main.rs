@@ -96,7 +96,7 @@ fn main() {
     })
     .unwrap();
 
-    // Test allocating GPU Only memory
+    // Test allocating Gpu Only memory
     {
         let test_buffer_info = vk::BufferCreateInfo::builder()
             .size(512)
@@ -111,7 +111,7 @@ fn main() {
                 requirements,
                 location,
                 linear: true,
-                name: "test allocation",
+                name: "Test allocation (Gpu Only)",
             })
             .unwrap();
 
@@ -128,7 +128,7 @@ fn main() {
         println!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
-    // Test allocating CPU to GPU memory
+    // Test allocating Cpu to Gpu memory
     {
         let test_buffer_info = vk::BufferCreateInfo::builder()
             .size(512)
@@ -143,7 +143,7 @@ fn main() {
                 requirements,
                 location,
                 linear: true,
-                name: "test allocation",
+                name: "Test allocation (Cpu to Gpu)",
             })
             .unwrap();
 
@@ -160,7 +160,7 @@ fn main() {
         println!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
-    // Test allocating GPU to CPU memory
+    // Test allocating Gpu to Cpu memory
     {
         let test_buffer_info = vk::BufferCreateInfo::builder()
             .size(512)
@@ -175,7 +175,7 @@ fn main() {
                 requirements,
                 location,
                 linear: true,
-                name: "test allocation",
+                name: "Test allocation (Gpu to Cpu)",
             })
             .unwrap();
 

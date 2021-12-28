@@ -442,7 +442,7 @@ impl MemoryType {
 
         let mem_block = self.memory_blocks[new_block_index]
             .as_mut()
-            .ok_or_else(|| AllocationError::Internal("memory block must be Some".into()))?;
+            .ok_or_else(|| AllocationError::Internal("Memory block must be Some".into()))?;
         let allocation = mem_block.sub_allocator.allocate(
             size,
             alignment,
