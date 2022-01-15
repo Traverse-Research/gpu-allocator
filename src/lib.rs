@@ -164,7 +164,7 @@ pub mod vulkan;
 #[cfg(all(windows, feature = "d3d12"))]
 pub mod d3d12;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MemoryLocation {
     /// The allocated resource is stored at an unknown memory location; let the driver decide what's the best location
     Unknown,
