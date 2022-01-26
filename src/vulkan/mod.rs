@@ -33,7 +33,7 @@ pub struct AllocatorCreateDesc {
     pub buffer_device_address: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Allocation {
     chunk_id: Option<std::num::NonZeroU64>,
     offset: u64,
