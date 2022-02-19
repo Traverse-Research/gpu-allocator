@@ -127,6 +127,7 @@ impl Default for Allocation {
 #[derive(Debug)]
 pub(crate) struct MemoryBlock {
     pub(crate) device_memory: vk::DeviceMemory,
+    #[cfg(feature = "visualizer")]
     pub(crate) size: u64,
     pub(crate) mapped_ptr: *mut std::ffi::c_void,
     pub(crate) sub_allocator: Box<dyn allocator::SubAllocator>,
@@ -184,6 +185,7 @@ impl MemoryBlock {
 
         Ok(Self {
             device_memory,
+            #[cfg(feature = "visualizer")]
             size,
             mapped_ptr,
             sub_allocator,
