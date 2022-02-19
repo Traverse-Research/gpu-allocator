@@ -124,7 +124,7 @@ impl ImGuiRenderer {
             #[allow(clippy::cast_ptr_alignment)]
             let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
                 assert_eq!(vs.len() % 4, 0);
-                std::slice::from_raw_parts(vs.as_ptr() as *const u32, vs.len() / 4)
+                std::slice::from_raw_parts(vs.as_ptr().cast(), vs.len() / 4)
             });
             unsafe { device.create_shader_module(&shader_info, None) }?
         };
@@ -134,7 +134,7 @@ impl ImGuiRenderer {
             #[allow(clippy::cast_ptr_alignment)]
             let shader_info = vk::ShaderModuleCreateInfo::builder().code(unsafe {
                 assert_eq!(ps.len() % 4, 0);
-                std::slice::from_raw_parts(ps.as_ptr() as *const u32, ps.len() / 4)
+                std::slice::from_raw_parts(ps.as_ptr().cast(), ps.len() / 4)
             });
             unsafe { device.create_shader_module(&shader_info, None) }?
         };

@@ -15,7 +15,6 @@ use winapi::um::d3dcommon::*;
 use winapi::um::winuser;
 
 use winapi::shared::minwindef::UINT;
-use winapi::shared::windef::HWND;
 use winapi::shared::winerror;
 use winapi::shared::winerror::{FAILED, SUCCEEDED};
 
@@ -37,19 +36,18 @@ fn find_hardware_adapter(
 ) -> Option<*mut all_dxgi::IDXGIAdapter4> {
     let mut adapter: *mut all_dxgi::IDXGIAdapter4 = std::ptr::null_mut();
     for adapter_index in 0.. {
-        let hr =
-            unsafe { dxgi_factory.EnumAdapters1(adapter_index, &mut adapter as *mut _ as *mut _) };
+        let hr = unsafe {
+            dxgi_factory.EnumAdapters1(
+                adapter_index,
+                <*mut *mut all_dxgi::IDXGIAdapter4>::cast(&mut adapter),
+            )
+        };
         if hr == winerror::DXGI_ERROR_NOT_FOUND {
-            return None;
+            break;
         }
 
-        let mut desc = all_dxgi::DXGI_ADAPTER_DESC3::default();
-        unsafe {
-            adapter
-                .as_ref()
-                .unwrap()
-                .GetDesc3(&mut desc as *mut _ as *mut _)
-        };
+        let mut desc = Default::default();
+        unsafe { adapter.as_ref().unwrap().GetDesc3(&mut desc) };
 
         if (desc.Flags & all_dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
             continue;
@@ -57,7 +55,7 @@ fn find_hardware_adapter(
 
         let hr = unsafe {
             D3D12CreateDevice(
-                adapter as *mut _,
+                adapter.cast(),
                 D3D_FEATURE_LEVEL_12_0,
                 &IID_ID3D12Device,
                 std::ptr::null_mut(),
@@ -68,14 +66,18 @@ fn find_hardware_adapter(
         }
     }
 
-    None // Unreachable
+    None
 }
 
 fn enable_d3d12_debug_layer() -> bool {
     use winapi::um::d3d12sdklayers::ID3D12Debug;
     let mut debug: *mut ID3D12Debug = std::ptr::null_mut();
-    let hr =
-        unsafe { D3D12GetDebugInterface(&ID3D12Debug::uuidof(), &mut debug as *mut _ as *mut _) };
+    let hr = unsafe {
+        D3D12GetDebugInterface(
+            &ID3D12Debug::uuidof(),
+            <*mut *mut ID3D12Debug>::cast(&mut debug),
+        )
+    };
     if FAILED(hr) {
         return false;
     }
@@ -91,10 +93,10 @@ fn create_d3d12_device(adapter: &mut all_dxgi::IDXGIAdapter4) -> *mut ID3D12Devi
     unsafe {
         let mut device: *mut ID3D12Device = std::ptr::null_mut();
         let hr = D3D12CreateDevice(
-            adapter as *mut _ as *mut _,
+            <*mut all_dxgi::IDXGIAdapter4>::cast(adapter),
             D3D_FEATURE_LEVEL_12_0,
             &ID3D12Device::uuidof(),
-            &mut device as *mut _ as *mut _,
+            <*mut *mut ID3D12Device>::cast(&mut device),
         );
         if FAILED(hr) {
             panic!("Failed to create ID3D12Device.");
@@ -158,7 +160,7 @@ fn main() {
             let hr = all_dxgi::CreateDXGIFactory2(
                 dxgi_factory_flags,
                 &all_dxgi::IID_IDXGIFactory6,
-                &mut factory as *mut _ as *mut _,
+                <*mut *mut all_dxgi::IDXGIFactory6>::cast(&mut factory),
             );
 
             if FAILED(hr) {
@@ -186,7 +188,7 @@ fn main() {
             let hr = device.CreateCommandQueue(
                 &desc as *const _,
                 &ID3D12CommandQueue::uuidof(),
-                &mut queue as *mut _ as *mut _,
+                <*mut *mut ID3D12CommandQueue>::cast(&mut queue),
             );
             if FAILED(hr) {
                 panic!("Failed to create command queue.");
@@ -221,12 +223,12 @@ fn main() {
                 panic!("Failed to get HWND.")
             };
             let hr = dxgi_factory.CreateSwapChainForHwnd(
-                queue as *mut _ as *mut _,
-                hwnd as HWND,
+                <*mut ID3D12CommandQueue>::cast(queue),
+                hwnd.cast(),
                 &swap_chain_desc as *const _,
                 std::ptr::null(),
                 std::ptr::null_mut(),
-                &mut swapchain as *mut _ as *mut _,
+                <*mut *mut all_dxgi::IDXGISwapChain3>::cast(&mut swapchain),
             );
             if FAILED(hr) {
                 panic!("Failed to create swapchain. hr: {:#x}", hr);
@@ -245,7 +247,7 @@ fn main() {
             let hr = device.CreateDescriptorHeap(
                 &desc,
                 &IID_ID3D12DescriptorHeap,
-                &mut heap as *mut _ as *mut _,
+                <*mut *mut ID3D12DescriptorHeap>::cast(&mut heap),
             );
             if FAILED(hr) {
                 panic!("Failed to create RTV Descriptor heap");
@@ -261,7 +263,7 @@ fn main() {
                     let hr = swapchain.GetBuffer(
                         i as u32,
                         &ID3D12Resource::uuidof(),
-                        &mut resource as *mut _ as *mut _,
+                        <*mut *mut ID3D12Resource>::cast(&mut resource),
                     );
                     if FAILED(hr) {
                         panic!("Failed to access swapchain buffer {}", i);
@@ -303,7 +305,7 @@ fn main() {
             let hr = device.CreateCommandAllocator(
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
                 &ID3D12CommandAllocator::uuidof(),
-                &mut command_allocator as *mut _ as *mut _,
+                <*mut *mut ID3D12CommandAllocator>::cast(&mut command_allocator),
             );
             if FAILED(hr) {
                 panic!("Failed to create command allocator");
@@ -324,7 +326,7 @@ fn main() {
             let hr = device.CreateDescriptorHeap(
                 &desc as *const _,
                 &IID_ID3D12DescriptorHeap as *const _,
-                &mut heap as *mut _ as *mut _,
+                <*mut *mut ID3D12DescriptorHeap>::cast(&mut heap),
             );
             if FAILED(hr) {
                 panic!("Failed to create descriptor heap.");
@@ -341,7 +343,7 @@ fn main() {
                 command_allocator as *mut _,
                 std::ptr::null_mut(),
                 &ID3D12GraphicsCommandList::uuidof(),
-                &mut command_list as *mut _ as *mut _,
+                <*mut *mut ID3D12GraphicsCommandList>::cast(&mut command_list),
             );
             if FAILED(hr) {
                 panic!("Failed to create command list.");
@@ -351,7 +353,7 @@ fn main() {
         };
 
         let mut allocator = Allocator::new(&AllocatorCreateDesc {
-            device: Dx12DevicePtr(device as *mut _ as *mut _),
+            device: Dx12DevicePtr(<*mut ID3D12Device>::cast(device)),
             debug_settings: Default::default(),
         })
         .unwrap();
@@ -375,7 +377,7 @@ fn main() {
                 0,
                 D3D12_FENCE_FLAG_NONE,
                 &ID3D12Fence::uuidof(),
-                &mut fence as *mut _ as *mut _,
+                <*mut *mut ID3D12Fence>::cast(&mut fence),
             );
             if FAILED(hr) {
                 panic!("Failed to create fence");
@@ -390,8 +392,7 @@ fn main() {
 
         // Submit and wait idle
         unsafe {
-            let lists: [*mut ID3D12CommandList; 1] =
-                [command_list as *mut _ as *mut ID3D12CommandList];
+            let lists = [<*mut ID3D12GraphicsCommandList>::cast(command_list)];
             queue.ExecuteCommandLists(lists.len() as u32, lists.as_ptr());
             fence_value += 1;
             queue.Signal(fence as *mut _, fence_value);
@@ -494,8 +495,7 @@ fn main() {
 
                 command_list.Close();
 
-                let lists: [*mut ID3D12CommandList; 1] =
-                    [command_list as *mut _ as *mut ID3D12CommandList];
+                let lists = [<*mut ID3D12GraphicsCommandList>::cast(command_list)];
                 queue.ExecuteCommandLists(lists.len() as u32, lists.as_ptr());
             }
 
