@@ -19,11 +19,11 @@ use cond_pub_mod::*;
 pub struct Dx12DevicePtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Device> for Dx12DevicePtr {
     fn as_winapi(&self) -> &d3d12::ID3D12Device {
-        let device = self.0 as *const d3d12::ID3D12Device;
+        let device = self.0.cast::<d3d12::ID3D12Device>();
         unsafe { device.as_ref() }.expect("Attempting to cast device null pointer to reference.")
     }
     fn as_winapi_mut(&mut self) -> &mut d3d12::ID3D12Device {
-        let device = self.0 as *mut d3d12::ID3D12Device;
+        let device = self.0.cast::<d3d12::ID3D12Device>();
         unsafe { device.as_mut() }.expect("Attempting to cast device null pointer to reference.")
     }
 }
@@ -31,11 +31,11 @@ impl AbstractWinapiPtr<d3d12::ID3D12Device> for Dx12DevicePtr {
 pub struct Dx12HeapPtr(pub *mut std::ffi::c_void);
 impl AbstractWinapiPtr<d3d12::ID3D12Heap> for Dx12HeapPtr {
     fn as_winapi(&self) -> &d3d12::ID3D12Heap {
-        let heap = self.0 as *const d3d12::ID3D12Heap;
+        let heap = self.0.cast::<d3d12::ID3D12Heap>();
         unsafe { heap.as_ref() }.expect("Attempting to cast heap null pointer to reference.")
     }
     fn as_winapi_mut(&mut self) -> &mut d3d12::ID3D12Heap {
-        let heap = self.0 as *mut d3d12::ID3D12Heap;
+        let heap = self.0.cast::<d3d12::ID3D12Heap>();
         unsafe { heap.as_mut() }.expect("Attempting to cast heap null pointer to reference.")
     }
 }
@@ -187,7 +187,7 @@ impl Allocation {
     /// The result of this function can safely be used to pass into [`d3d12::ID3D12Device::CreatePlacedResource()`].
     /// It's exposed for this reason. Keep in mind to also pass [`Self::offset()`] along to it.
     pub unsafe fn heap(&self) -> Dx12HeapPtr {
-        Dx12HeapPtr(self.heap as *mut _)
+        Dx12HeapPtr(self.heap.cast())
     }
 
     /// Returns the offset of the allocation on the [`d3d12::ID3D12Heap`].
@@ -309,7 +309,7 @@ impl std::fmt::Debug for HeapPropertiesDebug {
 }
 
 impl std::fmt::Debug for MemoryType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MemoryType")
             .field("memory_blocks", &self.memory_blocks)
             .field("memory_location", &self.memory_location)
@@ -330,7 +330,7 @@ impl MemoryType {
     fn allocate(
         &mut self,
         device: &mut d3d12::ID3D12Device,
-        desc: &AllocationCreateDesc,
+        desc: &AllocationCreateDesc<'_>,
         backtrace: Option<&str>,
     ) -> Result<Allocation> {
         let allocation_type = AllocationType::Linear;
@@ -452,14 +452,11 @@ impl MemoryType {
             backtrace,
         );
         let (offset, chunk_id) = match allocation {
-            Ok(value) => value,
-            Err(AllocationError::OutOfMemory) => {
-                return Err(AllocationError::Internal(
-                    "Allocation that must succeed failed. This is a bug in the allocator.".into(),
-                ))
-            }
-            Err(err) => return Err(err),
-        };
+            Err(AllocationError::OutOfMemory) => Err(AllocationError::Internal(
+                "Allocation that must succeed failed. This is a bug in the allocator.".into(),
+            )),
+            a => a,
+        }?;
 
         Ok(Allocation {
             chunk_id: Some(chunk_id),
@@ -514,23 +511,23 @@ pub struct Allocator {
 
 impl Allocator {
     pub fn device(&self) -> Dx12DevicePtr {
-        Dx12DevicePtr(self.device.as_ptr() as *mut _)
+        Dx12DevicePtr(self.device.as_ptr().cast())
     }
 
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
-        let device =
-            std::ptr::NonNull::new(desc.device.0 as *mut d3d12::ID3D12Device).ok_or_else(|| {
+        let device = std::ptr::NonNull::new(desc.device.0.cast::<d3d12::ID3D12Device>())
+            .ok_or_else(|| {
                 AllocationError::InvalidAllocatorCreateDesc("Device pointer is null.".into())
             })?;
 
         unsafe { device.as_ref().AddRef() };
 
         // Query device for feature level
-        let mut options = d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS::default();
+        let mut options = Default::default();
         let hr = unsafe {
             device.as_ref().CheckFeatureSupport(
                 d3d12::D3D12_FEATURE_D3D12_OPTIONS,
-                &mut options as *mut _ as *mut _,
+                <*mut d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS>::cast(&mut options),
                 std::mem::size_of_val(&options) as u32,
             )
         };
@@ -622,7 +619,7 @@ impl Allocator {
         })
     }
 
-    pub fn allocate(&mut self, desc: &AllocationCreateDesc) -> Result<Allocation> {
+    pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
         let size = desc.size;
         let alignment = desc.alignment;
 

@@ -110,14 +110,14 @@ impl ImGuiRenderer {
                 Flags: D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
             };
 
-            let mut blob = std::ptr::null_mut() as *mut ID3DBlob;
-            let mut error_blob = std::ptr::null_mut() as *mut ID3DBlob;
+            let mut blob = std::ptr::null_mut();
+            let mut error_blob = std::ptr::null_mut();
             let hr = unsafe {
                 D3D12SerializeRootSignature(
                     &rsig_desc,
                     D3D_ROOT_SIGNATURE_VERSION_1,
-                    &mut blob as *mut _ as *mut _,
-                    &mut error_blob as *mut _ as *mut _,
+                    &mut blob,
+                    &mut error_blob,
                 )
             };
             if FAILED(hr) {
@@ -137,14 +137,14 @@ impl ImGuiRenderer {
             }
 
             let blob = unsafe { blob.as_ref() }.unwrap();
-            let mut rsig = std::ptr::null_mut() as *mut ID3D12RootSignature;
+            let mut rsig = std::ptr::null_mut();
             let hr = unsafe {
                 device.CreateRootSignature(
                     0,
                     blob.GetBufferPointer(),
                     blob.GetBufferSize(),
                     &ID3D12RootSignature::uuidof(),
-                    &mut rsig as *mut _ as *mut _,
+                    <*mut *mut ID3D12RootSignature>::cast(&mut rsig),
                 )
             };
             if FAILED(hr) {
@@ -275,7 +275,7 @@ impl ImGuiRenderer {
             let hr = device.CreateGraphicsPipelineState(
                 &desc as *const _,
                 &ID3D12PipelineState::uuidof(),
-                &mut pipeline as *mut _ as *mut _,
+                <*mut *mut ID3D12PipelineState>::cast(&mut pipeline),
             );
             if FAILED(hr) {
                 panic!("Failed to create imgui pipeline.");
@@ -327,7 +327,7 @@ impl ImGuiRenderer {
                     D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
                     std::ptr::null(),
                     &ID3D12Resource::uuidof(),
-                    &mut font_image as *mut _ as *mut _,
+                    <*mut *mut ID3D12Resource>::cast(&mut font_image),
                 );
                 if FAILED(hr) {
                     panic!("Failed to create font image. hr: {:#x}", hr);
@@ -436,7 +436,7 @@ impl ImGuiRenderer {
                         D3D12_RESOURCE_STATE_GENERIC_READ,
                         std::ptr::null(),
                         &ID3D12Resource::uuidof(),
-                        &mut upload_buffer as *mut _ as *mut _,
+                        <*mut *mut ID3D12Resource>::cast(&mut upload_buffer),
                     )
                 };
 
@@ -465,7 +465,7 @@ impl ImGuiRenderer {
 
                     std::ptr::copy_nonoverlapping(
                         source_ptr,
-                        mapped_ptr as *mut u8,
+                        mapped_ptr,
                         (layout.Footprint.Width * 4) as usize,
                     );
                 }
@@ -541,7 +541,7 @@ impl ImGuiRenderer {
                     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
                     std::ptr::null(),
                     &ID3D12Resource::uuidof(),
-                    &mut buffer as *mut _ as *mut _,
+                    <*mut *mut ID3D12Resource>::cast(&mut buffer),
                 )
             };
             if FAILED(hr) {
@@ -553,7 +553,7 @@ impl ImGuiRenderer {
                 buffer.as_ref().unwrap().Map(
                     0,
                     std::ptr::null(),
-                    &mut mapped_ptr as *mut _ as *mut _,
+                    <*mut *mut u8>::cast(&mut mapped_ptr),
                 )
             };
 
@@ -596,7 +596,7 @@ impl ImGuiRenderer {
                     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
                     std::ptr::null(),
                     &ID3D12Resource::uuidof(),
-                    &mut buffer as *mut _ as *mut _,
+                    <*mut *mut ID3D12Resource>::cast(&mut buffer),
                 )
             };
             if FAILED(hr) {
@@ -608,7 +608,7 @@ impl ImGuiRenderer {
                 buffer.as_ref().unwrap().Map(
                     0,
                     std::ptr::null(),
-                    &mut mapped_ptr as *mut _ as *mut _,
+                    <*mut *mut u8>::cast(&mut mapped_ptr),
                 )
             };
             (buffer, allocation, mapped_ptr)
@@ -650,7 +650,7 @@ impl ImGuiRenderer {
                     D3D12_RESOURCE_STATE_INDEX_BUFFER,
                     std::ptr::null(),
                     &ID3D12Resource::uuidof(),
-                    &mut buffer as *mut _ as *mut _,
+                    <*mut *mut ID3D12Resource>::cast(&mut buffer),
                 )
             };
             if FAILED(hr) {
@@ -662,7 +662,7 @@ impl ImGuiRenderer {
                 buffer.as_ref().unwrap().Map(
                     0,
                     std::ptr::null(),
-                    &mut mapped_ptr as *mut _ as *mut _,
+                    <*mut *mut u8>::cast(&mut mapped_ptr),
                 )
             };
             (buffer, allocation, mapped_ptr)
@@ -877,7 +877,7 @@ impl ImGuiRenderer {
 pub(crate) fn handle_imgui_event(
     io: &mut imgui::Io,
     window: &winit::window::Window,
-    event: &winit::event::Event<()>,
+    event: &winit::event::Event<'_, ()>,
 ) -> bool {
     use winit::event::{
         DeviceEvent, ElementState, Event, KeyboardInput, MouseButton, MouseScrollDelta, TouchPhase,
@@ -955,7 +955,7 @@ pub(crate) fn handle_imgui_event(
                     MouseButton::Right => io.mouse_down[1] = pressed,
                     MouseButton::Middle => io.mouse_down[2] = pressed,
                     MouseButton::Other(idx @ 0..=4) => io.mouse_down[idx as usize] = pressed,
-                    _ => (),
+                    MouseButton::Other(_) => (),
                 }
 
                 io.want_capture_mouse

@@ -4,15 +4,15 @@ use thiserror::Error;
 pub enum AllocationError {
     #[error("Out of memory")]
     OutOfMemory,
-    #[error("Failed to map memory")]
-    FailedToMap,
+    #[error("Failed to map memory: {0}")]
+    FailedToMap(String),
     #[error("No compatible memory type available")]
     NoCompatibleMemoryTypeFound,
     #[error("Invalid AllocationCreateDesc")]
     InvalidAllocationCreateDesc,
     #[error("Invalid AllocatorCreateDesc {0}")]
     InvalidAllocatorCreateDesc(String),
-    #[error("Internal error {0}")]
+    #[error("Internal error: {0}")]
     Internal(String),
 }
 

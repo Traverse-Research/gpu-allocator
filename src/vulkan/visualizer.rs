@@ -41,7 +41,12 @@ impl AllocatorVisualizer {
         self.color_scheme = color_scheme;
     }
 
-    fn render_main_window(&mut self, ui: &imgui::Ui, opened: Option<&mut bool>, alloc: &Allocator) {
+    fn render_main_window(
+        &mut self,
+        ui: &imgui::Ui<'_>,
+        opened: Option<&mut bool>,
+        alloc: &Allocator,
+    ) {
         let mut window = imgui::Window::new("Allocator visualization");
 
         if let Some(opened) = opened {
@@ -158,7 +163,7 @@ impl AllocatorVisualizer {
             });
     }
 
-    fn render_memory_block_windows(&mut self, ui: &imgui::Ui, alloc: &Allocator) {
+    fn render_memory_block_windows(&mut self, ui: &imgui::Ui<'_>, alloc: &Allocator) {
         // Copy here to workaround the borrow checker.
         let focus_opt = self.focus;
         // Keep track of a list of windows that are signaled by imgui to be closed.
@@ -268,7 +273,7 @@ impl AllocatorVisualizer {
     /// When passing `Some(&mut bool)`:
     /// - If [`false`], the widget won't be drawn.
     /// - If [`true`], the widget will be drawn and an (X) closing button will be added to the widget bar.
-    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui, opened: Option<&mut bool>) {
+    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui<'_>, opened: Option<&mut bool>) {
         if opened != Some(&mut false) {
             self.render_main_window(ui, opened, allocator);
             self.render_memory_block_windows(ui, allocator);

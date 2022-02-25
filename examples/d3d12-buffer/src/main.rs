@@ -1,5 +1,6 @@
 use winapi::shared::{dxgiformat, winerror};
 use winapi::um::{d3d12, d3dcommon};
+use winapi::Interface;
 
 mod all_dxgi {
     pub use winapi::shared::{dxgi1_3::*, dxgi1_6::*, dxgitype::*};
@@ -19,14 +20,14 @@ fn create_d3d12_device(
     for idx in 0.. {
         let mut adapter4: *mut all_dxgi::IDXGIAdapter4 = std::ptr::null_mut();
         let hr = unsafe {
-            dxgi_factory
-                .as_ref()
-                .unwrap()
-                .EnumAdapters1(idx, &mut adapter4 as *mut _ as *mut *mut _)
+            dxgi_factory.as_ref().unwrap().EnumAdapters1(
+                idx,
+                <*mut *mut all_dxgi::IDXGIAdapter4>::cast(&mut adapter4),
+            )
         };
 
         if hr == winerror::DXGI_ERROR_NOT_FOUND {
-            return None;
+            break;
         }
 
         assert_eq!(hr, winerror::S_OK);
@@ -59,10 +60,10 @@ fn create_d3d12_device(
                     let mut device: *mut d3d12::ID3D12Device = std::ptr::null_mut();
                     let hr = unsafe {
                         d3d12::D3D12CreateDevice(
-                            adapter4 as *mut _,
+                            adapter4.cast(),
                             feature_level,
-                            &<d3d12::ID3D12Device as winapi::Interface>::uuidof(),
-                            &mut device as *mut _ as *mut *mut _,
+                            &d3d12::ID3D12Device::uuidof(),
+                            <*mut *mut d3d12::ID3D12Device>::cast(&mut device),
                         )
                     };
                     match hr {
@@ -98,7 +99,7 @@ fn main() {
             all_dxgi::CreateDXGIFactory2(
                 0,
                 &all_dxgi::IID_IDXGIFactory6,
-                &mut dxgi_factory as *mut _ as *mut *mut _,
+                <*mut *mut all_dxgi::IDXGIFactory6>::cast(&mut dxgi_factory),
             )
         };
 
@@ -114,7 +115,7 @@ fn main() {
 
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
-        device: Dx12DevicePtr(device as *mut _),
+        device: Dx12DevicePtr(device.cast()),
         debug_settings: Default::default(),
     })
     .unwrap();
@@ -154,7 +155,7 @@ fn main() {
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
                 std::ptr::null(),
                 &d3d12::IID_ID3D12Resource,
-                &mut resource as *mut _ as *mut _,
+                <*mut *mut d3d12::ID3D12Resource>::cast(&mut resource),
             )
         };
         if hr != winerror::S_OK {
@@ -211,7 +212,7 @@ fn main() {
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
                 std::ptr::null(),
                 &d3d12::IID_ID3D12Resource,
-                &mut resource as *mut _ as *mut _,
+                <*mut *mut d3d12::ID3D12Resource>::cast(&mut resource),
             )
         };
         if hr != winerror::S_OK {
@@ -268,7 +269,7 @@ fn main() {
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
                 std::ptr::null(),
                 &d3d12::IID_ID3D12Resource,
-                &mut resource as *mut _ as *mut _,
+                <*mut *mut d3d12::ID3D12Resource>::cast(&mut resource),
             )
         };
         if hr != winerror::S_OK {

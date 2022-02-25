@@ -127,6 +127,7 @@ impl Default for Allocation {
 #[derive(Debug)]
 pub(crate) struct MemoryBlock {
     pub(crate) device_memory: vk::DeviceMemory,
+    #[cfg(feature = "visualizer")]
     pub(crate) size: u64,
     pub(crate) mapped_ptr: *mut std::ffi::c_void,
     pub(crate) sub_allocator: Box<dyn allocator::SubAllocator>,
@@ -155,8 +156,13 @@ impl MemoryBlock {
                 alloc_info
             };
 
-            unsafe { device.allocate_memory(&alloc_info, None) }
-                .map_err(|_| AllocationError::OutOfMemory)?
+            unsafe { device.allocate_memory(&alloc_info, None) }.map_err(|e| match e {
+                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => AllocationError::OutOfMemory,
+                e => AllocationError::Internal(format!(
+                    "Unexpected error in vkAllocateMemory: {:?}",
+                    e
+                )),
+            })?
         };
 
         let mapped_ptr = if mapped {
@@ -168,9 +174,9 @@ impl MemoryBlock {
                     vk::MemoryMapFlags::empty(),
                 )
             }
-            .map_err(|_| {
+            .map_err(|e| {
                 unsafe { device.free_memory(device_memory, None) };
-                AllocationError::FailedToMap
+                AllocationError::FailedToMap(e.to_string())
             })?
         } else {
             std::ptr::null_mut()
@@ -184,6 +190,7 @@ impl MemoryBlock {
 
         Ok(Self {
             device_memory,
+            #[cfg(feature = "visualizer")]
             size,
             mapped_ptr,
             sub_allocator,
@@ -222,7 +229,7 @@ impl MemoryType {
     fn allocate(
         &mut self,
         device: &ash::Device,
-        desc: &AllocationCreateDesc,
+        desc: &AllocationCreateDesc<'_>,
         granularity: u64,
         backtrace: Option<&str>,
     ) -> Result<Allocation> {
@@ -538,7 +545,7 @@ impl Allocator {
         })
     }
 
-    pub fn allocate(&mut self, desc: &AllocationCreateDesc) -> Result<Allocation> {
+    pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
@@ -585,10 +592,7 @@ impl Allocator {
         if memory_type_index_opt.is_none() {
             let mem_loc_required_bits = match desc.location {
                 MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                MemoryLocation::CpuToGpu => {
-                    vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
-                }
-                MemoryLocation::GpuToCpu => {
+                MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => {
                     vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
                 }
                 MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
