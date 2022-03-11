@@ -149,7 +149,7 @@ impl MemoryBlock {
 
             let allocation_flags = vk::MemoryAllocateFlags::DEVICE_ADDRESS;
             let mut flags_info = vk::MemoryAllocateFlagsInfo::builder().flags(allocation_flags);
-            // TODO(max): Test this based on if the device has this feature enabled or not
+            // TODO(manon): Test this based on if the device has this feature enabled or not
             let alloc_info = if buffer_device_address {
                 alloc_info.push_next(&mut flags_info)
             } else {
@@ -500,7 +500,7 @@ impl Allocator {
             }
         }
 
-        // NOTE(max): Test if there is any HOST_VISIBLE memory that does _not_
+        // NOTE(manon): Test if there is any HOST_VISIBLE memory that does _not_
         //            have the HOST_COHERENT flag, in that case we want to panic,
         //            as we want to do cool things that we do not yet support
         //            with that type of memory :)
