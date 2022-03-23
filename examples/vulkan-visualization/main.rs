@@ -48,15 +48,11 @@ fn main() -> ash::prelude::VkResult<()> {
             .collect();
 
         let surface_extensions = ash_window::enumerate_required_extensions(&window).unwrap();
-        let extensions_names_raw = surface_extensions
-            .iter()
-            .map(|ext| ext.as_ptr())
-            .collect::<Vec<_>>();
 
         let create_info = vk::InstanceCreateInfo::builder()
             .application_info(&appinfo)
             .enabled_layer_names(&layers_names_raw)
-            .enabled_extension_names(&extensions_names_raw);
+            .enabled_extension_names(surface_extensions);
 
         unsafe {
             entry
