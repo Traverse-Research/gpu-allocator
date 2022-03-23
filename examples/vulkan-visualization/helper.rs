@@ -11,7 +11,7 @@ pub(crate) fn record_and_submit_command_buffer<F: FnOnce(&ash::Device, vk::Comma
     signal_semaphores: &[vk::Semaphore],
     f: F,
 ) {
-    unsafe { device.wait_for_fences(&[command_buffer_reuse_fence], true, std::u64::MAX) }.unwrap();
+    unsafe { device.wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX) }.unwrap();
     unsafe { device.reset_fences(&[command_buffer_reuse_fence]) }.unwrap();
     unsafe {
         device.reset_command_buffer(

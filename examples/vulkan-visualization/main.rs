@@ -132,7 +132,7 @@ fn main() -> ash::prelude::VkResult<()> {
         desired_image_count = surface_capabilities.max_image_count;
     }
     let surface_resolution = match surface_capabilities.current_extent.width {
-        std::u32::MAX => vk::Extent2D {
+        u32::MAX => vk::Extent2D {
             width: window_width,
             height: window_height,
         },
@@ -330,7 +330,7 @@ fn main() -> ash::prelude::VkResult<()> {
             let (present_index, _) = unsafe {
                 swapchain_loader.acquire_next_image(
                     swapchain,
-                    std::u64::MAX,
+                    u64::MAX,
                     present_complete_semaphore,
                     vk::Fence::null(),
                 )

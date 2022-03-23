@@ -172,11 +172,7 @@ impl AllocatorVisualizer {
         let color_scheme = &self.color_scheme;
         for (window_i, window) in self.selected_blocks.iter_mut().enumerate() {
             // Determine if this window needs focus.
-            let focus = if let Some(focus_i) = focus_opt {
-                window_i == focus_i
-            } else {
-                false
-            };
+            let focus = focus_opt.map_or(false, |focus_i| window_i == focus_i);
             let mut is_open = true;
             imgui::Window::new(format!(
                 "Block Visualizer##memtype({})block({})",

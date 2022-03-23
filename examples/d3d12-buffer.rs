@@ -139,7 +139,7 @@ fn main() {
         };
 
         let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            allocator.device(),
+            &allocator.device(),
             &test_buffer_desc,
             "Test allocation (Gpu Only)",
             MemoryLocation::GpuOnly,

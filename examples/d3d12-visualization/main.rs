@@ -186,7 +186,7 @@ fn main() {
 
             let mut queue: *mut ID3D12CommandQueue = std::ptr::null_mut();
             let hr = device.CreateCommandQueue(
-                &desc as *const _,
+                &desc,
                 &ID3D12CommandQueue::uuidof(),
                 <*mut *mut ID3D12CommandQueue>::cast(&mut queue),
             );
@@ -202,8 +202,8 @@ fn main() {
 
             let swap_chain_desc = all_dxgi::DXGI_SWAP_CHAIN_DESC1 {
                 BufferCount: FRAMES_IN_FLIGHT as UINT,
-                Width: window_width as UINT,
-                Height: window_height as UINT,
+                Width: window_width,
+                Height: window_height,
                 Format: all_dxgi::DXGI_FORMAT_R8G8B8A8_UNORM,
                 BufferUsage: all_dxgi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
                 SwapEffect: all_dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
@@ -225,7 +225,7 @@ fn main() {
             let hr = dxgi_factory.CreateSwapChainForHwnd(
                 <*mut ID3D12CommandQueue>::cast(queue),
                 hwnd.cast(),
-                &swap_chain_desc as *const _,
+                &swap_chain_desc,
                 std::ptr::null(),
                 std::ptr::null_mut(),
                 <*mut *mut all_dxgi::IDXGISwapChain3>::cast(&mut swapchain),
@@ -324,8 +324,8 @@ fn main() {
 
             let mut heap: *mut ID3D12DescriptorHeap = std::ptr::null_mut();
             let hr = device.CreateDescriptorHeap(
-                &desc as *const _,
-                &IID_ID3D12DescriptorHeap as *const _,
+                &desc,
+                &IID_ID3D12DescriptorHeap,
                 <*mut *mut ID3D12DescriptorHeap>::cast(&mut heap),
             );
             if FAILED(hr) {
@@ -340,7 +340,7 @@ fn main() {
             let hr = device.CreateCommandList(
                 0,
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
-                command_allocator as *mut _,
+                command_allocator,
                 std::ptr::null_mut(),
                 &ID3D12GraphicsCommandList::uuidof(),
                 <*mut *mut ID3D12GraphicsCommandList>::cast(&mut command_list),
@@ -395,7 +395,7 @@ fn main() {
             let lists = [<*mut ID3D12GraphicsCommandList>::cast(command_list)];
             queue.ExecuteCommandLists(lists.len() as u32, lists.as_ptr());
             fence_value += 1;
-            queue.Signal(fence as *mut _, fence_value);
+            queue.Signal(fence, fence_value);
 
             while fence.GetCompletedValue() < fence_value {}
         };
@@ -435,7 +435,7 @@ fn main() {
 
             unsafe {
                 command_allocator.Reset();
-                command_list.Reset(command_allocator as *mut _, std::ptr::null_mut());
+                command_list.Reset(command_allocator, std::ptr::null_mut());
 
                 {
                     let barriers = [transition_resource(
@@ -472,7 +472,7 @@ fn main() {
                         .RSSetScissorRects(scissor_rects.len() as u32, scissor_rects.as_ptr());
                 }
 
-                let mut heaps = [descriptor_heap as *mut _];
+                let mut heaps: [*mut _; 1] = [descriptor_heap];
                 command_list.SetDescriptorHeaps(heaps.len() as u32, heaps.as_mut_ptr());
 
                 imgui_renderer.render(

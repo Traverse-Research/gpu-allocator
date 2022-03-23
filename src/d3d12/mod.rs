@@ -70,9 +70,9 @@ enum HeapCategory {
 impl From<ResourceCategory> for HeapCategory {
     fn from(resource_category: ResourceCategory) -> Self {
         match resource_category {
-            ResourceCategory::Buffer => HeapCategory::Buffer,
-            ResourceCategory::RtvDsvTexture => HeapCategory::RtvDsvTexture,
-            ResourceCategory::OtherTexture => HeapCategory::OtherTexture,
+            ResourceCategory::Buffer => Self::Buffer,
+            ResourceCategory::RtvDsvTexture => Self::RtvDsvTexture,
+            ResourceCategory::OtherTexture => Self::OtherTexture,
         }
     }
 }
@@ -81,15 +81,15 @@ impl From<ResourceCategory> for HeapCategory {
 impl From<&d3d12::D3D12_RESOURCE_DESC> for ResourceCategory {
     fn from(desc: &d3d12::D3D12_RESOURCE_DESC) -> Self {
         if desc.Dimension == d3d12::D3D12_RESOURCE_DIMENSION_BUFFER {
-            ResourceCategory::Buffer
+            Self::Buffer
         } else if (desc.Flags
             & (d3d12::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
                 | d3d12::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
             != 0
         {
-            ResourceCategory::RtvDsvTexture
+            Self::RtvDsvTexture
         } else {
-            ResourceCategory::OtherTexture
+            Self::OtherTexture
         }
     }
 }
@@ -114,7 +114,7 @@ pub struct AllocationCreateDesc<'a> {
 impl<'a> AllocationCreateDesc<'a> {
     #[cfg(feature = "public-winapi")]
     pub fn from_d3d12_resource_desc(
-        device: Dx12DevicePtr,
+        device: &Dx12DevicePtr,
         desc: &d3d12::D3D12_RESOURCE_DESC,
         name: &'a str,
         location: MemoryLocation,
@@ -134,7 +134,7 @@ impl<'a> AllocationCreateDesc<'a> {
 
     #[cfg(not(feature = "public-winapi"))]
     pub fn from_d3d12_resource_desc(
-        device: Dx12DevicePtr,
+        device: &Dx12DevicePtr,
         desc: *const std::ffi::c_void,
         name: &'a str,
         location: MemoryLocation,
@@ -384,7 +384,7 @@ impl MemoryType {
                 size,
                 offset,
                 memory_block_index: block_index,
-                memory_type_index: self.memory_type_index as usize,
+                memory_type_index: self.memory_type_index,
                 heap: mem_block.heap.as_ptr(),
                 name: Some(desc.name.into()),
             });
@@ -409,7 +409,7 @@ impl MemoryType {
                             offset,
                             size,
                             memory_block_index: mem_block_i,
-                            memory_type_index: self.memory_type_index as usize,
+                            memory_type_index: self.memory_type_index,
                             heap: mem_block.heap.as_ptr(),
                             name: Some(desc.name.into()),
                         });
@@ -463,12 +463,13 @@ impl MemoryType {
             offset,
             size,
             memory_block_index: new_block_index,
-            memory_type_index: self.memory_type_index as usize,
+            memory_type_index: self.memory_type_index,
             heap: mem_block.heap.as_ptr(),
             name: Some(desc.name.into()),
         })
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn free(&mut self, allocation: Allocation) -> Result<()> {
         let block_idx = allocation.memory_block_index;
 

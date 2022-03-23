@@ -273,7 +273,7 @@ impl ImGuiRenderer {
 
             let mut pipeline: *mut ID3D12PipelineState = std::ptr::null_mut();
             let hr = device.CreateGraphicsPipelineState(
-                &desc as *const _,
+                &desc,
                 &ID3D12PipelineState::uuidof(),
                 <*mut *mut ID3D12PipelineState>::cast(&mut pipeline),
             );
@@ -311,7 +311,7 @@ impl ImGuiRenderer {
             };
             let font_image_memory = allocator
                 .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
+                    &allocator.device(),
                     &desc,
                     "font_image",
                     MemoryLocation::GpuOnly,
@@ -394,9 +394,9 @@ impl ImGuiRenderer {
                     layouts.len() as u32, // num sub
                     0,                    // intermediate offset
                     layouts.as_mut_ptr(),
-                    &mut num_rows as *mut _,
-                    &mut row_size_in_bytes as *mut _,
-                    &mut total_bytes as *mut _,
+                    &mut num_rows,
+                    &mut row_size_in_bytes,
+                    &mut total_bytes,
                 )
             };
 
@@ -420,7 +420,7 @@ impl ImGuiRenderer {
 
                 let upload_buffer_memory = allocator
                     .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                        allocator.device(),
+                        &allocator.device(),
                         &desc,
                         "font_image upload buffer",
                         MemoryLocation::CpuToGpu,
@@ -525,7 +525,7 @@ impl ImGuiRenderer {
 
             let allocation = allocator
                 .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
+                    &allocator.device(),
                     &desc,
                     "ImGui Constant buffer",
                     MemoryLocation::CpuToGpu,
@@ -580,7 +580,7 @@ impl ImGuiRenderer {
 
             let allocation = allocator
                 .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
+                    &allocator.device(),
                     &desc,
                     "ImGui Vertex buffer",
                     MemoryLocation::CpuToGpu,
@@ -634,7 +634,7 @@ impl ImGuiRenderer {
 
             let allocation = allocator
                 .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
+                    &allocator.device(),
                     &desc,
                     "ImGui Vertex buffer",
                     MemoryLocation::CpuToGpu,
@@ -826,8 +826,8 @@ impl ImGuiRenderer {
             ib_offset += indices.len();
 
             unsafe {
-                cmd.IASetVertexBuffers(0, 1, &vbv as *const _);
-                cmd.IASetIndexBuffer(&ibv as *const _);
+                cmd.IASetVertexBuffers(0, 1, &vbv);
+                cmd.IASetIndexBuffer(&ibv);
             };
             for command in draw_list.commands() {
                 match command {
@@ -839,7 +839,7 @@ impl ImGuiRenderer {
                             bottom: cmd_params.clip_rect[3] as i32,
                         };
                         unsafe {
-                            cmd.RSSetScissorRects(1, &scissor_rect as *const _);
+                            cmd.RSSetScissorRects(1, &scissor_rect);
                             cmd.DrawIndexedInstanced(
                                 count as u32,
                                 1,

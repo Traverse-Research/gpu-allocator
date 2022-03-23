@@ -60,7 +60,7 @@ fn has_granularity_conflict(type0: AllocationType, type1: AllocationType) -> boo
 }
 
 impl FreeListAllocator {
-    pub(crate) fn new(size: u64) -> FreeListAllocator {
+    pub(crate) fn new(size: u64) -> Self {
         #[allow(clippy::unwrap_used)]
         let initial_chunk_id = std::num::NonZeroU64::new(1).unwrap();
 
@@ -95,7 +95,7 @@ impl FreeListAllocator {
 
     /// Generates a new unique chunk ID
     fn get_new_chunk_id(&mut self) -> Result<std::num::NonZeroU64> {
-        if self.chunk_id_counter == std::u64::MAX {
+        if self.chunk_id_counter == u64::MAX {
             // End of chunk id counter reached, no more allocations are possible.
             return Err(AllocationError::OutOfMemory);
         }

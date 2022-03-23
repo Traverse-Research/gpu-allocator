@@ -299,7 +299,7 @@ impl MemoryType {
                 offset,
                 size,
                 memory_block_index: block_index,
-                memory_type_index: self.memory_type_index as usize,
+                memory_type_index: self.memory_type_index,
                 device_memory: mem_block.device_memory,
                 mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
                 name: Some(desc.name.into()),
@@ -331,7 +331,7 @@ impl MemoryType {
                             offset,
                             size,
                             memory_block_index: mem_block_i,
-                            memory_type_index: self.memory_type_index as usize,
+                            memory_type_index: self.memory_type_index,
                             device_memory: mem_block.device_memory,
                             mapped_ptr,
                             name: Some(desc.name.into()),
@@ -402,13 +402,14 @@ impl MemoryType {
             offset,
             size,
             memory_block_index: new_block_index,
-            memory_type_index: self.memory_type_index as usize,
+            memory_type_index: self.memory_type_index,
             device_memory: mem_block.device_memory,
             mapped_ptr,
             name: Some(desc.name.into()),
         })
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn free(&mut self, allocation: Allocation, device: &ash::Device) -> Result<()> {
         let block_idx = allocation.memory_block_index;
 

@@ -96,7 +96,7 @@ let buffer_desc = d3d12::D3D12_RESOURCE_DESC {
     Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
 };
 let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-    allocator.device(),
+    &allocator.device(),
     &buffer_desc,
     "Example allocation",
     MemoryLocation::GpuOnly,
