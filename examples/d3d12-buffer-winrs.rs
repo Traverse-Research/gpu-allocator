@@ -155,7 +155,7 @@ fn main() -> Result<()> {
             Flags: D3D12_RESOURCE_FLAG_NONE,
         };
 
-        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, 1, &test_buffer_desc) };
+        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, &[test_buffer_desc]) };
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
@@ -204,7 +204,7 @@ fn main() -> Result<()> {
             Flags: D3D12_RESOURCE_FLAG_NONE,
         };
 
-        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, 1, &test_buffer_desc) };
+        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, &[test_buffer_desc]) };
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
