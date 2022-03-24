@@ -55,27 +55,22 @@ features = [
 
 [[example]]
 name = "vulkan-buffer"
-path = "examples/vulkan-buffer/src/main.rs"
 required-features = ["vulkan", "ash/loaded"]
 
 [[example]]
 name = "vulkan-visualization"
-path = "examples/vulkan-visualization/src/main.rs"
 required-features = ["vulkan", "ash/loaded", "visualizer"]
 
 [[example]]
 name = "d3d12-buffer"
-path = "examples/d3d12-buffer/src/main.rs"
 required-features = ["d3d12", "public-winapi"]
 
 [[example]]
 name = "d3d12-buffer-winrs"
-path = "examples/d3d12-buffer-winrs/src/main.rs"
 required-features = ["d3d12"]
 
 [[example]]
 name = "d3d12-visualization"
-path = "examples/d3d12-visualization/src/main.rs"
 required-features = ["d3d12", "public-winapi", "visualizer"]
 
 
