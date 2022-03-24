@@ -29,8 +29,20 @@ ash = { version = ">=0.34, <=0.37", optional = true, default-features = false, f
 imgui = { version = "0.8", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-# Only needed for d3d12.
+# Only needed for public-winapi interop helpers
 winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
+
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.34"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+]
+optional = true
 
 [dev-dependencies]
 # Enable the "loaded" feature to be able to access the Vulkan entrypoint.
@@ -78,7 +90,8 @@ required-features = ["d3d12", "public-winapi", "visualizer"]
 [features]
 visualizer = ["imgui"]
 vulkan = ["ash"]
-d3d12 = ["winapi"]
+d3d12 = ["windows"]
+# Expose helper functionality for winapi types to interface with gpu-allocator, which is primarily windows-rs driven
 public-winapi = ["winapi"]
 
-default = ["d3d12", "vulkan", "public-winapi"]
+default = ["d3d12", "vulkan"]

@@ -1,3 +1,4 @@
+//! Example showcasing [`winapi`] interop with [`gpu-allocator`] which is driven by the [`windows`] crate.
 use winapi::shared::{dxgiformat, winerror};
 use winapi::um::{d3d12, d3dcommon};
 use winapi::Interface;
@@ -9,8 +10,7 @@ mod all_dxgi {
 use log::*;
 
 use gpu_allocator::d3d12::{
-    AbstractWinapiPtr, AllocationCreateDesc, Allocator, AllocatorCreateDesc, Dx12DevicePtr,
-    ResourceCategory,
+    AllocationCreateDesc, Allocator, AllocatorCreateDesc, ResourceCategory, ToWinapi, ToWindows,
 };
 use gpu_allocator::MemoryLocation;
 
@@ -68,7 +68,7 @@ fn create_d3d12_device(
                     };
                     match hr {
                         winapi::shared::winerror::S_OK => {
-                            info!("Using D3D12 feature level: {}.", feature_level_name);
+                            println!("Using D3D12 feature level: {}.", feature_level_name);
                             Some(device)
                         }
                         winapi::shared::winerror::E_NOINTERFACE => {
@@ -115,10 +115,12 @@ fn main() {
 
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
-        device: Dx12DevicePtr(device.cast()),
+        device: device.as_windows().clone(),
         debug_settings: Default::default(),
     })
     .unwrap();
+
+    let device = unsafe { device.as_ref() }.unwrap();
 
     // Test allocating Gpu Only memory
     {
@@ -138,8 +140,8 @@ fn main() {
             Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
         };
 
-        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            &allocator.device(),
+        let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+            device,
             &test_buffer_desc,
             "Test allocation (Gpu Only)",
             MemoryLocation::GpuOnly,
@@ -148,8 +150,8 @@ fn main() {
 
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
-            device.as_ref().unwrap().CreatePlacedResource(
-                allocation.heap().as_winapi_mut(),
+            device.CreatePlacedResource(
+                allocation.heap().as_winapi() as *mut _,
                 allocation.offset(),
                 &test_buffer_desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -165,7 +167,7 @@ fn main() {
         unsafe { resource.as_ref().unwrap().Release() };
 
         allocator.free(allocation).unwrap();
-        info!("Allocation and deallocation of GpuOnly memory was successful.");
+        println!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
     // Test allocating Cpu to Gpu memory
@@ -186,12 +188,7 @@ fn main() {
             Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
         };
 
-        let alloc_info = unsafe {
-            device
-                .as_ref()
-                .unwrap()
-                .GetResourceAllocationInfo(0, 1, &test_buffer_desc)
-        };
+        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, 1, &test_buffer_desc) };
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
@@ -205,8 +202,8 @@ fn main() {
 
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
-            device.as_ref().unwrap().CreatePlacedResource(
-                allocation.heap().as_winapi_mut(),
+            device.CreatePlacedResource(
+                allocation.heap().as_winapi() as *mut _,
                 allocation.offset(),
                 &test_buffer_desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -222,7 +219,7 @@ fn main() {
         unsafe { resource.as_ref().unwrap().Release() };
 
         allocator.free(allocation).unwrap();
-        info!("Allocation and deallocation of CpuToGpu memory was successful.");
+        println!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     // Test allocating Gpu to Cpu memory
@@ -243,12 +240,7 @@ fn main() {
             Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
         };
 
-        let alloc_info = unsafe {
-            device
-                .as_ref()
-                .unwrap()
-                .GetResourceAllocationInfo(0, 1, &test_buffer_desc)
-        };
+        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, 1, &test_buffer_desc) };
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
@@ -262,8 +254,8 @@ fn main() {
 
         let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
         let hr = unsafe {
-            device.as_ref().unwrap().CreatePlacedResource(
-                allocation.heap().as_winapi_mut(),
+            device.CreatePlacedResource(
+                allocation.heap().as_winapi() as *mut _,
                 allocation.offset(),
                 &test_buffer_desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -279,10 +271,10 @@ fn main() {
         unsafe { resource.as_ref().unwrap().Release() };
 
         allocator.free(allocation).unwrap();
-        info!("Allocation and deallocation of CpuToGpu memory was successful.");
+        println!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     drop(allocator); // Explicitly drop before destruction of device.
-    unsafe { device.as_ref().unwrap().Release() };
+    unsafe { device.Release() };
     unsafe { dxgi_factory.as_ref().unwrap().Release() };
 }
