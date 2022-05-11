@@ -23,7 +23,7 @@ log = "0.4"
 thiserror = "1.0"
 # Only needed for vulkan.  Disable all default features as good practice,
 # such as the ability to link/load a Vulkan library.
-ash = { version = "0.36", optional = true, default-features = false, features = ["debug"] }
+ash = { version = "0.37", optional = true, default-features = false, features = ["debug"] }
 # Only needed for visualizer.
 imgui = { version = "0.8", optional = true }
 
@@ -33,7 +33,7 @@ winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "
 
 [dev-dependencies]
 # Enable the "loaded" feature to be able to access the Vulkan entrypoint.
-ash = { version = "0.36", default-features = false, features = ["debug", "loaded"] }
+ash = { version = "0.37", default-features = false, features = ["debug", "loaded"] }
 ash-window = "0.9.1"
 raw-window-handle = "0.4"
 winit = "0.26"
