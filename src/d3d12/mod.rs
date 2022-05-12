@@ -152,6 +152,9 @@ pub struct AllocationCreateDesc<'a> {
 
 impl<'a> AllocationCreateDesc<'a> {
     /// Helper conversion function utilizing [`winapi`] types.
+    ///
+    /// This function is also available for [`windows::Win32::Graphics::Direct3D12`]
+    /// types as [`from_d3d12_resource_desc()`][Self::from_d3d12_resource_desc()].
     #[cfg(feature = "public-winapi")]
     pub fn from_winapi_d3d12_resource_desc(
         device: *const winapi_d3d12::ID3D12Device,
