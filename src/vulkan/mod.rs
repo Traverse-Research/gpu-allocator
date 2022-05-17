@@ -64,8 +64,8 @@ impl Allocation {
     /// without this library, because that will lead to undefined behavior.
     ///
     /// # Safety
-    /// The result of this function can safely be used to pass into [`vk::DeviceFnV1_0::bind_buffer_memory()`],
-    /// [`vk::DeviceFnV1_0::bind_image_memory()`] etc. It is exposed for this reason. Keep in mind to also
+    /// The result of this function can safely be used to pass into [`ash::Device::bind_buffer_memory()`],
+    /// [`ash::Device::bind_image_memory()`] etc. It is exposed for this reason. Keep in mind to also
     /// pass [`Self::offset()`] along to those.
     pub unsafe fn memory(&self) -> vk::DeviceMemory {
         self.device_memory
