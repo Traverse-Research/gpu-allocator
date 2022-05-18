@@ -50,7 +50,7 @@ impl SubAllocatorVisualizer for FreeListAllocator {
             loop {
                 // Calculate how large the block should be. We take in account the size of the chunk,
                 // and the amount of space that is left on the line.
-                let units_to_draw = bytes_to_draw as f32 / bytes_per_unit as f32;
+                let units_to_draw = bytes_to_draw / bytes_per_unit as f32;
                 let units_left_on_line = line_width - line_x;
                 let units_to_draw = units_to_draw.min(units_left_on_line);
                 // Determine bounds of chunk line
@@ -92,7 +92,7 @@ impl SubAllocatorVisualizer for FreeListAllocator {
                     line_y += LINE_HEIGHT + LINE_SPACING;
                 }
                 // Calculate how many bytes have been drawn, and subtract that from the number of bytes left to draw
-                let bytes_drawn = units_to_draw as f32 * bytes_per_unit as f32;
+                let bytes_drawn = units_to_draw * bytes_per_unit as f32;
                 bytes_to_draw -= bytes_drawn;
                 // Exit when there are no more bytes to draw.
                 if bytes_to_draw < 1.0f32 {

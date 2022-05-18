@@ -110,7 +110,7 @@ fn main() -> Result<()> {
         };
 
         let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            allocator.device(),
+            &allocator.device(),
             // Raw structs are binary-compatible
             unsafe { std::mem::transmute(&test_buffer_desc) },
             "Test allocation (Gpu only)",
