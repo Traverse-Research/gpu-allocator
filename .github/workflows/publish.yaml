@@ -1,0 +1,22 @@
+name: Publish
+
+on:
+  push:
+    tags:
+    paths: "/Cargo.toml"
+
+jobs:
+  Publish:
+    if: github.repository_owner == 'Traverse-Research'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Publish
+        uses: actions-rs/cargo@v1
+        with:
+          command: publish
+          args: --token ${{ secrets.cratesio_token }}
