@@ -121,7 +121,7 @@ jobs:
           toolchain: stable
           override: true
       - name: Use cached cargo-readme
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cargo-readme-cache
         with:
           path: ~/.cargo/bin/cargo-readme
