@@ -255,21 +255,6 @@ impl Allocation {
     }
 }
 
-// TODO: Was this ever used??
-// impl Default for Allocation {
-//     fn default() -> Self {
-//         Self {
-//             chunk_id: None,
-//             offset: 0,
-//             size: 0,
-//             memory_block_index: !0,
-//             memory_type_index: !0,
-//             heap: None,
-//             name: None,
-//         }
-//     }
-// }
-
 #[derive(Debug)]
 struct MemoryBlock {
     heap: ID3D12Heap,

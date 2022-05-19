@@ -92,6 +92,6 @@ visualizer = ["imgui"]
 vulkan = ["ash"]
 d3d12 = ["windows"]
 # Expose helper functionality for winapi types to interface with gpu-allocator, which is primarily windows-rs driven
-public-winapi = ["winapi"]
+public-winapi = ["dep:winapi"]
 
 default = ["d3d12", "vulkan"]
