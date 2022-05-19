@@ -1,5 +1,12 @@
 //! This crate provides a fully written in Rust memory allocator for Vulkan and DirectX 12.
 //!
+//! ## [Windows-rs] and [winapi]
+//!
+//! `gpu-allocator` recently migrated from [winapi] to [windows-rs] but still provides convenient helpers to convert to and from [winapi] types, enabled when compiling with the `public-winapi` crate feature.
+//!
+//! [Windows-rs]: https://github.com/microsoft/windows-rs
+//! [winapi]: https://github.com/retep998/winapi-rs
+//!
 //! ## Setting up the Vulkan memory allocator
 //!
 //! ```no_run
@@ -76,7 +83,6 @@
 //! # #[cfg(feature = "d3d12")]
 //! # fn main() {
 //! use gpu_allocator::d3d12::*;
-//! # use winapi::um::d3d12;
 //! # let device = todo!();
 //!
 //! let mut allocator = Allocator::new(&AllocatorCreateDesc {
@@ -91,33 +97,32 @@
 //! ## Simple d3d12 allocation example
 //!
 //! ```no_run
-//! # #[cfg(all(feature = "d3d12", feature = "public-winapi"))]
-//! # fn main() {
+//! # #[cfg(feature = "d3d12")]
+//! # fn main() -> windows::core::Result<()> {
 //! use gpu_allocator::d3d12::*;
 //! use gpu_allocator::MemoryLocation;
-//! # use winapi::um::d3d12;
-//! # use winapi::shared::{dxgiformat, dxgitype, winerror};
-//! # let device: *mut d3d12::ID3D12Device = todo!();
+//! # use windows::Win32::Graphics::{Dxgi, Direct3D12};
+//! # let device = todo!();
 //!
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
-//! #     device: Dx12DevicePtr(device as *mut _),
+//! #     device: device,
 //! #     debug_settings: Default::default(),
 //! # }).unwrap();
 //!
-//! let buffer_desc = d3d12::D3D12_RESOURCE_DESC {
-//!     Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
+//! let buffer_desc = Direct3D12::D3D12_RESOURCE_DESC {
+//!     Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
 //!     Alignment: 0,
 //!     Width: 512,
 //!     Height: 1,
 //!     DepthOrArraySize: 1,
 //!     MipLevels: 1,
-//!     Format: dxgiformat::DXGI_FORMAT_UNKNOWN,
-//!     SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+//!     Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
+//!     SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
 //!         Count: 1,
 //!         Quality: 0,
 //!     },
-//!     Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-//!     Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
+//!     Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+//!     Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
 //! };
 //! let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
 //!     &allocator.device(),
@@ -126,27 +131,24 @@
 //!     MemoryLocation::GpuOnly,
 //! );
 //! let allocation = allocator.allocate(&allocation_desc).unwrap();
-//! let mut resource: *mut d3d12::ID3D12Resource = std::ptr::null_mut();
+//! let mut resource: Option<Direct3D12::ID3D12Resource> = None;
 //! let hr = unsafe {
-//!     device.as_ref().unwrap().CreatePlacedResource(
-//!         allocation.heap().as_winapi_mut(),
+//!     device.CreatePlacedResource(
+//!         allocation.heap(),
 //!         allocation.offset(),
 //!         &buffer_desc,
-//!         d3d12::D3D12_RESOURCE_STATE_COMMON,
+//!         Direct3D12::D3D12_RESOURCE_STATE_COMMON,
 //!         std::ptr::null(),
-//!         &d3d12::IID_ID3D12Resource,
-//!         &mut resource as *mut _ as *mut _,
+//!         &mut resource,
 //!     )
-//! };
-//! if hr != winerror::S_OK {
-//!     panic!("Failed to create placed resource.");
-//! }
+//! }?;
 //!
 //! // Cleanup
-//! unsafe { resource.as_ref().unwrap().Release() };
+//! drop(resource);
 //! allocator.free(allocation).unwrap();
+//! # Ok(())
 //! # }
-//! # #[cfg(not(all(feature = "d3d12", feature="public-winapi")))]
+//! # #[cfg(not(feature = "d3d12"))]
 //! # fn main() {}
 //! ```
 

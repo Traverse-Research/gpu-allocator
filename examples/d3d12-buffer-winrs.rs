@@ -1,5 +1,6 @@
+//! Example showcasing [`gpu-allocator`] with types and functions from the [`windows`] crate.
 use gpu_allocator::d3d12::{
-    AllocationCreateDesc, Allocator, AllocatorCreateDesc, Dx12DevicePtr, ResourceCategory,
+    AllocationCreateDesc, Allocator, AllocatorCreateDesc, ResourceCategory,
 };
 use gpu_allocator::MemoryLocation;
 use log::error;
@@ -9,7 +10,7 @@ use windows::Win32::{
     Graphics::{
         Direct3D::{D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_12_0},
         Direct3D12::{
-            D3D12CreateDevice, ID3D12Device, ID3D12Heap, ID3D12Resource,
+            D3D12CreateDevice, ID3D12Device, ID3D12Resource,
             D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT, D3D12_RESOURCE_DESC,
             D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON,
             D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
@@ -82,11 +83,9 @@ fn main() -> Result<()> {
 
     let device = create_d3d12_device(&dxgi_factory).expect("Failed to create D3D12 device.");
 
-    let device_ptr: Dx12DevicePtr = unsafe { std::mem::transmute_copy(&device) };
-
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
-        device: device_ptr,
+        device: device.clone(),
         debug_settings: Default::default(),
     })
     .unwrap();
@@ -110,19 +109,17 @@ fn main() -> Result<()> {
         };
 
         let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            &allocator.device(),
-            // Raw structs are binary-compatible
-            unsafe { std::mem::transmute(&test_buffer_desc) },
+            allocator.device(),
+            &test_buffer_desc,
             "Test allocation (Gpu only)",
             MemoryLocation::GpuOnly,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
 
         let mut resource: Option<ID3D12Resource> = None;
-        let heap: &ID3D12Heap = unsafe { std::mem::transmute(&allocation.heap()) };
         unsafe {
             device.CreatePlacedResource(
-                heap,
+                allocation.heap(),
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
@@ -155,7 +152,7 @@ fn main() -> Result<()> {
             Flags: D3D12_RESOURCE_FLAG_NONE,
         };
 
-        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, 1, &test_buffer_desc) };
+        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, &[test_buffer_desc]) };
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
@@ -168,10 +165,9 @@ fn main() -> Result<()> {
             .unwrap();
 
         let mut resource: Option<ID3D12Resource> = None;
-        let heap: &ID3D12Heap = unsafe { std::mem::transmute(&allocation.heap()) };
         unsafe {
             device.CreatePlacedResource(
-                heap,
+                allocation.heap(),
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
@@ -204,7 +200,7 @@ fn main() -> Result<()> {
             Flags: D3D12_RESOURCE_FLAG_NONE,
         };
 
-        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, 1, &test_buffer_desc) };
+        let alloc_info = unsafe { device.GetResourceAllocationInfo(0, &[test_buffer_desc]) };
 
         let allocation = allocator
             .allocate(&AllocationCreateDesc {
@@ -217,10 +213,9 @@ fn main() -> Result<()> {
             .unwrap();
 
         let mut resource: Option<ID3D12Resource> = None;
-        let heap: &ID3D12Heap = unsafe { std::mem::transmute(&allocation.heap()) };
         unsafe {
             device.CreatePlacedResource(
-                heap,
+                allocation.heap(),
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
@@ -234,8 +229,6 @@ fn main() -> Result<()> {
         allocator.free(allocation).unwrap();
         println!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
-
-    drop(allocator); // Explicitly drop before destruction of device.
 
     Ok(())
 }

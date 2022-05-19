@@ -3,7 +3,7 @@
 use super::Allocator;
 use crate::visualizer::ColorScheme;
 
-use winapi::um::d3d12::*;
+use windows::Win32::Graphics::Direct3D12::*;
 
 // Default value for block visualizer granularity.
 const DEFAULT_BYTES_PER_UNIT: i32 = 1024;
@@ -14,6 +14,7 @@ struct AllocatorVisualizerBlockWindow {
     bytes_per_unit: i32,
     show_backtraces: bool,
 }
+
 impl AllocatorVisualizerBlockWindow {
     fn new(memory_type_index: usize, block_index: usize) -> Self {
         Self {
@@ -24,13 +25,14 @@ impl AllocatorVisualizerBlockWindow {
         }
     }
 }
+
 pub struct AllocatorVisualizer {
     selected_blocks: Vec<AllocatorVisualizerBlockWindow>,
     focus: Option<usize>,
     color_scheme: ColorScheme,
 }
 
-fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> String {
+fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> &'static str {
     let names = [
         "D3D12_HEAP_TYPE_DEFAULT_INVALID",
         "D3D12_HEAP_TYPE_DEFAULT",
@@ -39,10 +41,10 @@ fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> String {
         "D3D12_HEAP_TYPE_CUSTOM",
     ];
 
-    names[heap_type as usize].to_owned()
+    names[heap_type.0 as usize]
 }
 
-fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> String {
+fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> &'static str {
     let names = [
         "D3D12_CPU_PAGE_PROPERTY_UNKNOWN",
         "D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE",
@@ -50,16 +52,17 @@ fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> String {
         "D3D12_CPU_PAGE_PROPERTY_WRITE_BACK",
     ];
 
-    names[prop as usize].to_owned()
+    names[prop.0 as usize]
 }
-fn format_memory_pool(pool: D3D12_MEMORY_POOL) -> String {
+
+fn format_memory_pool(pool: D3D12_MEMORY_POOL) -> &'static str {
     let names = [
         "D3D12_MEMORY_POOL_UNKNOWN",
         "D3D12_MEMORY_POOL_L0",
         "D3D12_MEMORY_POOL_L1",
     ];
 
-    names[pool as usize].to_owned()
+    names[pool.0 as usize]
 }
 
 impl AllocatorVisualizer {
@@ -112,17 +115,17 @@ impl AllocatorVisualizer {
                             ui.text(format!(
                                 "Heap Type: {} ({})",
                                 format_heap_type(mem_type.heap_properties.Type),
-                                mem_type.heap_properties.Type
+                                mem_type.heap_properties.Type.0
                             ));
                             ui.text(format!(
                                 "CpuPageProperty: {} ({})",
                                 format_cpu_page_property(mem_type.heap_properties.CPUPageProperty),
-                                mem_type.heap_properties.CPUPageProperty
+                                mem_type.heap_properties.CPUPageProperty.0
                             ));
                             ui.text(format!(
                                 "MemoryPoolPreference: {} ({})",
                                 format_memory_pool(mem_type.heap_properties.MemoryPoolPreference),
-                                mem_type.heap_properties.MemoryPoolPreference
+                                mem_type.heap_properties.MemoryPoolPreference.0
                             ));
                             ui.text(format!("total block size: {} KiB", total_block_size / 1024));
                             ui.text(format!("total allocated:  {} KiB", total_allocated / 1024));
