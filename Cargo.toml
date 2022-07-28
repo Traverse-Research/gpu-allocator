@@ -49,8 +49,8 @@ optional = true
 ash = { version = "0.37", default-features = false, features = ["debug", "loaded"] }
 ash-window = "0.10.0"
 raw-window-handle = "0.5"
-winit = "0.26"
-imgui-winit-support = { version = "0.8", default-features = false, features = ["winit-26"] }
+winit = "0.27"
+imgui-winit-support = { version = "0.8", default-features = false, features = ["winit-27"] }
 
 [target.'cfg(windows)'.dev-dependencies]
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
