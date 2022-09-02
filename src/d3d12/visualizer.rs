@@ -3,8 +3,8 @@
 use super::Allocator;
 use crate::visualizer::ColorScheme;
 
-use windows::Win32::Graphics::Direct3D12::*;
 use log::error;
+use windows::Win32::Graphics::Direct3D12::*;
 
 // Default value for block visualizer granularity.
 #[allow(dead_code)]
