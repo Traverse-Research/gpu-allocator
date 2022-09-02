@@ -4,10 +4,13 @@ use super::Allocator;
 use crate::visualizer::ColorScheme;
 
 use windows::Win32::Graphics::Direct3D12::*;
+use log::error;
 
 // Default value for block visualizer granularity.
+#[allow(dead_code)]
 const DEFAULT_BYTES_PER_UNIT: i32 = 1024;
 
+#[allow(dead_code)]
 struct AllocatorVisualizerBlockWindow {
     memory_type_index: usize,
     block_index: usize,
@@ -16,6 +19,7 @@ struct AllocatorVisualizerBlockWindow {
 }
 
 impl AllocatorVisualizerBlockWindow {
+    #[allow(dead_code)]
     fn new(memory_type_index: usize, block_index: usize) -> Self {
         Self {
             memory_type_index,
@@ -27,12 +31,15 @@ impl AllocatorVisualizerBlockWindow {
 }
 
 pub struct AllocatorVisualizer {
+    #[allow(dead_code)]
     selected_blocks: Vec<AllocatorVisualizerBlockWindow>,
+    #[allow(dead_code)]
     focus: Option<usize>,
     color_scheme: ColorScheme,
     allocation_breakdown_sorting: Option<(Option<imgui::TableSortDirection>, usize)>,
 }
 
+#[allow(dead_code)]
 fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> &'static str {
     let names = [
         "D3D12_HEAP_TYPE_DEFAULT_INVALID",
@@ -45,6 +52,7 @@ fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> &'static str {
     names[heap_type.0 as usize]
 }
 
+#[allow(dead_code)]
 fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> &'static str {
     let names = [
         "D3D12_CPU_PAGE_PROPERTY_UNKNOWN",
@@ -56,6 +64,7 @@ fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> &'static str {
     names[prop.0 as usize]
 }
 
+#[allow(dead_code)]
 fn format_memory_pool(pool: D3D12_MEMORY_POOL) -> &'static str {
     let names = [
         "D3D12_MEMORY_POOL_UNKNOWN",
@@ -80,7 +89,7 @@ impl AllocatorVisualizer {
         self.color_scheme = color_scheme;
     }
 
-    fn render_main_window(
+    pub fn render_main_window(
         &mut self,
         ui: &imgui::Ui<'_>,
         opened: Option<&mut bool>,
@@ -181,6 +190,7 @@ impl AllocatorVisualizer {
             });
     }
 
+    #[allow(dead_code)]
     fn render_memory_block_windows(&mut self, ui: &imgui::Ui<'_>, alloc: &Allocator) {
         // Copy here to workaround the borrow checker.
         let focus_opt = self.focus;
@@ -220,7 +230,9 @@ impl AllocatorVisualizer {
                         ui.checkbox("Show backtraces", &mut window.show_backtraces);
                     }
                     // Slider for changing the 'zoom' level of the visualizer.
+                    #[allow(dead_code)]
                     const BYTES_PER_UNIT_MIN: i32 = 1;
+                    #[allow(dead_code)]
                     const BYTES_PER_UNIT_MAX: i32 = 1024 * 1024;
                     Drag::new("Bytes per Pixel (zoom)")
                         .range(BYTES_PER_UNIT_MIN, BYTES_PER_UNIT_MAX)
@@ -307,11 +319,9 @@ impl AllocatorVisualizer {
                 let mut allocation_report = vec![];
 
                 for memory_type in &allocator.memory_types {
-                    for block in &memory_type.memory_blocks {
-                        if let Some(block) = block {
-                            allocation_report
-                                .extend_from_slice(&block.sub_allocator.report_allocations())
-                        }
+                    for block in memory_type.memory_blocks.iter().flatten() {
+                        allocation_report
+                            .extend_from_slice(&block.sub_allocator.report_allocations())
                     }
                 }
 
@@ -341,9 +351,10 @@ impl AllocatorVisualizer {
                     if let Some(mut sort_data) = ui.table_sort_specs_mut() {
                         if sort_data.should_sort() {
                             let specs = sort_data.specs();
-                            let spec = specs.iter().next().unwrap();
-                            self.allocation_breakdown_sorting =
-                                Some((spec.sort_direction(), spec.column_idx()));
+                            if let Some(spec) = specs.iter().next() {
+                                self.allocation_breakdown_sorting =
+                                    Some((spec.sort_direction(), spec.column_idx()));
+                            }
                             sort_data.set_sorted();
                         }
                     }
@@ -354,7 +365,7 @@ impl AllocatorVisualizer {
                                 0 => allocation_report.sort_by_key(|(idx, _)| *idx),
                                 1 => allocation_report.sort_by_key(|(_, alloc)| &alloc.name),
                                 2 => allocation_report.sort_by_key(|(_, alloc)| alloc.size),
-                                _ => unimplemented!(),
+                                _ => error!("Sorting invalid column index {}", column_idx),
                             },
                             imgui::TableSortDirection::Descending => match column_idx {
                                 0 => allocation_report
@@ -363,7 +374,7 @@ impl AllocatorVisualizer {
                                     .sort_by_key(|(_, alloc)| std::cmp::Reverse(&alloc.name)),
                                 2 => allocation_report
                                     .sort_by_key(|(_, alloc)| std::cmp::Reverse(alloc.size)),
-                                _ => unimplemented!(),
+                                _ => error!("Sorting invalid column index {}", column_idx),
                             },
                         }
                     }
