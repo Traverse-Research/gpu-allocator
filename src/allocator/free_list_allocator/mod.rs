@@ -3,7 +3,7 @@
 #[cfg(feature = "visualizer")]
 pub(crate) mod visualizer;
 
-use super::{AllocationType, SubAllocator, SubAllocatorBase};
+use super::{resolve_backtrace, AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
 
 use log::{log, Level};
@@ -26,7 +26,7 @@ pub(crate) struct MemoryChunk {
     pub(crate) offset: u64,
     pub(crate) allocation_type: AllocationType,
     pub(crate) name: Option<String>,
-    pub(crate) backtrace: Option<String>, // Only used if STORE_STACK_TRACES is true
+    pub(crate) backtrace: Option<backtrace::Backtrace>, // Only used if STORE_STACK_TRACES is true
     next: Option<std::num::NonZeroU64>,
     prev: Option<std::num::NonZeroU64>,
 }
@@ -156,7 +156,7 @@ impl SubAllocator for FreeListAllocator {
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Option<&str>,
+        backtrace: Option<backtrace::Backtrace>,
     ) -> Result<(u64, std::num::NonZeroU64)> {
         let free_size = self.size - self.allocated;
         if size > free_size {
@@ -243,7 +243,7 @@ impl SubAllocator for FreeListAllocator {
                     offset: free_chunk.offset,
                     allocation_type,
                     name: Some(name.to_string()),
-                    backtrace: backtrace.map(|s| s.to_owned()),
+                    backtrace,
                     prev: free_chunk.prev,
                     next: Some(first_fit_id),
                 };
@@ -272,7 +272,7 @@ impl SubAllocator for FreeListAllocator {
 
             chunk.allocation_type = allocation_type;
             chunk.name = Some(name.to_string());
-            chunk.backtrace = backtrace.map(|s| s.to_owned());
+            chunk.backtrace = backtrace;
 
             self.remove_id_from_free_list(first_fit_id);
 
@@ -356,7 +356,7 @@ impl SubAllocator for FreeListAllocator {
             }
             let empty = "".to_string();
             let name = chunk.name.as_ref().unwrap_or(&empty);
-            let backtrace = chunk.backtrace.as_ref().unwrap_or(&empty);
+            let backtrace = resolve_backtrace(&chunk.backtrace);
 
             log!(
                 log_level,
@@ -383,12 +383,30 @@ impl SubAllocator for FreeListAllocator {
             );
         }
     }
+
+    fn report_allocations(&self) -> Vec<AllocationReport> {
+        self.chunks
+            .iter()
+            .filter(|(_key, chunk)| chunk.allocation_type != AllocationType::Free)
+            .map(|(_key, chunk)| AllocationReport {
+                name: chunk
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "<Unnamed FreeList allocation>".to_owned()),
+                size: chunk.size,
+                backtrace: chunk.backtrace.clone(),
+            })
+            .collect::<Vec<_>>()
+    }
+
     fn size(&self) -> u64 {
         self.size
     }
+
     fn allocated(&self) -> u64 {
         self.allocated
     }
+
     fn supports_general_allocations(&self) -> bool {
         true
     }

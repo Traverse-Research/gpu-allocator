@@ -1,7 +1,9 @@
 #![allow(clippy::new_without_default)]
 
 use super::Allocator;
+use crate::allocator::resolve_backtrace;
 use crate::visualizer::ColorScheme;
+use log::error;
 
 // Default value for block visualizer granularity.
 const DEFAULT_BYTES_PER_UNIT: i32 = 1024;
@@ -26,6 +28,8 @@ pub struct AllocatorVisualizer {
     selected_blocks: Vec<AllocatorVisualizerBlockWindow>,
     focus: Option<usize>,
     color_scheme: ColorScheme,
+    allocation_breakdown_sorting: Option<(Option<imgui::TableSortDirection>, usize)>,
+    breakdown_filter: String,
 }
 
 impl AllocatorVisualizer {
@@ -34,6 +38,8 @@ impl AllocatorVisualizer {
             selected_blocks: Vec::default(),
             focus: None,
             color_scheme: ColorScheme::default(),
+            allocation_breakdown_sorting: None,
+            breakdown_filter: String::new(),
         }
     }
 
@@ -274,5 +280,134 @@ impl AllocatorVisualizer {
             self.render_main_window(ui, opened, allocator);
             self.render_memory_block_windows(ui, allocator);
         }
+    }
+
+    pub fn render_breakdown(
+        &mut self,
+        allocator: &Allocator,
+        ui: &imgui::Ui<'_>,
+        opened: Option<&mut bool>,
+    ) {
+        let mut allocation_report = vec![];
+        let mut total_size_in_bytes = 0;
+
+        if let Some(true) = opened {
+            let lowercase_needle = &self.breakdown_filter.to_lowercase();
+            for memory_type in &allocator.memory_types {
+                for block in memory_type.memory_blocks.iter().flatten() {
+                    for report in block.sub_allocator.report_allocations() {
+                        if self.breakdown_filter.is_empty()
+                            || report.name.to_lowercase().contains(lowercase_needle)
+                        {
+                            allocation_report.push(report);
+                        }
+                    }
+                }
+            }
+
+            total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
+        }
+
+        let suffix = ["B", "KB", "MB", "GB", "TB"];
+
+        let fmt_bytes = |mut amount: u64| -> String {
+            let mut idx = 0;
+            let mut print_amount = amount as f64;
+            loop {
+                if amount < 1024 {
+                    return format!("{:.2} {}", print_amount, suffix[idx]);
+                }
+
+                print_amount = amount as f64 / 1024.0;
+                amount /= 1024;
+                idx += 1;
+            }
+        };
+
+        let mut window = imgui::Window::new(format!(
+            "Allocation Breakdown ({})###allocation_breakdown_window",
+            fmt_bytes(total_size_in_bytes)
+        ))
+        .position([20.0f32, 80.0f32], imgui::Condition::FirstUseEver)
+        .size([460.0f32, 420.0f32], imgui::Condition::FirstUseEver);
+
+        if let Some(opened) = opened {
+            window = window.opened(opened);
+        }
+
+        window.build(ui, || {
+            ui.input_text("Filter", &mut self.breakdown_filter).build();
+
+            if ui
+                .begin_table_header_with_flags(
+                    "alloc_breakdown_table",
+                    [
+                        imgui::TableColumnSetup {
+                            flags: imgui::TableColumnFlags::WIDTH_FIXED,
+                            init_width_or_weight: 50.0,
+                            ..imgui::TableColumnSetup::new("Idx")
+                        },
+                        imgui::TableColumnSetup::new("Name"),
+                        imgui::TableColumnSetup {
+                            flags: imgui::TableColumnFlags::WIDTH_FIXED,
+                            init_width_or_weight: 150.0,
+                            ..imgui::TableColumnSetup::new("Size")
+                        },
+                    ],
+                    imgui::TableFlags::SORTABLE | imgui::TableFlags::RESIZABLE,
+                )
+                .is_some()
+            {
+                let mut allocation_report =
+                    allocation_report.iter().enumerate().collect::<Vec<_>>();
+
+                if let Some(mut sort_data) = ui.table_sort_specs_mut() {
+                    if sort_data.should_sort() {
+                        let specs = sort_data.specs();
+                        if let Some(ref spec) = specs.iter().next() {
+                            self.allocation_breakdown_sorting =
+                                Some((spec.sort_direction(), spec.column_idx()));
+                        }
+                        sort_data.set_sorted();
+                    }
+                }
+
+                if let Some((Some(dir), column_idx)) = self.allocation_breakdown_sorting {
+                    match dir {
+                        imgui::TableSortDirection::Ascending => match column_idx {
+                            0 => allocation_report.sort_by_key(|(idx, _)| *idx),
+                            1 => allocation_report.sort_by_key(|(_, alloc)| &alloc.name),
+                            2 => allocation_report.sort_by_key(|(_, alloc)| alloc.size),
+                            _ => error!("Sorting invalid column index {}", column_idx),
+                        },
+                        imgui::TableSortDirection::Descending => match column_idx {
+                            0 => allocation_report.sort_by_key(|(idx, _)| std::cmp::Reverse(*idx)),
+                            1 => allocation_report
+                                .sort_by_key(|(_, alloc)| std::cmp::Reverse(&alloc.name)),
+                            2 => allocation_report
+                                .sort_by_key(|(_, alloc)| std::cmp::Reverse(alloc.size)),
+                            _ => error!("Sorting invalid column index {}", column_idx),
+                        },
+                    }
+                }
+
+                for (idx, alloc) in &allocation_report {
+                    ui.table_next_column();
+                    ui.text(idx.to_string());
+
+                    ui.table_next_column();
+                    ui.text(&alloc.name);
+
+                    if ui.is_item_hovered() && alloc.backtrace.is_some() {
+                        ui.tooltip(|| {
+                            ui.text(resolve_backtrace(&alloc.backtrace));
+                        });
+                    }
+
+                    ui.table_next_column();
+                    ui.text(fmt_bytes(alloc.size));
+                }
+            }
+        });
     }
 }

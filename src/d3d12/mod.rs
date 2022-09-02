@@ -360,7 +360,7 @@ impl MemoryType {
         &mut self,
         device: &ID3D12Device,
         desc: &AllocationCreateDesc<'_>,
-        backtrace: Option<&str>,
+        backtrace: Option<backtrace::Backtrace>,
     ) -> Result<Allocation> {
         let allocation_type = AllocationType::Linear;
 
@@ -428,7 +428,7 @@ impl MemoryType {
                     allocation_type,
                     1,
                     desc.name,
-                    backtrace,
+                    backtrace.clone(),
                 );
 
                 match allocation {
@@ -651,7 +651,7 @@ impl Allocator {
         let alignment = desc.alignment;
 
         let backtrace = if self.debug_settings.store_stack_traces {
-            Some(format!("{:?}", backtrace::Backtrace::new()))
+            Some(backtrace::Backtrace::new_unresolved())
         } else {
             None
         };
@@ -662,10 +662,8 @@ impl Allocator {
                 &desc.name, size, alignment
             );
             if self.debug_settings.log_stack_traces {
-                let backtrace = backtrace
-                    .clone()
-                    .unwrap_or(format!("{:?}", backtrace::Backtrace::new()));
-                debug!("Allocation stack trace: {}", &backtrace);
+                let backtrace = backtrace::Backtrace::new();
+                debug!("Allocation stack trace: {:?}", &backtrace);
             }
         }
 
@@ -688,7 +686,7 @@ impl Allocator {
             })
             .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
 
-        memory_type.allocate(&self.device, desc, backtrace.as_deref())
+        memory_type.allocate(&self.device, desc, backtrace)
     }
 
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
