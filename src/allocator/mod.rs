@@ -16,6 +16,23 @@ pub(crate) enum AllocationType {
     NonLinear,
 }
 
+#[derive(Clone)]
+pub(crate) struct AllocationReport {
+    pub(crate) name: String,
+    pub(crate) size: u64,
+    pub(crate) backtrace: Option<backtrace::Backtrace>,
+}
+
+pub(crate) fn resolve_backtrace(backtrace: &Option<backtrace::Backtrace>) -> String {
+    if let Some(bt) = backtrace {
+        let mut bt = bt.clone();
+        bt.resolve();
+        format!("{:?}", bt)
+    } else {
+        "".to_owned()
+    }
+}
+
 #[cfg(feature = "visualizer")]
 pub(crate) trait SubAllocatorBase: crate::visualizer::SubAllocatorVisualizer {}
 #[cfg(not(feature = "visualizer"))]
@@ -29,7 +46,7 @@ pub(crate) trait SubAllocator: SubAllocatorBase + std::fmt::Debug {
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Option<&str>,
+        backtrace: Option<backtrace::Backtrace>,
     ) -> Result<(u64, std::num::NonZeroU64)>;
 
     fn free(&mut self, chunk_id: Option<std::num::NonZeroU64>) -> Result<()>;
@@ -46,6 +63,8 @@ pub(crate) trait SubAllocator: SubAllocatorBase + std::fmt::Debug {
         memory_type_index: usize,
         memory_block_index: usize,
     );
+
+    fn report_allocations(&self) -> Vec<AllocationReport>;
 
     #[must_use]
     fn supports_general_allocations(&self) -> bool;

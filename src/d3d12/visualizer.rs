@@ -30,6 +30,7 @@ pub struct AllocatorVisualizer {
     selected_blocks: Vec<AllocatorVisualizerBlockWindow>,
     focus: Option<usize>,
     color_scheme: ColorScheme,
+    allocation_breakdown_sorting: Option<(Option<imgui::TableSortDirection>, usize)>,
 }
 
 fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> &'static str {
@@ -71,6 +72,7 @@ impl AllocatorVisualizer {
             selected_blocks: Vec::default(),
             focus: None,
             color_scheme: ColorScheme::default(),
+            allocation_breakdown_sorting: None,
         }
     }
 
@@ -287,8 +289,87 @@ impl AllocatorVisualizer {
     /// - If [`true`], the widget will be drawn and an (X) closing button will be added to the widget bar.
     pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui<'_>, opened: Option<&mut bool>) {
         if opened != Some(&mut false) {
-            self.render_main_window(ui, opened, allocator);
-            self.render_memory_block_windows(ui, allocator);
+            // self.render_main_window(ui, opened, allocator);
+            // self.render_memory_block_windows(ui, allocator);
+
+            self.render_breakdown(allocator, ui, opened);
         }
+    }
+
+    pub fn render_breakdown(&mut self, allocator: &Allocator, ui: &imgui::Ui<'_>, opened: Option<&mut bool>) {
+        imgui::Window::new("Allocation Breakdown")
+        .position([20.0f32, 80.0f32], imgui::Condition::FirstUseEver)
+        .size([460.0f32, 420.0f32], imgui::Condition::FirstUseEver)
+        .opened(opened.unwrap_or(&mut false))
+        .build(ui, || {
+            let mut allocation_report = vec![];
+
+            for memory_type in &allocator.memory_types {
+                for block in &memory_type.memory_blocks {
+                    if let Some(block) = block {
+                        allocation_report.extend_from_slice(&block.sub_allocator.report_allocations())
+                    }
+                }
+            }
+
+            if let Some(_t) = ui.begin_table_header_with_flags(
+                "alloc_breakdown_table",
+                [
+                    imgui::TableColumnSetup {
+                        flags: imgui::TableColumnFlags::WIDTH_FIXED,
+                        init_width_or_weight: 50.0,
+                        ..imgui::TableColumnSetup::new("Idx")
+                    },
+                    imgui::TableColumnSetup::new("Name"),
+                    imgui::TableColumnSetup {
+                        flags: imgui::TableColumnFlags::WIDTH_FIXED,
+                        init_width_or_weight: 150.0,
+                        ..imgui::TableColumnSetup::new("Size")
+                    },
+                ],
+                imgui::TableFlags::SORTABLE | imgui::TableFlags::RESIZABLE,
+            ) {
+                let mut allocation_report = allocation_report.iter().enumerate().collect::<Vec<_>>();
+
+                if let Some(mut sort_data) = ui.table_sort_specs_mut() {
+                    if sort_data.should_sort() {
+                        let specs = sort_data.specs();
+                        let spec = specs.iter().next().unwrap();
+                        self.allocation_breakdown_sorting =
+                            Some((spec.sort_direction(), spec.column_idx()));
+                        sort_data.set_sorted();
+                    }
+                }
+
+                if let Some((Some(dir), column_idx)) = self.allocation_breakdown_sorting {
+                    match dir {
+                        imgui::TableSortDirection::Ascending => match column_idx {
+                            0 => allocation_report.sort_by_key(|(idx, _)| *idx),
+                            1 => allocation_report.sort_by_key(|(_, alloc)| &alloc.name),
+                            2 => allocation_report.sort_by_key(|(_, alloc)| alloc.size),
+                            _ => unimplemented!(),
+                        },
+                        imgui::TableSortDirection::Descending => match column_idx {
+                            0 => allocation_report.sort_by_key(|(idx, _)| std::cmp::Reverse(*idx)),
+                            1 => allocation_report
+                                .sort_by_key(|(_, alloc)| std::cmp::Reverse(&alloc.name)),
+                            2 => allocation_report.sort_by_key(|(_, alloc)| std::cmp::Reverse(alloc.size)),
+                            _ => unimplemented!(),
+                        },
+                    }
+                }
+
+                for (idx, alloc) in &allocation_report {
+                    ui.table_next_column();
+                    ui.text(idx.to_string());
+
+                    ui.table_next_column();
+                    ui.text(&alloc.name);
+
+                    ui.table_next_column();
+                    ui.text(format!("{:.3?}", alloc.size));
+                }
+            }
+        });
     }
 }

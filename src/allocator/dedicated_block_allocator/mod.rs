@@ -3,7 +3,7 @@
 #[cfg(feature = "visualizer")]
 pub(crate) mod visualizer;
 
-use super::{AllocationType, SubAllocator, SubAllocatorBase};
+use super::{resolve_backtrace, AllocationType, AllocationReport, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
 use log::{log, Level};
 
@@ -12,7 +12,7 @@ pub(crate) struct DedicatedBlockAllocator {
     size: u64,
     allocated: u64,
     name: Option<String>,
-    backtrace: Option<String>,
+    backtrace: Option<backtrace::Backtrace>,
 }
 
 impl DedicatedBlockAllocator {
@@ -35,7 +35,7 @@ impl SubAllocator for DedicatedBlockAllocator {
         _allocation_type: AllocationType,
         _granularity: u64,
         name: &str,
-        backtrace: Option<&str>,
+        backtrace: Option<backtrace::Backtrace>,
     ) -> Result<(u64, std::num::NonZeroU64)> {
         if self.allocated != 0 {
             return Err(AllocationError::OutOfMemory);
@@ -49,7 +49,7 @@ impl SubAllocator for DedicatedBlockAllocator {
 
         self.allocated = size;
         self.name = Some(name.to_string());
-        self.backtrace = backtrace.map(|s| s.to_owned());
+        self.backtrace = backtrace;
 
         #[allow(clippy::unwrap_used)]
         let dummy_id = std::num::NonZeroU64::new(1).unwrap();
@@ -86,7 +86,7 @@ impl SubAllocator for DedicatedBlockAllocator {
     ) {
         let empty = "".to_string();
         let name = self.name.as_ref().unwrap_or(&empty);
-        let backtrace = self.backtrace.as_ref().unwrap_or(&empty);
+        let backtrace = resolve_backtrace(&self.backtrace);
 
         log!(
             log_level,
@@ -105,6 +105,14 @@ impl SubAllocator for DedicatedBlockAllocator {
             name,
             backtrace
         )
+    }
+
+    fn report_allocations(&self) -> Vec<AllocationReport> {
+        vec![AllocationReport {
+            name: self.name.clone().unwrap_or_else(|| "<Unnamed Dedicated allocation>".to_owned()),
+            size: self.size,
+            backtrace: self.backtrace.clone(),
+        }]
     }
 
     fn size(&self) -> u64 {

@@ -231,7 +231,7 @@ impl MemoryType {
         device: &ash::Device,
         desc: &AllocationCreateDesc<'_>,
         granularity: u64,
-        backtrace: Option<&str>,
+        backtrace: Option<backtrace::Backtrace>,
     ) -> Result<Allocation> {
         let allocation_type = if desc.linear {
             AllocationType::Linear
@@ -315,7 +315,7 @@ impl MemoryType {
                     allocation_type,
                     granularity,
                     desc.name,
-                    backtrace,
+                    backtrace.clone(),
                 );
 
                 match allocation {
@@ -551,7 +551,7 @@ impl Allocator {
         let alignment = desc.requirements.alignment;
 
         let backtrace = if self.debug_settings.store_stack_traces {
-            Some(format!("{:?}", backtrace::Backtrace::new()))
+            Some(backtrace::Backtrace::new_unresolved())
         } else {
             None
         };
@@ -562,10 +562,8 @@ impl Allocator {
                 &desc.name, size, alignment
             );
             if self.debug_settings.log_stack_traces {
-                let backtrace = backtrace
-                    .clone()
-                    .unwrap_or(format!("{:?}", backtrace::Backtrace::new()));
-                debug!("Allocation stack trace: {}", &backtrace);
+                let backtrace = backtrace::Backtrace::new();
+                debug!("Allocation stack trace: {:?}", backtrace);
             }
         }
 
@@ -617,7 +615,7 @@ impl Allocator {
                 &self.device,
                 desc,
                 self.buffer_image_granularity,
-                backtrace.as_deref(),
+                backtrace.clone(),
             )
         };
 
@@ -638,7 +636,7 @@ impl Allocator {
                     &self.device,
                     desc,
                     self.buffer_image_granularity,
-                    backtrace.as_deref(),
+                    backtrace,
                 )
             } else {
                 allocation

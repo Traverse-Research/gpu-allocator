@@ -1,4 +1,4 @@
-use super::{AllocationType, FreeListAllocator};
+use super::{resolve_backtrace, AllocationType, FreeListAllocator};
 use crate::visualizer::{ColorScheme, SubAllocatorVisualizer};
 
 impl SubAllocatorVisualizer for FreeListAllocator {
@@ -77,8 +77,8 @@ impl SubAllocatorVisualizer for FreeListAllocator {
                                 ui.text(format!("name: {:?}", name));
                             }
                             if show_backtraces {
-                                if let Some(backtrace) = &chunk.backtrace {
-                                    ui.text(format!("backtrace: {:}", backtrace));
+                                if chunk.backtrace.is_some() {
+                                    ui.text(format!("backtrace: {:}", resolve_backtrace(&chunk.backtrace)));
                                 }
                             }
                         })
