@@ -1,6 +1,6 @@
 #![allow(clippy::new_without_default)]
 
-use super::{Allocator};
+use super::Allocator;
 use crate::allocator::resolve_backtrace;
 use crate::visualizer::ColorScheme;
 
@@ -280,8 +280,13 @@ impl AllocatorVisualizer {
             self.render_memory_block_windows(ui, allocator);
         }
     }
-    
-    pub fn render_breakdown(&mut self, allocator: &Allocator, ui: &imgui::Ui<'_>, opened: Option<&mut bool>) {
+
+    pub fn render_breakdown(
+        &mut self,
+        allocator: &Allocator,
+        ui: &imgui::Ui<'_>,
+        opened: Option<&mut bool>,
+    ) {
         let mut allocation_report = vec![];
         let mut total_size_in_bytes = 0;
 
@@ -291,7 +296,9 @@ impl AllocatorVisualizer {
                 for block in &memory_type.memory_blocks {
                     if let Some(block) = block {
                         for report in block.sub_allocator.report_allocations() {
-                            if self.breakdown_filter.is_empty() || report.name.to_lowercase().contains(lowercase_needle) {
+                            if self.breakdown_filter.is_empty()
+                                || report.name.to_lowercase().contains(lowercase_needle)
+                            {
                                 allocation_report.push(report);
                             }
                         }
@@ -318,10 +325,13 @@ impl AllocatorVisualizer {
             }
         };
 
-        let mut window = imgui::Window::new(format!("Allocation Breakdown ({})###allocation_breakdown_window", fmt_bytes(total_size_in_bytes)))
-            .position([20.0f32, 80.0f32], imgui::Condition::FirstUseEver)
-            .size([460.0f32, 420.0f32], imgui::Condition::FirstUseEver);
-        
+        let mut window = imgui::Window::new(format!(
+            "Allocation Breakdown ({})###allocation_breakdown_window",
+            fmt_bytes(total_size_in_bytes)
+        ))
+        .position([20.0f32, 80.0f32], imgui::Condition::FirstUseEver)
+        .size([460.0f32, 420.0f32], imgui::Condition::FirstUseEver);
+
         if let Some(opened) = opened {
             window = window.opened(opened);
         }
@@ -329,24 +339,28 @@ impl AllocatorVisualizer {
         window.build(ui, || {
             ui.input_text("Filter", &mut self.breakdown_filter).build();
 
-            if let Some(_t) = ui.begin_table_header_with_flags(
-                "alloc_breakdown_table",
-                [
-                    imgui::TableColumnSetup {
-                        flags: imgui::TableColumnFlags::WIDTH_FIXED,
-                        init_width_or_weight: 50.0,
-                        ..imgui::TableColumnSetup::new("Idx")
-                    },
-                    imgui::TableColumnSetup::new("Name"),
-                    imgui::TableColumnSetup {
-                        flags: imgui::TableColumnFlags::WIDTH_FIXED,
-                        init_width_or_weight: 150.0,
-                        ..imgui::TableColumnSetup::new("Size")
-                    },
-                ],
-                imgui::TableFlags::SORTABLE | imgui::TableFlags::RESIZABLE,
-            ) {
-                let mut allocation_report = allocation_report.iter().enumerate().collect::<Vec<_>>();
+            if ui
+                .begin_table_header_with_flags(
+                    "alloc_breakdown_table",
+                    [
+                        imgui::TableColumnSetup {
+                            flags: imgui::TableColumnFlags::WIDTH_FIXED,
+                            init_width_or_weight: 50.0,
+                            ..imgui::TableColumnSetup::new("Idx")
+                        },
+                        imgui::TableColumnSetup::new("Name"),
+                        imgui::TableColumnSetup {
+                            flags: imgui::TableColumnFlags::WIDTH_FIXED,
+                            init_width_or_weight: 150.0,
+                            ..imgui::TableColumnSetup::new("Size")
+                        },
+                    ],
+                    imgui::TableFlags::SORTABLE | imgui::TableFlags::RESIZABLE,
+                )
+                .is_some()
+            {
+                let mut allocation_report =
+                    allocation_report.iter().enumerate().collect::<Vec<_>>();
 
                 if let Some(mut sort_data) = ui.table_sort_specs_mut() {
                     if sort_data.should_sort() {
@@ -370,7 +384,8 @@ impl AllocatorVisualizer {
                             0 => allocation_report.sort_by_key(|(idx, _)| std::cmp::Reverse(*idx)),
                             1 => allocation_report
                                 .sort_by_key(|(_, alloc)| std::cmp::Reverse(&alloc.name)),
-                            2 => allocation_report.sort_by_key(|(_, alloc)| std::cmp::Reverse(alloc.size)),
+                            2 => allocation_report
+                                .sort_by_key(|(_, alloc)| std::cmp::Reverse(alloc.size)),
                             _ => unimplemented!(),
                         },
                     }

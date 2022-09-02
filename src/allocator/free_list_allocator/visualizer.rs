@@ -78,7 +78,10 @@ impl SubAllocatorVisualizer for FreeListAllocator {
                             }
                             if show_backtraces {
                                 if chunk.backtrace.is_some() {
-                                    ui.text(format!("backtrace: {:}", resolve_backtrace(&chunk.backtrace)));
+                                    ui.text(format!(
+                                        "backtrace: {:}",
+                                        resolve_backtrace(&chunk.backtrace)
+                                    ));
                                 }
                             }
                         })

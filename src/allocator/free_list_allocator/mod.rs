@@ -3,7 +3,7 @@
 #[cfg(feature = "visualizer")]
 pub(crate) mod visualizer;
 
-use super::{resolve_backtrace, AllocationType, AllocationReport, SubAllocator, SubAllocatorBase};
+use super::{resolve_backtrace, AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
 
 use log::{log, Level};
@@ -383,13 +383,20 @@ impl SubAllocator for FreeListAllocator {
             );
         }
     }
-    
+
     fn report_allocations(&self) -> Vec<AllocationReport> {
-        self.chunks.iter().filter(|(_key, chunk)| chunk.allocation_type != AllocationType::Free).map(|(_key, chunk)| AllocationReport {
-            name: chunk.name.clone().unwrap_or_else(|| "<Unnamed FreeList allocation>".to_owned()),
-            size: chunk.size,
-            backtrace: chunk.backtrace.clone(),
-        }).collect::<Vec<_>>()
+        self.chunks
+            .iter()
+            .filter(|(_key, chunk)| chunk.allocation_type != AllocationType::Free)
+            .map(|(_key, chunk)| AllocationReport {
+                name: chunk
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "<Unnamed FreeList allocation>".to_owned()),
+                size: chunk.size,
+                backtrace: chunk.backtrace.clone(),
+            })
+            .collect::<Vec<_>>()
     }
 
     fn size(&self) -> u64 {

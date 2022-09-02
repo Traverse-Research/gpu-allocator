@@ -3,7 +3,7 @@
 #[cfg(feature = "visualizer")]
 pub(crate) mod visualizer;
 
-use super::{resolve_backtrace, AllocationType, AllocationReport, SubAllocator, SubAllocatorBase};
+use super::{resolve_backtrace, AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
 use log::{log, Level};
 
@@ -109,7 +109,10 @@ impl SubAllocator for DedicatedBlockAllocator {
 
     fn report_allocations(&self) -> Vec<AllocationReport> {
         vec![AllocationReport {
-            name: self.name.clone().unwrap_or_else(|| "<Unnamed Dedicated allocation>".to_owned()),
+            name: self
+                .name
+                .clone()
+                .unwrap_or_else(|| "<Unnamed Dedicated allocation>".to_owned()),
             size: self.size,
             backtrace: self.backtrace.clone(),
         }]
