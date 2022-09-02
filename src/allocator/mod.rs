@@ -24,13 +24,14 @@ pub(crate) struct AllocationReport {
 }
 
 pub(crate) fn resolve_backtrace(backtrace: &Option<backtrace::Backtrace>) -> String {
-    if let Some(bt) = backtrace {
-        let mut bt = bt.clone();
-        bt.resolve();
-        format!("{:?}", bt)
-    } else {
-        "".to_owned()
-    }
+    backtrace.as_ref().map_or_else(
+        || "".to_owned(),
+        |bt| {
+            let mut bt = bt.clone();
+            bt.resolve();
+            format!("{:?}", bt)
+        },
+    )
 }
 
 #[cfg(feature = "visualizer")]

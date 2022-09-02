@@ -3,6 +3,7 @@
 use super::Allocator;
 use crate::allocator::resolve_backtrace;
 use crate::visualizer::ColorScheme;
+use log::error;
 
 // Default value for block visualizer granularity.
 const DEFAULT_BYTES_PER_UNIT: i32 = 1024;
@@ -293,14 +294,12 @@ impl AllocatorVisualizer {
         if let Some(true) = opened {
             let lowercase_needle = &self.breakdown_filter.to_lowercase();
             for memory_type in &allocator.memory_types {
-                for block in &memory_type.memory_blocks {
-                    if let Some(block) = block {
-                        for report in block.sub_allocator.report_allocations() {
-                            if self.breakdown_filter.is_empty()
-                                || report.name.to_lowercase().contains(lowercase_needle)
-                            {
-                                allocation_report.push(report);
-                            }
+                for block in memory_type.memory_blocks.iter().flatten() {
+                    for report in block.sub_allocator.report_allocations() {
+                        if self.breakdown_filter.is_empty()
+                            || report.name.to_lowercase().contains(lowercase_needle)
+                        {
+                            allocation_report.push(report);
                         }
                     }
                 }
@@ -365,9 +364,10 @@ impl AllocatorVisualizer {
                 if let Some(mut sort_data) = ui.table_sort_specs_mut() {
                     if sort_data.should_sort() {
                         let specs = sort_data.specs();
-                        let spec = specs.iter().next().unwrap();
-                        self.allocation_breakdown_sorting =
-                            Some((spec.sort_direction(), spec.column_idx()));
+                        if let Some(ref spec) = specs.iter().next() {
+                            self.allocation_breakdown_sorting =
+                                Some((spec.sort_direction(), spec.column_idx()));
+                        }
                         sort_data.set_sorted();
                     }
                 }
@@ -378,7 +378,7 @@ impl AllocatorVisualizer {
                             0 => allocation_report.sort_by_key(|(idx, _)| *idx),
                             1 => allocation_report.sort_by_key(|(_, alloc)| &alloc.name),
                             2 => allocation_report.sort_by_key(|(_, alloc)| alloc.size),
-                            _ => unimplemented!(),
+                            _ => error!("Sorting invalid column index {}", column_idx),
                         },
                         imgui::TableSortDirection::Descending => match column_idx {
                             0 => allocation_report.sort_by_key(|(idx, _)| std::cmp::Reverse(*idx)),
@@ -386,7 +386,7 @@ impl AllocatorVisualizer {
                                 .sort_by_key(|(_, alloc)| std::cmp::Reverse(&alloc.name)),
                             2 => allocation_report
                                 .sort_by_key(|(_, alloc)| std::cmp::Reverse(alloc.size)),
-                            _ => unimplemented!(),
+                            _ => error!("Sorting invalid column index {}", column_idx),
                         },
                     }
                 }
@@ -398,12 +398,10 @@ impl AllocatorVisualizer {
                     ui.table_next_column();
                     ui.text(&alloc.name);
 
-                    if ui.is_item_hovered() {
-                        if alloc.backtrace.is_some() {
-                            ui.tooltip(|| {
-                                ui.text(resolve_backtrace(&alloc.backtrace));
-                            });
-                        }
+                    if ui.is_item_hovered() && alloc.backtrace.is_some() {
+                        ui.tooltip(|| {
+                            ui.text(resolve_backtrace(&alloc.backtrace));
+                        });
                     }
 
                     ui.table_next_column();

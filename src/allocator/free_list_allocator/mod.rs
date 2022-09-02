@@ -272,7 +272,7 @@ impl SubAllocator for FreeListAllocator {
 
             chunk.allocation_type = allocation_type;
             chunk.name = Some(name.to_string());
-            chunk.backtrace = backtrace.map(|s| s.to_owned());
+            chunk.backtrace = backtrace;
 
             self.remove_id_from_free_list(first_fit_id);
 
