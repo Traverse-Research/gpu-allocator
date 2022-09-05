@@ -325,25 +325,23 @@ impl AllocatorVisualizer {
                     }
                 }
 
-                if let Some(_k) = ui
-                    .begin_table_header_with_flags(
-                        "alloc_breakdown_table",
-                        [
-                            imgui::TableColumnSetup {
-                                flags: imgui::TableColumnFlags::WIDTH_FIXED,
-                                init_width_or_weight: 50.0,
-                                ..imgui::TableColumnSetup::new("Idx")
-                            },
-                            imgui::TableColumnSetup::new("Name"),
-                            imgui::TableColumnSetup {
-                                flags: imgui::TableColumnFlags::WIDTH_FIXED,
-                                init_width_or_weight: 150.0,
-                                ..imgui::TableColumnSetup::new("Size")
-                            },
-                        ],
-                        imgui::TableFlags::SORTABLE | imgui::TableFlags::RESIZABLE,
-                    )
-                {
+                if let Some(_k) = ui.begin_table_header_with_flags(
+                    "alloc_breakdown_table",
+                    [
+                        imgui::TableColumnSetup {
+                            flags: imgui::TableColumnFlags::WIDTH_FIXED,
+                            init_width_or_weight: 50.0,
+                            ..imgui::TableColumnSetup::new("Idx")
+                        },
+                        imgui::TableColumnSetup::new("Name"),
+                        imgui::TableColumnSetup {
+                            flags: imgui::TableColumnFlags::WIDTH_FIXED,
+                            init_width_or_weight: 150.0,
+                            ..imgui::TableColumnSetup::new("Size")
+                        },
+                    ],
+                    imgui::TableFlags::SORTABLE | imgui::TableFlags::RESIZABLE,
+                ) {
                     let mut allocation_report =
                         allocation_report.iter().enumerate().collect::<Vec<_>>();
 
