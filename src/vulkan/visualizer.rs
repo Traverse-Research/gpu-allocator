@@ -338,7 +338,7 @@ impl AllocatorVisualizer {
         window.build(ui, || {
             ui.input_text("Filter", &mut self.breakdown_filter).build();
 
-            if ui
+            if let Some(_k) = ui
                 .begin_table_header_with_flags(
                     "alloc_breakdown_table",
                     [
@@ -356,7 +356,6 @@ impl AllocatorVisualizer {
                     ],
                     imgui::TableFlags::SORTABLE | imgui::TableFlags::RESIZABLE,
                 )
-                .is_some()
             {
                 let mut allocation_report =
                     allocation_report.iter().enumerate().collect::<Vec<_>>();
