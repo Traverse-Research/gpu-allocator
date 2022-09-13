@@ -11,7 +11,9 @@ use ash::vk;
 use log::{debug, warn, Level};
 use std::fmt;
 
-use crate::{AllocationError, AllocatorDebugSettings, MemoryLocation, Result};
+use crate::{
+    allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result,
+};
 
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
@@ -449,6 +451,45 @@ pub struct Allocator {
     device: ash::Device,
     pub(crate) buffer_image_granularity: u64,
     pub(crate) debug_settings: AllocatorDebugSettings,
+}
+
+impl Allocator {
+    #[allow(clippy::print_stdout)]
+    pub fn debug_pring_breakdown(&self) {
+        let mut allocation_report = vec![];
+
+        for memory_type in &self.memory_types {
+            for block in memory_type.memory_blocks.iter().flatten() {
+                allocation_report.extend_from_slice(&block.sub_allocator.report_allocations())
+            }
+        }
+
+        let total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
+
+        let mut allocation_report = allocation_report.iter().enumerate().collect::<Vec<_>>();
+        allocation_report.sort_by_key(|(_, alloc)| std::cmp::Reverse(alloc.size));
+
+        const MAX_NUM_CHARACTERS: usize = 40;
+
+        println!("================================================================");
+        println!("ALLOCATION BREAKDOWN ({})", fmt_bytes(total_size_in_bytes));
+
+        for (idx, alloc) in &allocation_report {
+            let mut cloned_name = alloc.name.clone();
+            cloned_name.truncate(MAX_NUM_CHARACTERS);
+
+            let num_spaces = MAX_NUM_CHARACTERS - cloned_name.len();
+            let aligning_spaces = " ".repeat(num_spaces);
+
+            println!(
+                "\t\t{}\t- {}{}\t- {}",
+                idx,
+                cloned_name,
+                aligning_spaces,
+                fmt_bytes(alloc.size)
+            );
+        }
+    }
 }
 
 impl fmt::Debug for Allocator {

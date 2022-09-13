@@ -86,3 +86,19 @@ pub(crate) trait SubAllocator: SubAllocatorBase + std::fmt::Debug {
         self.allocated() == 0
     }
 }
+
+pub(crate) fn fmt_bytes(mut amount: u64) -> String {
+    let suffix = ["B", "KB", "MB", "GB", "TB"];
+
+    let mut idx = 0;
+    let mut print_amount = amount as f64;
+    loop {
+        if amount < 1024 {
+            return format!("{:.2} {}", print_amount, suffix[idx]);
+        }
+
+        print_amount = amount as f64 / 1024.0;
+        amount /= 1024;
+        idx += 1;
+    }
+}
