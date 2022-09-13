@@ -749,7 +749,7 @@ impl fmt::Debug for Allocator {
 
         for memory_type in &self.memory_types {
             for block in memory_type.memory_blocks.iter().flatten() {
-                allocation_report.extend_from_slice(&block.sub_allocator.report_allocations())
+                allocation_report.extend(block.sub_allocator.report_allocations())
             }
         }
 
