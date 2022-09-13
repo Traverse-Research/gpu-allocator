@@ -760,8 +760,8 @@ impl fmt::Debug for Allocator {
 
         const MAX_NUM_CHARACTERS: usize = 40;
 
-        f.write_str("================================================================")?;
-        write!(
+        f.write_str("================================================================\n")?;
+        writeln!(
             f,
             "ALLOCATION BREAKDOWN ({})",
             fmt_bytes(total_size_in_bytes)
@@ -774,7 +774,7 @@ impl fmt::Debug for Allocator {
             let num_spaces = MAX_NUM_CHARACTERS - cloned_name.len();
             let aligning_spaces = " ".repeat(num_spaces);
 
-            write!(
+            writeln!(
                 f,
                 "\t\t{}\t- {}{}\t- {}",
                 idx,
