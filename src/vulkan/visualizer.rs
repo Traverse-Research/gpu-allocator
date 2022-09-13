@@ -1,7 +1,7 @@
 #![allow(clippy::new_without_default)]
 
 use super::Allocator;
-use crate::allocator::resolve_backtrace;
+use crate::allocator::{fmt_bytes, resolve_backtrace};
 use crate::visualizer::ColorScheme;
 use log::error;
 
@@ -307,22 +307,6 @@ impl AllocatorVisualizer {
 
             total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
         }
-
-        let suffix = ["B", "KB", "MB", "GB", "TB"];
-
-        let fmt_bytes = |mut amount: u64| -> String {
-            let mut idx = 0;
-            let mut print_amount = amount as f64;
-            loop {
-                if amount < 1024 {
-                    return format!("{:.2} {}", print_amount, suffix[idx]);
-                }
-
-                print_amount = amount as f64 / 1024.0;
-                amount /= 1024;
-                idx += 1;
-            }
-        };
 
         let mut window = imgui::Window::new(format!(
             "Allocation Breakdown ({})###allocation_breakdown_window",

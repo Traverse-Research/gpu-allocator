@@ -11,7 +11,9 @@ use ash::vk;
 use log::{debug, warn, Level};
 use std::fmt;
 
-use crate::{AllocationError, AllocatorDebugSettings, MemoryLocation, Result};
+use crate::{
+    allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result,
+};
 
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
@@ -453,12 +455,39 @@ pub struct Allocator {
 
 impl fmt::Debug for Allocator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Allocator")
-            .field("memory_types", &self.memory_types)
-            .field("memory_heaps", &self.memory_heaps)
-            .field("buffer_image_granularity", &self.buffer_image_granularity)
-            .field("debug_settings", &self.debug_settings)
-            .finish()
+        let mut allocation_report = vec![];
+
+        for memory_type in &self.memory_types {
+            for block in memory_type.memory_blocks.iter().flatten() {
+                allocation_report.extend(block.sub_allocator.report_allocations())
+            }
+        }
+
+        let total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
+
+        allocation_report.sort_by_key(|alloc| std::cmp::Reverse(alloc.size));
+
+        writeln!(
+            f,
+            "================================================================"
+        )?;
+        writeln!(
+            f,
+            "ALLOCATION BREAKDOWN ({})",
+            fmt_bytes(total_size_in_bytes)
+        )?;
+
+        for alloc in &allocation_report {
+            writeln!(
+                f,
+                "{:max_len$.max_len$}\t- {}",
+                alloc.name,
+                fmt_bytes(alloc.size),
+                max_len = allocator::VISUALIZER_TABLE_MAX_ENTRY_NAME_LEN,
+            )?;
+        }
+
+        Ok(())
     }
 }
 

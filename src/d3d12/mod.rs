@@ -1,5 +1,7 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 
+use std::fmt;
+
 use log::{debug, Level};
 
 use windows::Win32::{Foundation::E_OUTOFMEMORY, Graphics::Direct3D12::*};
@@ -72,7 +74,9 @@ pub use visualizer::AllocatorVisualizer;
 use super::allocator;
 use super::allocator::AllocationType;
 
-use crate::{AllocationError, AllocatorDebugSettings, MemoryLocation, Result};
+use crate::{
+    allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result,
+};
 
 /// [`ResourceCategory`] is used for supporting [`D3D12_RESOURCE_HEAP_TIER_1`].
 /// [`ResourceCategory`] will be ignored if device supports [`D3D12_RESOURCE_HEAP_TIER_2`].
@@ -536,7 +540,6 @@ impl MemoryType {
     }
 }
 
-#[derive(Debug)]
 pub struct Allocator {
     device: ID3D12Device,
     debug_settings: AllocatorDebugSettings,
@@ -737,6 +740,44 @@ impl Allocator {
                 }
             }
         }
+    }
+}
+
+impl fmt::Debug for Allocator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut allocation_report = vec![];
+
+        for memory_type in &self.memory_types {
+            for block in memory_type.memory_blocks.iter().flatten() {
+                allocation_report.extend(block.sub_allocator.report_allocations())
+            }
+        }
+
+        let total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
+
+        allocation_report.sort_by_key(|alloc| std::cmp::Reverse(alloc.size));
+
+        writeln!(
+            f,
+            "================================================================"
+        )?;
+        writeln!(
+            f,
+            "ALLOCATION BREAKDOWN ({})",
+            fmt_bytes(total_size_in_bytes)
+        )?;
+
+        for alloc in &allocation_report {
+            writeln!(
+                f,
+                "{:max_len$.max_len$}\t- {}",
+                alloc.name,
+                fmt_bytes(alloc.size),
+                max_len = allocator::VISUALIZER_TABLE_MAX_ENTRY_NAME_LEN,
+            )?;
+        }
+
+        Ok(())
     }
 }
 
