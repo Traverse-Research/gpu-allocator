@@ -453,8 +453,8 @@ pub struct Allocator {
     pub(crate) debug_settings: AllocatorDebugSettings,
 }
 
-impl Allocator {
-    pub fn fmt_alloc_breakdown(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl fmt::Debug for Allocator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut allocation_report = vec![];
 
         for memory_type in &self.memory_types {
@@ -495,17 +495,6 @@ impl Allocator {
         }
 
         Ok(())
-    }
-}
-
-impl fmt::Debug for Allocator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Allocator")
-            .field("memory_types", &self.memory_types)
-            .field("memory_heaps", &self.memory_heaps)
-            .field("buffer_image_granularity", &self.buffer_image_granularity)
-            .field("debug_settings", &self.debug_settings)
-            .finish()
     }
 }
 

@@ -540,7 +540,6 @@ impl MemoryType {
     }
 }
 
-#[derive(Debug)]
 pub struct Allocator {
     device: ID3D12Device,
     debug_settings: AllocatorDebugSettings,
@@ -742,8 +741,10 @@ impl Allocator {
             }
         }
     }
+}
 
-    pub fn fmt_alloc_breakdown(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl fmt::Debug for Allocator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut allocation_report = vec![];
 
         for memory_type in &self.memory_types {
