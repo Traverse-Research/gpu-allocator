@@ -465,8 +465,7 @@ impl fmt::Debug for Allocator {
 
         let total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
 
-        let mut allocation_report = allocation_report.iter().enumerate().collect::<Vec<_>>();
-        allocation_report.sort_by_key(|(_, alloc)| std::cmp::Reverse(alloc.size));
+        allocation_report.sort_by_key(|alloc| std::cmp::Reverse(alloc.size));
 
         const MAX_NUM_CHARACTERS: usize = 40;
 
@@ -480,11 +479,10 @@ impl fmt::Debug for Allocator {
             fmt_bytes(total_size_in_bytes)
         )?;
 
-        for (idx, alloc) in &allocation_report {
+        for alloc in &allocation_report {
             writeln!(
                 f,
-                "\t\t{}\t- {:max_len$.max_len$}\t- {}",
-                idx,
+                "{:max_len$.max_len$}\t- {}",
                 alloc.name,
                 fmt_bytes(alloc.size),
                 max_len = MAX_NUM_CHARACTERS,
