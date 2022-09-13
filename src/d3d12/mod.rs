@@ -760,7 +760,10 @@ impl fmt::Debug for Allocator {
 
         const MAX_NUM_CHARACTERS: usize = 40;
 
-        f.write_str("================================================================\n")?;
+        writeln!(
+            f,
+            "================================================================"
+        )?;
         writeln!(
             f,
             "ALLOCATION BREAKDOWN ({})",
