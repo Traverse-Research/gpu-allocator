@@ -87,6 +87,8 @@ pub(crate) trait SubAllocator: SubAllocatorBase + std::fmt::Debug {
     }
 }
 
+pub(crate) const VISUALIZER_TABLE_MAX_ENTRY_NAME_LEN: usize = 40;
+
 pub(crate) fn fmt_bytes(mut amount: u64) -> String {
     const SUFFIX: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
 

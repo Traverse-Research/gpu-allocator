@@ -467,8 +467,6 @@ impl fmt::Debug for Allocator {
 
         allocation_report.sort_by_key(|alloc| std::cmp::Reverse(alloc.size));
 
-        const MAX_NUM_CHARACTERS: usize = 40;
-
         writeln!(
             f,
             "================================================================"
@@ -485,7 +483,7 @@ impl fmt::Debug for Allocator {
                 "{:max_len$.max_len$}\t- {}",
                 alloc.name,
                 fmt_bytes(alloc.size),
-                max_len = MAX_NUM_CHARACTERS,
+                max_len = allocator::VISUALIZER_TABLE_MAX_ENTRY_NAME_LEN,
             )?;
         }
 
