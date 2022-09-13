@@ -393,7 +393,7 @@ impl AllocatorVisualizer {
     }
 
     #[allow(clippy::print_stdout)]
-    pub fn debug_pring_breakdown(&mut self, allocator: &Allocator) {
+    pub fn debug_pring_breakdown(allocator: &Allocator) {
         let mut allocation_report = vec![];
 
         for memory_type in &allocator.memory_types {
