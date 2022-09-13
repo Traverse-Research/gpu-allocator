@@ -411,7 +411,6 @@ impl AllocatorVisualizer {
     #[allow(clippy::print_stdout)]
     pub fn debug_pring_breakdown(&mut self, allocator: &Allocator) {
         let mut allocation_report = vec![];
-        let mut total_size_in_bytes = 0;
 
         for memory_type in &allocator.memory_types {
             for block in memory_type.memory_blocks.iter().flatten() {
@@ -421,7 +420,7 @@ impl AllocatorVisualizer {
             }
         }
 
-        total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
+        let total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
 
         let suffix = ["B", "KB", "MB", "GB", "TB"];
 
@@ -439,6 +438,9 @@ impl AllocatorVisualizer {
             }
         };
 
+        let mut allocation_report =
+        allocation_report.iter().enumerate().collect::<Vec<_>>();
+
         allocation_report.sort_by_key(|(idx, _)| *idx);
 
         const MAX_NUM_CHARACTERS: usize = 40;
@@ -447,15 +449,6 @@ impl AllocatorVisualizer {
         println!("ALLOCATION BREAKDOWN ({})", fmt_bytes(total_size_in_bytes));
 
         for (idx, alloc) in &allocation_report {
-            if ui.is_item_hovered() && alloc.backtrace.is_some() {
-                ui.tooltip(|| {
-                    ui.text(resolve_backtrace(&alloc.backtrace));
-                });
-            }
-
-            ui.table_next_column();
-            ui.text(fmt_bytes(alloc.size));
-
             let mut cloned_name = alloc.name.clone();
             cloned_name.truncate(MAX_NUM_CHARACTERS);
 
