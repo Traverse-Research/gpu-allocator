@@ -481,19 +481,13 @@ impl fmt::Debug for Allocator {
         )?;
 
         for (idx, alloc) in &allocation_report {
-            let mut cloned_name = alloc.name.clone();
-            cloned_name.truncate(MAX_NUM_CHARACTERS);
-
-            let num_spaces = MAX_NUM_CHARACTERS - cloned_name.len();
-            let aligning_spaces = " ".repeat(num_spaces);
-
             writeln!(
                 f,
-                "\t\t{}\t- {}{}\t- {}",
+                "\t\t{}\t- {:max_len$.max_len$}\t- {}",
                 idx,
-                cloned_name,
-                aligning_spaces,
-                fmt_bytes(alloc.size)
+                alloc.name,
+                fmt_bytes(alloc.size),
+                max_len = MAX_NUM_CHARACTERS,
             )?;
         }
 
