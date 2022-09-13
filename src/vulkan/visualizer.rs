@@ -308,25 +308,9 @@ impl AllocatorVisualizer {
             total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
         }
 
-        let suffix = ["B", "KB", "MB", "GB", "TB"];
-
-        let fmt_bytes = |mut amount: u64| -> String {
-            let mut idx = 0;
-            let mut print_amount = amount as f64;
-            loop {
-                if amount < 1024 {
-                    return format!("{:.2} {}", print_amount, suffix[idx]);
-                }
-
-                print_amount = amount as f64 / 1024.0;
-                amount /= 1024;
-                idx += 1;
-            }
-        };
-
         let mut window = imgui::Window::new(format!(
             "Allocation Breakdown ({})###allocation_breakdown_window",
-            fmt_bytes(total_size_in_bytes)
+            crate::visualizer::fmt_bytes(total_size_in_bytes)
         ))
         .position([20.0f32, 80.0f32], imgui::Condition::FirstUseEver)
         .size([460.0f32, 420.0f32], imgui::Condition::FirstUseEver);
@@ -402,7 +386,7 @@ impl AllocatorVisualizer {
                     }
 
                     ui.table_next_column();
-                    ui.text(fmt_bytes(alloc.size));
+                    ui.text(crate::visualizer::fmt_bytes(alloc.size));
                 }
             }
         });
@@ -414,39 +398,22 @@ impl AllocatorVisualizer {
 
         for memory_type in &allocator.memory_types {
             for block in memory_type.memory_blocks.iter().flatten() {
-                for report in block.sub_allocator.report_allocations() {
-                    allocation_report.push(report);
-                }
+                allocation_report.extend_from_slice(&block.sub_allocator.report_allocations())
             }
         }
 
         let total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
 
-        let suffix = ["B", "KB", "MB", "GB", "TB"];
-
-        let fmt_bytes = |mut amount: u64| -> String {
-            let mut idx = 0;
-            let mut print_amount = amount as f64;
-            loop {
-                if amount < 1024 {
-                    return format!("{:.2} {}", print_amount, suffix[idx]);
-                }
-
-                print_amount = amount as f64 / 1024.0;
-                amount /= 1024;
-                idx += 1;
-            }
-        };
-
-        let mut allocation_report =
-        allocation_report.iter().enumerate().collect::<Vec<_>>();
-
-        allocation_report.sort_by_key(|(idx, _)| *idx);
+        let mut allocation_report = allocation_report.iter().enumerate().collect::<Vec<_>>();
+        allocation_report.sort_by_key(|(_, alloc)| std::cmp::Reverse(alloc.size));
 
         const MAX_NUM_CHARACTERS: usize = 40;
 
         println!("================================================================");
-        println!("ALLOCATION BREAKDOWN ({})", fmt_bytes(total_size_in_bytes));
+        println!(
+            "ALLOCATION BREAKDOWN ({})",
+            crate::visualizer::fmt_bytes(total_size_in_bytes)
+        );
 
         for (idx, alloc) in &allocation_report {
             let mut cloned_name = alloc.name.clone();
@@ -460,7 +427,7 @@ impl AllocatorVisualizer {
                 idx,
                 cloned_name,
                 aligning_spaces,
-                fmt_bytes(alloc.size)
+                crate::visualizer::fmt_bytes(alloc.size)
             );
         }
     }
