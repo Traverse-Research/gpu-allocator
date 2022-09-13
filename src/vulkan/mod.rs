@@ -454,8 +454,7 @@ pub struct Allocator {
 }
 
 impl Allocator {
-    #[allow(clippy::print_stdout)]
-    pub fn debug_pring_breakdown(&self) {
+    pub fn fmt_alloc_breakdown(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut allocation_report = vec![];
 
         for memory_type in &self.memory_types {
@@ -471,8 +470,12 @@ impl Allocator {
 
         const MAX_NUM_CHARACTERS: usize = 40;
 
-        println!("================================================================");
-        println!("ALLOCATION BREAKDOWN ({})", fmt_bytes(total_size_in_bytes));
+        f.write_str("================================================================")?;
+        write!(
+            f,
+            "ALLOCATION BREAKDOWN ({})",
+            fmt_bytes(total_size_in_bytes)
+        )?;
 
         for (idx, alloc) in &allocation_report {
             let mut cloned_name = alloc.name.clone();
@@ -481,14 +484,17 @@ impl Allocator {
             let num_spaces = MAX_NUM_CHARACTERS - cloned_name.len();
             let aligning_spaces = " ".repeat(num_spaces);
 
-            println!(
+            write!(
+                f,
                 "\t\t{}\t- {}{}\t- {}",
                 idx,
                 cloned_name,
                 aligning_spaces,
                 fmt_bytes(alloc.size)
-            );
+            )?;
         }
+
+        Ok(())
     }
 }
 
