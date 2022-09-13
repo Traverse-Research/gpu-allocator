@@ -407,4 +407,68 @@ impl AllocatorVisualizer {
             }
         });
     }
+
+    #[allow(clippy::print_stdout)]
+    pub fn debug_pring_breakdown(&mut self, allocator: &Allocator) {
+        let mut allocation_report = vec![];
+        let mut total_size_in_bytes = 0;
+
+        for memory_type in &allocator.memory_types {
+            for block in memory_type.memory_blocks.iter().flatten() {
+                for report in block.sub_allocator.report_allocations() {
+                    allocation_report.push(report);
+                }
+            }
+        }
+
+        total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
+
+        let suffix = ["B", "KB", "MB", "GB", "TB"];
+
+        let fmt_bytes = |mut amount: u64| -> String {
+            let mut idx = 0;
+            let mut print_amount = amount as f64;
+            loop {
+                if amount < 1024 {
+                    return format!("{:.2} {}", print_amount, suffix[idx]);
+                }
+
+                print_amount = amount as f64 / 1024.0;
+                amount /= 1024;
+                idx += 1;
+            }
+        };
+
+        allocation_report.sort_by_key(|(idx, _)| *idx);
+
+        const MAX_NUM_CHARACTERS: usize = 40;
+
+        println!("================================================================");
+        println!("ALLOCATION BREAKDOWN ({})", fmt_bytes(total_size_in_bytes));
+
+        for (idx, alloc) in &allocation_report {
+            if ui.is_item_hovered() && alloc.backtrace.is_some() {
+                ui.tooltip(|| {
+                    ui.text(resolve_backtrace(&alloc.backtrace));
+                });
+            }
+
+            ui.table_next_column();
+            ui.text(fmt_bytes(alloc.size));
+
+            let mut cloned_name = alloc.name.clone();
+            cloned_name.truncate(MAX_NUM_CHARACTERS);
+
+            let num_spaces = MAX_NUM_CHARACTERS - cloned_name.len();
+            let aligning_spaces = " ".repeat(num_spaces);
+
+            println!(
+                "\t\t{}\t- {}{}\t- {}",
+                idx,
+                cloned_name,
+                aligning_spaces,
+                fmt_bytes(alloc.size)
+            );
+        }
+    }
 }
