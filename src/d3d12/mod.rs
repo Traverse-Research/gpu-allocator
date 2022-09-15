@@ -262,6 +262,7 @@ impl Allocation {
 #[derive(Debug)]
 struct MemoryBlock {
     heap: ID3D12Heap,
+    size: u64,
     sub_allocator: Box<dyn allocator::SubAllocator>,
 }
 impl MemoryBlock {
@@ -310,6 +311,7 @@ impl MemoryBlock {
 
         Ok(Self {
             heap,
+            size,
             sub_allocator,
         })
     }
@@ -746,25 +748,28 @@ impl Allocator {
 impl fmt::Debug for Allocator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut allocation_report = vec![];
+        let mut total_reserved_size_in_bytes = 0;
 
         for memory_type in &self.memory_types {
             for block in memory_type.memory_blocks.iter().flatten() {
+                total_reserved_size_in_bytes += block.size;
                 allocation_report.extend(block.sub_allocator.report_allocations())
             }
         }
 
-        let total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
+        let total_used_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
 
         allocation_report.sort_by_key(|alloc| std::cmp::Reverse(alloc.size));
 
         writeln!(
             f,
-            "================================================================"
+            "================================================================",
         )?;
         writeln!(
             f,
-            "ALLOCATION BREAKDOWN ({})",
-            fmt_bytes(total_size_in_bytes)
+            "ALLOCATION BREAKDOWN ({} / {})",
+            fmt_bytes(total_used_size_in_bytes),
+            fmt_bytes(total_reserved_size_in_bytes),
         )?;
 
         let max_num_allocations_to_print = f.precision().map_or(usize::MAX, |n| n);
