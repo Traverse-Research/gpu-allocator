@@ -116,7 +116,7 @@ let hr = unsafe {
         allocation.offset(),
         &buffer_desc,
         Direct3D12::D3D12_RESOURCE_STATE_COMMON,
-        std::ptr::null(),
+        None,
         &mut resource,
     )
 }?;
