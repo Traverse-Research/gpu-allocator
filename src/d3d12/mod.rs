@@ -560,10 +560,8 @@ impl Allocator {
         unsafe {
             device.CheckFeatureSupport(
                 D3D12_FEATURE_D3D12_OPTIONS,
-                std::slice::from_raw_parts_mut(
-                    <*mut D3D12_FEATURE_DATA_D3D12_OPTIONS>::cast(&mut options),
-                    std::mem::size_of_val(&options),
-                ),
+                <*mut D3D12_FEATURE_DATA_D3D12_OPTIONS>::cast(&mut options),
+                std::mem::size_of_val(&options) as u32,
             )
         }
         .map_err(|e| {
