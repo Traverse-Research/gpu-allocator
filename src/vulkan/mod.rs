@@ -478,7 +478,6 @@ impl fmt::Debug for Allocator {
         )?;
 
         let max_num_allocations_to_print = f.precision().map_or(usize::MAX, |n| n);
-
         for (idx, alloc) in allocation_report.iter().enumerate() {
             if idx >= max_num_allocations_to_print {
                 break;
