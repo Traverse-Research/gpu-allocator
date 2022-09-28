@@ -477,7 +477,12 @@ impl fmt::Debug for Allocator {
             fmt_bytes(total_size_in_bytes)
         )?;
 
-        for alloc in &allocation_report {
+        let max_num_allocations_to_print = f.precision().map_or(usize::MAX, |n| n);
+        for (idx, alloc) in allocation_report.iter().enumerate() {
+            if idx >= max_num_allocations_to_print {
+                break;
+            }
+
             writeln!(
                 f,
                 "{:max_len$.max_len$}\t- {}",
