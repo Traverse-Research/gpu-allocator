@@ -8,7 +8,7 @@ pub use visualizer::AllocatorVisualizer;
 use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;
-use log::{debug, warn, Level};
+use log::{debug, info, Level};
 use std::fmt;
 
 use crate::{
@@ -546,7 +546,7 @@ impl Allocator {
                 && !flags.contains(vk::MemoryPropertyFlags::HOST_COHERENT)
         });
         if host_visible_not_coherent {
-            warn!("There is a memory type that is host visible, but not host coherent. It's time to upgrade our memory allocator to take advantage of this type of memory :)");
+            info!("There is a memory type that is host visible, but not host coherent. It's time to upgrade our memory allocator to take advantage of this type of memory :)");
         }
 
         let memory_types = memory_types
