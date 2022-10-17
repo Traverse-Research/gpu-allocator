@@ -5,6 +5,9 @@ mod visualizer;
 #[cfg(feature = "visualizer")]
 pub use visualizer::AllocatorVisualizer;
 
+#[cfg(feature = "presser")]
+mod presser;
+
 use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;
