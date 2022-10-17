@@ -8,7 +8,7 @@ pub use visualizer::AllocatorVisualizer;
 use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;
-use log::{debug, info, Level};
+use log::{debug, Level};
 use std::fmt;
 
 use crate::{
@@ -534,19 +534,6 @@ impl Allocator {
                     heap.size / (1024 * 1024)
                 );
             }
-        }
-
-        // NOTE(manon): Test if there is any HOST_VISIBLE memory that does _not_
-        //            have the HOST_COHERENT flag, in that case we want to panic,
-        //            as we want to do cool things that we do not yet support
-        //            with that type of memory :)
-        let host_visible_not_coherent = memory_types.iter().any(|t| {
-            let flags = t.property_flags;
-            flags.contains(vk::MemoryPropertyFlags::HOST_VISIBLE)
-                && !flags.contains(vk::MemoryPropertyFlags::HOST_COHERENT)
-        });
-        if host_visible_not_coherent {
-            info!("There is a memory type that is host visible, but not host coherent. It's time to upgrade our memory allocator to take advantage of this type of memory :)");
         }
 
         let memory_types = memory_types
