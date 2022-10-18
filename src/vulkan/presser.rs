@@ -10,7 +10,7 @@ impl Allocation {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```ignore
     /// #[repr(C, align(16))]
     /// #[derive(Clone, Copy)]
     /// struct MyGpuVector {
