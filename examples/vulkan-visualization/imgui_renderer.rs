@@ -713,37 +713,36 @@ impl ImGuiRenderer {
         let mut ib_slab = self.ib_allocation.as_mapped_slab().unwrap();
 
         for draw_list in imgui_draw_data.draw_lists() {
-            unsafe {
-                device.cmd_bind_vertex_buffers(
-                    cmd,
-                    0,
-                    &[self.vertex_buffer],
-                    &[vb_offset as u64 * std::mem::size_of::<imgui::DrawVert>() as u64],
-                )
-            };
-            unsafe {
-                device.cmd_bind_index_buffer(
-                    cmd,
-                    self.index_buffer,
-                    ib_offset as u64 * std::mem::size_of::<imgui::DrawIdx>() as u64,
-                    vk::IndexType::UINT16,
-                )
-            };
-
             {
                 let vertices = draw_list.vtx_buffer();
                 let copy_record =
                     presser::copy_from_slice_to_offset(vertices, &mut vb_slab, vb_offset).unwrap();
-                assert_eq!(copy_record.copy_start_offset, vb_offset);
                 vb_offset = copy_record.copy_end_offset_padded;
+
+                unsafe {
+                    device.cmd_bind_vertex_buffers(
+                        cmd,
+                        0,
+                        &[self.vertex_buffer],
+                        &[copy_record.copy_start_offset as _],
+                    )
+                };
             }
 
             {
                 let indices = draw_list.idx_buffer();
                 let copy_record =
                     presser::copy_from_slice_to_offset(indices, &mut ib_slab, ib_offset).unwrap();
-                assert_eq!(copy_record.copy_start_offset, ib_offset);
                 ib_offset = copy_record.copy_end_offset_padded;
+
+                unsafe {
+                    device.cmd_bind_index_buffer(
+                        cmd,
+                        self.index_buffer,
+                        copy_record.copy_start_offset as _,
+                        vk::IndexType::UINT16,
+                    )
+                };
             }
 
             for command in draw_list.commands() {
