@@ -5,7 +5,7 @@ impl Allocation {
     /// Borrow the CPU-mapped memory that backs this allocation as a [`presser::Slab`], which you can then
     /// use to safely copy data into the raw, potentially-uninitialized buffer.
     ///
-    /// Returns `None` if `self.mapped_ptr()` is `None`, or if `self.size()` is > `isize::MAX` because
+    /// Returns [`None`] if `self.mapped_ptr()` is `None`, or if `self.size()` is > `isize::MAX` because
     /// this could lead to undefined behavior.
     ///
     /// # Example
