@@ -9,9 +9,9 @@ jobs:
       matrix:
         include:
         - os: ubuntu-latest
-          features: vulkan,visualizer
+          features: vulkan,visualizer,presser
         - os: windows-latest
-          features: vulkan,visualizer,d3d12,public-winapi
+          features: vulkan,visualizer,d3d12,public-winapi,presser
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -31,9 +31,9 @@ jobs:
       matrix:
         include:
         - os: ubuntu-latest
-          features: vulkan,visualizer
+          features: vulkan,visualizer,presser
         - os: windows-latest
-          features: vulkan,visualizer,d3d12,public-winapi
+          features: vulkan,visualizer,d3d12,public-winapi,presser
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -75,9 +75,9 @@ jobs:
       matrix:
         include:
         - os: ubuntu-latest
-          features: vulkan,visualizer
+          features: vulkan,visualizer,presser
         - os: windows-latest
-          features: vulkan,visualizer,d3d12,public-winapi
+          features: vulkan,visualizer,d3d12,public-winapi,presser
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
