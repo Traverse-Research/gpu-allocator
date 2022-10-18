@@ -24,7 +24,7 @@ impl Allocation {
     /// let my_gpu_data: &[MyGpuVector] = get_vertex_data();
     ///
     /// // Get a `presser::Slab` from our gpu_allocator::Allocation
-    /// let alloc_slab = my_allocation.as_mapped_slab().unwrap();
+    /// let mut alloc_slab = my_allocation.as_mapped_slab().unwrap();
     ///
     /// // depending on the type of data you're copying, your vulkan device may have a minimum
     /// // alignment requirement for that data
@@ -32,7 +32,7 @@ impl Allocation {
     ///
     /// let copy_record = presser::copy_from_slice_to_offset_with_align(
     ///     my_gpu_data,
-    ///     alloc_slab,
+    ///     &mut alloc_slab,
     ///     0, // start as close to the beginning of the allocation as possible
     ///     min_gpu_align,
     /// );
