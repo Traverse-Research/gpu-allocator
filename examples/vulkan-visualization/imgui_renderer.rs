@@ -309,7 +309,7 @@ impl ImGuiRenderer {
             let image_view = unsafe { device.create_image_view(&view_create_info, None) }?;
 
             // Create upload buffer
-            let (upload_buffer, upload_buffer_memory) = {
+            let (upload_buffer, mut upload_buffer_memory) = {
                 let create_info = vk::BufferCreateInfo::builder()
                     .size((font_atlas.width * font_atlas.height * 4) as u64)
                     .usage(vk::BufferUsageFlags::TRANSFER_SRC);
@@ -338,14 +338,8 @@ impl ImGuiRenderer {
             };
 
             // Copy font data to upload buffer
-            let dst = upload_buffer_memory.mapped_ptr().unwrap().cast().as_ptr();
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    font_atlas.data.as_ptr(),
-                    dst,
-                    (font_atlas.width * font_atlas.height * 4) as usize,
-                );
-            }
+            let mut slab = upload_buffer_memory.as_mapped_slab().unwrap();
+            presser::copy_from_slice_to_offset(font_atlas.data, &mut slab, 0).unwrap();
 
             // Copy upload buffer to image
             record_and_submit_command_buffer(
@@ -633,13 +627,13 @@ impl ImGuiRenderer {
                 ],
             };
 
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    &cbuffer_data,
-                    self.cb_allocation.mapped_ptr().unwrap().cast().as_ptr(),
-                    1,
-                )
-            };
+            let copy_record = presser::copy_to_offset(
+                &cbuffer_data,
+                &mut self.cb_allocation.as_mapped_slab().unwrap(),
+                0,
+            )
+            .unwrap();
+            assert_eq!(copy_record.copy_start_offset, 0);
         }
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
@@ -715,6 +709,9 @@ impl ImGuiRenderer {
         let mut vb_offset = 0;
         let mut ib_offset = 0;
 
+        let mut vb_slab = self.vb_allocation.as_mapped_slab().unwrap();
+        let mut ib_slab = self.ib_allocation.as_mapped_slab().unwrap();
+
         for draw_list in imgui_draw_data.draw_lists() {
             unsafe {
                 device.cmd_bind_vertex_buffers(
@@ -735,30 +732,18 @@ impl ImGuiRenderer {
 
             {
                 let vertices = draw_list.vtx_buffer();
-                let dst_ptr = self
-                    .vb_allocation
-                    .mapped_ptr()
-                    .unwrap()
-                    .cast::<imgui::DrawVert>()
-                    .as_ptr();
-                let dst_ptr = unsafe { dst_ptr.offset(vb_offset) };
-                unsafe {
-                    std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst_ptr, vertices.len())
-                };
-                vb_offset += vertices.len() as isize;
+                let copy_record =
+                    presser::copy_from_slice_to_offset(vertices, &mut vb_slab, vb_offset).unwrap();
+                assert_eq!(copy_record.copy_start_offset, vb_offset);
+                vb_offset = copy_record.copy_end_offset_padded;
             }
 
             {
                 let indices = draw_list.idx_buffer();
-                let dst_ptr = self
-                    .ib_allocation
-                    .mapped_ptr()
-                    .unwrap()
-                    .cast::<imgui::DrawIdx>()
-                    .as_ptr();
-                let dst_ptr = unsafe { dst_ptr.offset(ib_offset) };
-                unsafe { std::ptr::copy_nonoverlapping(indices.as_ptr(), dst_ptr, indices.len()) };
-                ib_offset += indices.len() as isize;
+                let copy_record =
+                    presser::copy_from_slice_to_offset(indices, &mut ib_slab, ib_offset).unwrap();
+                assert_eq!(copy_record.copy_start_offset, ib_offset);
+                ib_offset = copy_record.copy_end_offset_padded;
             }
 
             for command in draw_list.commands() {
