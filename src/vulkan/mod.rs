@@ -5,15 +5,11 @@ mod visualizer;
 #[cfg(feature = "visualizer")]
 pub use visualizer::AllocatorVisualizer;
 
-#[cfg(feature = "presser")]
-mod presser;
-
 use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;
 use log::{debug, Level};
 use std::fmt;
-use core::convert::TryFrom;
 
 use crate::{
     allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result,
@@ -39,6 +35,90 @@ pub struct AllocatorCreateDesc {
     pub buffer_device_address: bool,
 }
 
+/// A piece of allocated memory.
+///
+/// Could be contained in its own individual underlying memory object or as a sub-region
+/// of a larger allocation.
+///
+/// # Copying data into a CPU-mapped [`Allocation`]
+///
+/// You'll very likely want to copy data into CPU-mapped [`Allocation`]s in order to send that data to the GPU.
+/// Doing this data transfer correctly without invoking undefined behavior can be quite fraught and non-obvious<sup>[\[1\]]</sup>.
+///
+/// To help you do this correctly, [`Allocation`] implements [`presser::Slab`], which means you can directly
+/// pass it in to many of `presser`'s [helper functions] (for example, [`copy_from_slice_to_offset`]).
+///
+/// In most cases, this will work perfectly. However, note that if you try to use an [`Allocation`] as a
+/// [`Slab`] and it is not valid to do so (if it is not CPU-mapped or if its `size > isize::MAX`),
+/// you will cause a panic. If you aren't sure about these conditions, you may use [`Allocation::try_as_mapped_slab`].
+///
+/// ## Example
+///
+/// Say we've created an [`Allocation`] called `my_allocation`, which is CPU-mapped.
+/// ```ignore
+/// let mut my_allocation: Allocation = my_allocator.allocate(...)?;
+/// ```
+///
+/// And we want to fill it with some data in the form of a `my_gpu_data: Vec<MyGpuVector>`, defined as such:
+///
+/// ```ignore
+/// // note that this is size(12) but align(16), thus we have 4 padding bytes.
+/// // this would mean a `&[MyGpuVector]` is invalid to cast as a `&[u8]`, but
+/// // we can still use `presser` to copy it directly in a valid manner.
+/// #[repr(C, align(16))]
+/// #[derive(Clone, Copy)]
+/// struct MyGpuVertex {
+///     x: f32,
+///     y: f32,
+///     z: f32,
+/// }
+///
+/// let my_gpu_data: Vec<MyGpuData> = make_vertex_data();
+/// ```
+///
+/// Depending on how the data we're copying will be used, the vulkan device may have a minimum
+/// alignment requirement for that data:
+///
+/// ```ignore
+/// let min_gpu_align = my_vulkan_device_specifications.min_alignment_thing;
+/// ```
+///
+/// Finally, we can use [`presser::copy_from_slice_to_offset_with_align`] to perform the copy,
+/// simply passing `&mut my_allocation` since [`Allocation`] implements [`Slab`].
+///
+/// ```ignore
+/// let copy_record = presser::copy_from_slice_to_offset_with_align(
+///     &my_gpu_data[..], // a slice containing all elements of my_gpu_data
+///     &mut my_allocation, // our Allocation
+///     0, // start as close to the beginning of the allocation as possible
+///     min_gpu_align, // the minimum alignment we queried previously
+/// )?;
+/// ```
+///
+/// It's important to note that the data may not have actually been copied starting at the requested
+/// `start_offset` (0 in the example above) depending on the alignment of the underlying allocation
+/// as well as the alignment requirements of `MyGpuVector` and the `min_gpu_align` we passed in. Thus,
+/// we can query the `copy_record` for the actual starting offset:
+///
+/// ```ignore
+/// let actual_data_start_offset = copy_record.copy_start_offset;
+/// ```
+///
+/// ## Safety
+///
+/// It is technically not fully safe to use an [`Allocation`] as a [`presser::Slab`] because we can't validate that the
+/// GPU is not using the data in the buffer while `self` is borrowed. However, trying
+/// to validate this statically is really hard and the community has basically decided that
+/// requiring `unsafe` for functions like this creates too much "unsafe-noise", ultimately making it
+/// harder to debug more insidious unsafety that is unrelated to GPU-CPU sync issues.
+///
+/// So, as would always be the case, you must ensure the GPU
+/// is not using the data in `self` for the duration that you hold the returned [`MappedAllocationSlab`].
+///
+/// [`Slab`]: presser::Slab
+/// [`copy_from_slice_to_offset`]: presser::copy_from_slice_to_offset
+/// [helper functions]: presser#functions
+/// [\[1\]]: presser#motivation
 #[derive(Debug)]
 pub struct Allocation {
     chunk_id: Option<std::num::NonZeroU64>,
@@ -61,63 +141,31 @@ unsafe impl Send for Allocation {}
 unsafe impl Sync for Allocation {}
 
 impl Allocation {
-    /// Borrow the CPU-mapped memory that backs this allocation as a [`presser::Slab`], which you can then
+    /// Tries to borrow the CPU-mapped memory that backs this allocation as a [`presser::Slab`], which you can then
     /// use to safely copy data into the raw, potentially-uninitialized buffer.
+    /// See [the documentation of Allocation][Allocation#example] for an example of this.
     ///
     /// Returns [`None`] if `self.mapped_ptr()` is `None`, or if `self.size()` is greater than `isize::MAX` because
     /// this could lead to undefined behavior.
     ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// #[repr(C, align(16))]
-    /// #[derive(Clone, Copy)]
-    /// struct MyGpuVector {
-    ///     x: f32,
-    ///     y: f32,
-    ///     z: f32,
-    /// }
-    ///
-    /// // Create some data to be sent to the GPU. Note this must be formatted correctly in terms of
-    /// // alignment of individual items and etc, as usual.
-    /// let my_gpu_data: &[MyGpuVector] = get_vertex_data();
-    ///
-    /// // Get a `presser::Slab` from our gpu_allocator::Allocation
-    /// let mut alloc_slab = my_allocation.as_mapped_slab().unwrap();
-    ///
-    /// // depending on the type of data you're copying, your vulkan device may have a minimum
-    /// // alignment requirement for that data
-    /// let min_gpu_align = my_vulkan_device_specifications.min_alignment_thing;
-    ///
-    /// let copy_record = presser::copy_from_slice_to_offset_with_align(
-    ///     my_gpu_data,
-    ///     &mut alloc_slab,
-    ///     0, // start as close to the beginning of the allocation as possible
-    ///     min_gpu_align,
-    /// );
-    ///
-    /// // the data may not have actually been copied starting at the requested start offset
-    /// // depending on the alignment of the underlying allocation, as well as the alignment requirements of
-    /// // `MyGpuVector` and the `min_gpu_align` we passed in.
-    /// let actual_data_start_offset = copy_record.copy_start_offset;
-    /// ```
+    /// Note that [`Allocation`] implements [`Slab`] natively, so you can actually pass this allocation as a [`Slab`]
+    /// directly. However, if `self` is not actually a valid [`Slab`] (this function would return `None` as described above),
+    /// then trying to use it as a [`Slab`] will panic.
     ///
     /// # Safety
     ///
-    /// This is technically not fully safe because we can't validate that the
-    /// GPU is not using the data in the buffer while `self` is borrowed. However, trying
-    /// to validate this statically is really hard and the community has basically decided that
-    /// requiring `unsafe` for functions like this creates too much unsafe-noise, ultimately making it
-    /// harder to debug more insidious unsafety that is unrelated to GPU-CPU sync issues.
-    /// 
-    /// So, as would always be the case, you must ensure the GPU
-    /// is not using the data in `self` for the duration that you hold the returned [`MappedAllocationSlab`].
-    pub fn as_mapped_slab(&mut self) -> Option<MappedAllocationSlab<'_>> {
+    /// See the note about safety in [the documentation of Allocation][Allocation#safety]
+    ///
+    /// [`Slab`]: presser::Slab
+    pub fn try_as_mapped_slab(&mut self) -> Option<MappedAllocationSlab<'_>> {
         let mapped_ptr = self.mapped_ptr()?.cast().as_ptr();
-        // size > isize::MAX is disallowed by `Slab` for safety reasons
-        let size = isize::try_from(self.size()).ok()?;
-        // this will always succeed since size can only be positive and < isize::MAX
-        let size = size as usize;
+
+        if self.size > isize::MAX as _ {
+            return None;
+        }
+
+        // this will always succeed since size is <= isize::MAX which is < usize::MAX
+        let size = self.size as usize;
 
         Some(MappedAllocationSlab {
             _borrowed_alloc: self,
@@ -195,9 +243,9 @@ impl Default for Allocation {
     }
 }
 
-/// A wrapper struct over a borrowed [`Allocation`] that implements [`presser::Slab`].
+/// A wrapper struct over a borrowed [`Allocation`] that infallibly implements [`presser::Slab`].
 ///
-/// This type should be acquired by calling [`Allocation::as_mapped_slab`].
+/// This type should be acquired by calling [`Allocation::try_as_mapped_slab`].
 pub struct MappedAllocationSlab<'a> {
     _borrowed_alloc: &'a mut Allocation,
     mapped_ptr: *mut u8,
@@ -216,6 +264,31 @@ unsafe impl<'a> presser::Slab for MappedAllocationSlab<'a> {
 
     fn size(&self) -> usize {
         self.size
+    }
+}
+
+// SAFETY: See the safety comment of Allocation::as_mapped_slab above.
+unsafe impl presser::Slab for Allocation {
+    fn base_ptr(&self) -> *const u8 {
+        self.mapped_ptr
+            .expect("tried to use a non-mapped Allocation as a Slab")
+            .as_ptr()
+            .cast()
+    }
+
+    fn base_ptr_mut(&mut self) -> *mut u8 {
+        self.mapped_ptr
+            .expect("tried to use a non-mapped Allocation as a Slab")
+            .as_ptr()
+            .cast()
+    }
+
+    fn size(&self) -> usize {
+        if self.size > isize::MAX as _ {
+            panic!("tried to use an Allocation with size > isize::MAX as a Slab")
+        }
+        // this will always work if the above passed
+        self.size as usize
     }
 }
 

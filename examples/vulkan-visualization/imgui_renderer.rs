@@ -338,8 +338,10 @@ impl ImGuiRenderer {
             };
 
             // Copy font data to upload buffer
-            let mut slab = upload_buffer_memory.as_mapped_slab().unwrap();
-            presser::copy_from_slice_to_offset(font_atlas.data, &mut slab, 0).unwrap();
+            let copy_record =
+                presser::copy_from_slice_to_offset(font_atlas.data, &mut upload_buffer_memory, 0)
+                    .unwrap();
+            assert_eq!(copy_record.copy_start_offset, 0);
 
             // Copy upload buffer to image
             record_and_submit_command_buffer(
@@ -627,12 +629,8 @@ impl ImGuiRenderer {
                 ],
             };
 
-            let copy_record = presser::copy_to_offset(
-                &cbuffer_data,
-                &mut self.cb_allocation.as_mapped_slab().unwrap(),
-                0,
-            )
-            .unwrap();
+            let copy_record =
+                presser::copy_to_offset(&cbuffer_data, &mut self.cb_allocation, 0).unwrap();
             assert_eq!(copy_record.copy_start_offset, 0);
         }
 
@@ -709,14 +707,15 @@ impl ImGuiRenderer {
         let mut vb_offset = 0;
         let mut ib_offset = 0;
 
-        let mut vb_slab = self.vb_allocation.as_mapped_slab().unwrap();
-        let mut ib_slab = self.ib_allocation.as_mapped_slab().unwrap();
-
         for draw_list in imgui_draw_data.draw_lists() {
             {
                 let vertices = draw_list.vtx_buffer();
-                let copy_record =
-                    presser::copy_from_slice_to_offset(vertices, &mut vb_slab, vb_offset).unwrap();
+                let copy_record = presser::copy_from_slice_to_offset(
+                    vertices,
+                    &mut self.vb_allocation,
+                    vb_offset,
+                )
+                .unwrap();
                 vb_offset = copy_record.copy_end_offset_padded;
 
                 unsafe {
@@ -732,7 +731,8 @@ impl ImGuiRenderer {
             {
                 let indices = draw_list.idx_buffer();
                 let copy_record =
-                    presser::copy_from_slice_to_offset(indices, &mut ib_slab, ib_offset).unwrap();
+                    presser::copy_from_slice_to_offset(indices, &mut self.ib_allocation, ib_offset)
+                        .unwrap();
                 ib_offset = copy_record.copy_end_offset_padded;
 
                 unsafe {
