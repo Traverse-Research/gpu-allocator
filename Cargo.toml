@@ -22,7 +22,7 @@ include = [
 backtrace = "0.3"
 log = "0.4"
 thiserror = "1.0"
-presser = { version = "0.3", optional = true }
+presser = { version = "0.3" }
 # Only needed for vulkan.  Disable all default features as good practice,
 # such as the ability to link/load a Vulkan library.
 ash = { version = ">=0.34, <=0.37", optional = true, default-features = false, features = ["debug"] }
@@ -73,7 +73,7 @@ required-features = ["vulkan", "ash/loaded"]
 
 [[example]]
 name = "vulkan-visualization"
-required-features = ["vulkan", "ash/loaded", "visualizer", "presser"]
+required-features = ["vulkan", "ash/loaded", "visualizer"]
 
 [[example]]
 name = "d3d12-buffer"
@@ -95,4 +95,4 @@ d3d12 = ["windows"]
 # Expose helper functionality for winapi types to interface with gpu-allocator, which is primarily windows-rs driven
 public-winapi = ["dep:winapi"]
 
-default = ["d3d12", "vulkan", "presser"]
+default = ["d3d12", "vulkan"]
