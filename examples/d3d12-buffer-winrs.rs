@@ -123,7 +123,7 @@ fn main() -> Result<()> {
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
-                std::ptr::null(),
+                None,
                 &mut resource,
             )
         }?;
@@ -171,7 +171,7 @@ fn main() -> Result<()> {
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
-                std::ptr::null(),
+                None,
                 &mut resource,
             )
         }?;
@@ -219,7 +219,7 @@ fn main() -> Result<()> {
                 allocation.offset(),
                 &test_buffer_desc,
                 D3D12_RESOURCE_STATE_COMMON,
-                std::ptr::null(),
+                None,
                 &mut resource,
             )
         }?;
