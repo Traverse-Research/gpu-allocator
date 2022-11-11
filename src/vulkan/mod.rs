@@ -204,7 +204,7 @@ impl Allocation {
         self.chunk_id
     }
 
-    ///Returns the [`vk::MemoryPropertyFlags`](vk::MemoryPropertyFlags) of this allocation.
+    ///Returns the [`vk::MemoryPropertyFlags`] of this allocation.
     pub fn memory_properties(&self) -> vk::MemoryPropertyFlags {
         self.memory_properties
     }
