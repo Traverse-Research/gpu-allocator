@@ -1,17 +1,15 @@
-use ash::vk;
-
 use std::default::Default;
 use std::ffi::CString;
 
+use ash::vk;
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+
+mod imgui_renderer;
+use imgui_renderer::{handle_imgui_event, ImGuiRenderer};
 
 mod helper;
 use helper::record_and_submit_command_buffer;
-
-mod imgui_renderer;
-use imgui_renderer::ImGuiRenderer;
-
-use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
 fn main() -> ash::prelude::VkResult<()> {
     let entry = unsafe { ash::Entry::load() }.unwrap();
@@ -21,7 +19,7 @@ fn main() -> ash::prelude::VkResult<()> {
     let window_width = 1920;
     let window_height = 1080;
     let window = winit::window::WindowBuilder::new()
-        .with_title("gpu-allocator vulkan visualization")
+        .with_title("gpu-allocator Vulkan visualization")
         .with_inner_size(winit::dpi::PhysicalSize::new(
             window_width as f64,
             window_height as f64,
@@ -30,7 +28,7 @@ fn main() -> ash::prelude::VkResult<()> {
         .build(&event_loop)
         .unwrap();
 
-    // Create vulkan instance
+    // Create Vulkan instance
     let instance = {
         let app_name = CString::new("gpu-allocator examples vulkan-visualization").unwrap();
 
@@ -47,7 +45,8 @@ fn main() -> ash::prelude::VkResult<()> {
             .map(|raw_name| raw_name.as_ptr())
             .collect();
 
-        let surface_extensions = ash_window::enumerate_required_extensions(&window).unwrap();
+        let surface_extensions =
+            ash_window::enumerate_required_extensions(event_loop.raw_display_handle()).unwrap();
 
         let create_info = vk::InstanceCreateInfo::builder()
             .application_info(&appinfo)
@@ -61,10 +60,19 @@ fn main() -> ash::prelude::VkResult<()> {
         }
     };
 
-    let surface = unsafe { ash_window::create_surface(&entry, &instance, &window, None) }.unwrap();
+    let surface = unsafe {
+        ash_window::create_surface(
+            &entry,
+            &instance,
+            window.raw_display_handle(),
+            window.raw_window_handle(),
+            None,
+        )
+    }
+    .unwrap();
     let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
 
-    // Look for vulkan physical device
+    // Look for Vulkan physical device
     let (pdevice, queue_family_index) = {
         let pdevices = unsafe {
             instance
@@ -97,7 +105,7 @@ fn main() -> ash::prelude::VkResult<()> {
             .expect("Couldn't find suitable device.")
     };
 
-    // Create vulkan device
+    // Create Vulkan device
     let device = {
         let device_extension_names_raw = [ash::extensions::khr::Swapchain::name().as_ptr()];
         let features = vk::PhysicalDeviceFeatures {
@@ -239,13 +247,7 @@ fn main() -> ash::prelude::VkResult<()> {
         unsafe { device.create_semaphore(&semaphore_create_info, None) }.unwrap();
 
     let mut imgui = imgui::Context::create();
-    let mut platform = WinitPlatform::init(&mut imgui);
-    // imgui.io_mut().display_size = [window_width as f32, window_height as f32];
-    platform.attach_window(
-        imgui.io_mut(),
-        &window,
-        HiDpiMode::Rounded, /* Default is blurry! */
-    );
+    imgui.io_mut().display_size = [window_width as f32, window_height as f32];
 
     let descriptor_pool = {
         let pool_sizes = [
@@ -294,12 +296,11 @@ fn main() -> ash::prelude::VkResult<()> {
         .collect::<Vec<_>>();
 
     let mut visualizer = Some(gpu_allocator::vulkan::AllocatorVisualizer::new());
-    let mut last_frame = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Wait;
 
-        platform.handle_event(imgui.io_mut(), &window, &event);
+        handle_imgui_event(imgui.io_mut(), &window, &event);
 
         let mut ready_for_rendering = false;
         match event {
@@ -318,11 +319,6 @@ fn main() -> ash::prelude::VkResult<()> {
                 _ => {}
             },
             winit::event::Event::MainEventsCleared => ready_for_rendering = true,
-            winit::event::Event::NewEvents(_) => {
-                let now = std::time::Instant::now();
-                imgui.io_mut().update_delta_time(now - last_frame);
-                last_frame = now;
-            }
             _ => {}
         }
 
@@ -338,9 +334,6 @@ fn main() -> ash::prelude::VkResult<()> {
             .unwrap();
 
             // Start ImGui frame
-            platform
-                .prepare_frame(imgui.io_mut(), &window)
-                .expect("Failed to prepare frame");
             let ui = imgui.frame();
 
             // Submit visualizer ImGui commands
@@ -350,7 +343,6 @@ fn main() -> ash::prelude::VkResult<()> {
                 .render(allocator.as_ref().unwrap(), &ui, None);
 
             // Finish ImGui Frame
-            platform.prepare_render(&ui, &window);
             let imgui_draw_data = ui.render();
 
             record_and_submit_command_buffer(
