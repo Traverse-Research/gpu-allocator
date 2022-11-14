@@ -452,7 +452,7 @@ impl MemoryType {
                     Err(AllocationError::OutOfMemory) => {} // Block is full, continue search.
                     Err(err) => return Err(err),            // Unhandled error, return.
                 }
-            } else if empty_block_index == None {
+            } else if empty_block_index.is_none() {
                 empty_block_index = Some(mem_block_i);
             }
         }
