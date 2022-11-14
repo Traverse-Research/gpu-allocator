@@ -1,17 +1,16 @@
-use ash::vk;
-
 use std::default::Default;
 use std::ffi::CString;
 
+use ash::vk;
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
+use imgui_winit_support::{HiDpiMode, WinitPlatform};
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+
+mod imgui_renderer;
+use imgui_renderer::{handle_imgui_event, ImGuiRenderer};
 
 mod helper;
 use helper::record_and_submit_command_buffer;
-
-mod imgui_renderer;
-use imgui_renderer::ImGuiRenderer;
-
-use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
 fn main() -> ash::prelude::VkResult<()> {
     let entry = unsafe { ash::Entry::load() }.unwrap();
@@ -21,7 +20,7 @@ fn main() -> ash::prelude::VkResult<()> {
     let window_width = 1920;
     let window_height = 1080;
     let window = winit::window::WindowBuilder::new()
-        .with_title("gpu-allocator vulkan visualization")
+        .with_title("gpu-allocator Vulkan visualization")
         .with_inner_size(winit::dpi::PhysicalSize::new(
             window_width as f64,
             window_height as f64,
@@ -30,7 +29,7 @@ fn main() -> ash::prelude::VkResult<()> {
         .build(&event_loop)
         .unwrap();
 
-    // Create vulkan instance
+    // Create Vulkan instance
     let instance = {
         let app_name = CString::new("gpu-allocator examples vulkan-visualization").unwrap();
 
@@ -47,7 +46,8 @@ fn main() -> ash::prelude::VkResult<()> {
             .map(|raw_name| raw_name.as_ptr())
             .collect();
 
-        let surface_extensions = ash_window::enumerate_required_extensions(&window).unwrap();
+        let surface_extensions =
+            ash_window::enumerate_required_extensions(event_loop.raw_display_handle()).unwrap();
 
         let create_info = vk::InstanceCreateInfo::builder()
             .application_info(&appinfo)
@@ -61,10 +61,19 @@ fn main() -> ash::prelude::VkResult<()> {
         }
     };
 
-    let surface = unsafe { ash_window::create_surface(&entry, &instance, &window, None) }.unwrap();
+    let surface = unsafe {
+        ash_window::create_surface(
+            &entry,
+            &instance,
+            window.raw_display_handle(),
+            window.raw_window_handle(),
+            None,
+        )
+    }
+    .unwrap();
     let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
 
-    // Look for vulkan physical device
+    // Look for Vulkan physical device
     let (pdevice, queue_family_index) = {
         let pdevices = unsafe {
             instance
@@ -97,7 +106,7 @@ fn main() -> ash::prelude::VkResult<()> {
             .expect("Couldn't find suitable device.")
     };
 
-    // Create vulkan device
+    // Create Vulkan device
     let device = {
         let device_extension_names_raw = [ash::extensions::khr::Swapchain::name().as_ptr()];
         let features = vk::PhysicalDeviceFeatures {

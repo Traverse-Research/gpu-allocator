@@ -47,9 +47,9 @@ optional = true
 [dev-dependencies]
 # Enable the "loaded" feature to be able to access the Vulkan entrypoint.
 ash = { version = "0.37", default-features = false, features = ["debug", "loaded"] }
-ash-window = "0.10.0"
-raw-window-handle = "0.4"
-winit = "0.26"
+ash-window = "0.12"
+raw-window-handle = "0.5"
+winit = { version = "0.27", features = ["x11", "wayland"] }
 imgui-winit-support = { version = "0.8", default-features = false, features = ["winit-26"] }
 
 [target.'cfg(windows)'.dev-dependencies]
