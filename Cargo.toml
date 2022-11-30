@@ -50,6 +50,7 @@ ash = { version = "0.37", default-features = false, features = ["debug", "loaded
 ash-window = "0.12"
 raw-window-handle = "0.5"
 winit = { version = "0.27", features = ["x11", "wayland"] }
+env_logger = "0.10"
 
 [target.'cfg(windows)'.dev-dependencies]
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }

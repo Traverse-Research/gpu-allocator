@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"]
 //! Example showcasing [`winapi`] interop with [`gpu-allocator`] which is driven by the [`windows`] crate.
+use log::info;
 use raw_window_handle::HasRawWindowHandle;
 
 use gpu_allocator::d3d12::{Allocator, AllocatorCreateDesc, ToWindows};
@@ -128,6 +129,8 @@ fn transition_resource(
 }
 
 fn main() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
+
     // Disable automatic DPI scaling by windows
     unsafe { winuser::SetProcessDPIAware() };
 
@@ -151,7 +154,7 @@ fn main() {
     std::thread::spawn(move || {
         let mut dxgi_factory_flags = 0;
         if ENABLE_DEBUG_LAYER && enable_d3d12_debug_layer() {
-            println!("Enabled D3D12 debug layer");
+            info!("Enabled D3D12 debug layer");
             dxgi_factory_flags |= all_dxgi::DXGI_CREATE_FACTORY_DEBUG;
         }
 
