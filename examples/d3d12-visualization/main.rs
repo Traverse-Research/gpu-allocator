@@ -11,14 +11,12 @@ mod all_dxgi {
     };
 }
 
-use winapi::um::d3d12::*;
-use winapi::um::d3dcommon::*;
-use winapi::um::winuser;
-
+use log::*;
 use winapi::shared::minwindef::UINT;
-use winapi::shared::winerror;
-use winapi::shared::winerror::{FAILED, SUCCEEDED};
-
+use winapi::shared::winerror::{self, FAILED, SUCCEEDED};
+use winapi::um::d3d12::*;
+use winapi::um::winuser;
+use winapi::um::{d3d12, d3dcommon};
 use winapi::Interface;
 
 mod imgui_renderer;
@@ -32,38 +30,78 @@ struct BackBuffer {
     rtv_handle: D3D12_CPU_DESCRIPTOR_HANDLE,
 }
 
-fn find_hardware_adapter(
-    dxgi_factory: &all_dxgi::IDXGIFactory6,
-) -> Option<*mut all_dxgi::IDXGIAdapter4> {
-    let mut adapter: *mut all_dxgi::IDXGIAdapter4 = std::ptr::null_mut();
-    for adapter_index in 0.. {
+fn create_d3d12_device(
+    dxgi_factory: *mut all_dxgi::IDXGIFactory6,
+) -> Option<(*mut all_dxgi::IDXGIAdapter4, *mut ID3D12Device)> {
+    for idx in 0.. {
+        let mut adapter4: *mut all_dxgi::IDXGIAdapter4 = std::ptr::null_mut();
         let hr = unsafe {
-            dxgi_factory.EnumAdapters1(
-                adapter_index,
-                <*mut *mut all_dxgi::IDXGIAdapter4>::cast(&mut adapter),
+            dxgi_factory.as_ref().unwrap().EnumAdapters1(
+                idx,
+                <*mut *mut all_dxgi::IDXGIAdapter4>::cast(&mut adapter4),
             )
         };
+
         if hr == winerror::DXGI_ERROR_NOT_FOUND {
             break;
         }
 
-        let mut desc = Default::default();
-        unsafe { adapter.as_ref().unwrap().GetDesc3(&mut desc) };
+        assert_eq!(hr, winerror::S_OK);
 
-        if (desc.Flags & all_dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+        let mut desc = all_dxgi::DXGI_ADAPTER_DESC3::default();
+        let hr = unsafe { adapter4.as_ref().unwrap().GetDesc3(&mut desc) };
+        if FAILED(hr) {
+            error!("Failed to get adapter description for adapter");
             continue;
         }
 
-        let hr = unsafe {
-            D3D12CreateDevice(
-                adapter.cast(),
-                D3D_FEATURE_LEVEL_12_0,
-                &IID_ID3D12Device,
-                std::ptr::null_mut(),
-            )
-        };
-        if SUCCEEDED(hr) {
-            return Some(adapter);
+        // Skip software adapters
+        if (desc.Flags & all_dxgi::DXGI_ADAPTER_FLAG3_SOFTWARE)
+            == all_dxgi::DXGI_ADAPTER_FLAG3_SOFTWARE
+        {
+            continue;
+        }
+
+        let feature_levels = [
+            (d3dcommon::D3D_FEATURE_LEVEL_11_0, "D3D_FEATURE_LEVEL_11_0"),
+            (d3dcommon::D3D_FEATURE_LEVEL_11_1, "D3D_FEATURE_LEVEL_11_1"),
+            (d3dcommon::D3D_FEATURE_LEVEL_12_0, "D3D_FEATURE_LEVEL_12_0"),
+        ];
+
+        let device =
+            feature_levels
+                .iter()
+                .rev()
+                .find_map(|&(feature_level, feature_level_name)| {
+                    let mut device: *mut ID3D12Device = std::ptr::null_mut();
+                    let hr = unsafe {
+                        D3D12CreateDevice(
+                            adapter4.cast(),
+                            feature_level,
+                            &ID3D12Device::uuidof(),
+                            <*mut *mut ID3D12Device>::cast(&mut device),
+                        )
+                    };
+                    match hr {
+                        winapi::shared::winerror::S_OK => {
+                            println!("Using D3D12 feature level: {}.", feature_level_name);
+                            Some((adapter4, device))
+                        }
+                        winapi::shared::winerror::E_NOINTERFACE => {
+                            error!("ID3D12Device interface not supported.");
+                            None
+                        }
+                        _ => {
+                            info!(
+                                "D3D12 feature level: {} not supported: {:x}",
+                                feature_level_name, hr
+                            );
+                            None
+                        }
+                    }
+                });
+        if device.is_some() {
+            return device;
         }
     }
 
@@ -88,22 +126,6 @@ fn enable_d3d12_debug_layer() -> bool {
     unsafe { debug.Release() };
 
     true
-}
-
-fn create_d3d12_device(adapter: &mut all_dxgi::IDXGIAdapter4) -> *mut ID3D12Device {
-    unsafe {
-        let mut device: *mut ID3D12Device = std::ptr::null_mut();
-        let hr = D3D12CreateDevice(
-            <*mut all_dxgi::IDXGIAdapter4>::cast(adapter),
-            D3D_FEATURE_LEVEL_12_0,
-            &ID3D12Device::uuidof(),
-            <*mut *mut ID3D12Device>::cast(&mut device),
-        );
-        if FAILED(hr) {
-            panic!("Failed to create ID3D12Device.");
-        }
-        device
-    }
 }
 
 #[must_use]
@@ -173,10 +195,9 @@ fn main() {
             factory.as_mut().unwrap()
         };
 
-        let adapter = find_hardware_adapter(dxgi_factory).unwrap();
+        let (adapter, device) =
+            create_d3d12_device(dxgi_factory).expect("Failed to create D3D12 device.");
         let adapter = unsafe { adapter.as_mut().unwrap() };
-
-        let device = create_d3d12_device(adapter);
         let device = unsafe { device.as_mut().unwrap() };
 
         let queue = unsafe {

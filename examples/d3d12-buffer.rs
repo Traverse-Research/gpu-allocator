@@ -1,5 +1,8 @@
 //! Example showcasing [`winapi`] interop with [`gpu-allocator`] which is driven by the [`windows`] crate.
-use winapi::shared::{dxgiformat, winerror};
+use winapi::shared::{
+    dxgiformat,
+    winerror::{self, FAILED},
+};
 use winapi::um::{d3d12, d3dcommon};
 use winapi::Interface;
 
@@ -34,7 +37,7 @@ fn create_d3d12_device(
 
         let mut desc = all_dxgi::DXGI_ADAPTER_DESC3::default();
         let hr = unsafe { adapter4.as_ref().unwrap().GetDesc3(&mut desc) };
-        if hr != winerror::S_OK {
+        if FAILED(hr) {
             error!("Failed to get adapter description for adapter");
             continue;
         }
@@ -162,7 +165,7 @@ fn main() {
                 <*mut *mut d3d12::ID3D12Resource>::cast(&mut resource),
             )
         };
-        if hr != winerror::S_OK {
+        if FAILED(hr) {
             panic!("Failed to create placed resource.");
         }
 
@@ -214,7 +217,7 @@ fn main() {
                 <*mut *mut d3d12::ID3D12Resource>::cast(&mut resource),
             )
         };
-        if hr != winerror::S_OK {
+        if FAILED(hr) {
             panic!("Failed to create placed resource.");
         }
 
@@ -266,7 +269,7 @@ fn main() {
                 <*mut *mut d3d12::ID3D12Resource>::cast(&mut resource),
             )
         };
-        if hr != winerror::S_OK {
+        if FAILED(hr) {
             panic!("Failed to create placed resource.");
         }
 
