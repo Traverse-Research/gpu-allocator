@@ -68,7 +68,7 @@ fn create_d3d12_device(
                     };
                     match hr {
                         winapi::shared::winerror::S_OK => {
-                            println!("Using D3D12 feature level: {}.", feature_level_name);
+                            info!("Using D3D12 feature level: {}.", feature_level_name);
                             Some(device)
                         }
                         winapi::shared::winerror::E_NOINTERFACE => {
@@ -93,6 +93,8 @@ fn create_d3d12_device(
 }
 
 fn main() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
+
     let dxgi_factory = {
         let mut dxgi_factory: *mut all_dxgi::IDXGIFactory6 = std::ptr::null_mut();
         let hr = unsafe {
@@ -167,7 +169,7 @@ fn main() {
         unsafe { resource.as_ref().unwrap().Release() };
 
         allocator.free(allocation).unwrap();
-        println!("Allocation and deallocation of GpuOnly memory was successful.");
+        info!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
     // Test allocating Cpu to Gpu memory
@@ -219,7 +221,7 @@ fn main() {
         unsafe { resource.as_ref().unwrap().Release() };
 
         allocator.free(allocation).unwrap();
-        println!("Allocation and deallocation of CpuToGpu memory was successful.");
+        info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     // Test allocating Gpu to Cpu memory
@@ -271,7 +273,7 @@ fn main() {
         unsafe { resource.as_ref().unwrap().Release() };
 
         allocator.free(allocation).unwrap();
-        println!("Allocation and deallocation of CpuToGpu memory was successful.");
+        info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     drop(allocator); // Explicitly drop before destruction of device.

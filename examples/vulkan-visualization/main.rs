@@ -12,6 +12,8 @@ mod helper;
 use helper::record_and_submit_command_buffer;
 
 fn main() -> ash::prelude::VkResult<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
+
     let entry = unsafe { ash::Entry::load() }.unwrap();
 
     let event_loop = winit::event_loop::EventLoop::new();
