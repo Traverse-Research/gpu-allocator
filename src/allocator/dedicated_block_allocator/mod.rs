@@ -3,16 +3,20 @@
 #[cfg(feature = "visualizer")]
 pub(crate) mod visualizer;
 
-use super::{resolve_backtrace, AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
-use crate::{AllocationError, Result};
+use std::{backtrace::Backtrace, sync::Arc};
+
 use log::{log, Level};
+
+use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
+use crate::{AllocationError, Result};
 
 #[derive(Debug)]
 pub(crate) struct DedicatedBlockAllocator {
     size: u64,
     allocated: u64,
+    /// Only used if [`crate::AllocatorDebugSettings::store_stack_traces`] is [`true`]
     name: Option<String>,
-    backtrace: Option<backtrace::Backtrace>,
+    backtrace: Arc<Backtrace>,
 }
 
 impl DedicatedBlockAllocator {
@@ -21,7 +25,7 @@ impl DedicatedBlockAllocator {
             size,
             allocated: 0,
             name: None,
-            backtrace: None,
+            backtrace: Arc::new(Backtrace::disabled()),
         }
     }
 }
@@ -35,7 +39,7 @@ impl SubAllocator for DedicatedBlockAllocator {
         _allocation_type: AllocationType,
         _granularity: u64,
         name: &str,
-        backtrace: Option<backtrace::Backtrace>,
+        backtrace: Arc<Backtrace>,
     ) -> Result<(u64, std::num::NonZeroU64)> {
         if self.allocated != 0 {
             return Err(AllocationError::OutOfMemory);
@@ -86,7 +90,6 @@ impl SubAllocator for DedicatedBlockAllocator {
     ) {
         let empty = "".to_string();
         let name = self.name.as_ref().unwrap_or(&empty);
-        let backtrace = resolve_backtrace(&self.backtrace);
 
         log!(
             log_level,
@@ -103,7 +106,7 @@ impl SubAllocator for DedicatedBlockAllocator {
             memory_block_index,
             self.size,
             name,
-            backtrace
+            self.backtrace
         )
     }
 

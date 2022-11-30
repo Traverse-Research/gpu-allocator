@@ -78,7 +78,6 @@ rustflags = [
     # END - Embark standard lints v6 for Rust 1.55+
 
     # Our additional lints
-    "-Wclippy::clone_on_ref_ptr",
     "-Wclippy::cognitive_complexity",
     "-Wclippy::needless_pass_by_value",
     "-Wclippy::option_if_let_else",
