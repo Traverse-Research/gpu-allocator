@@ -340,10 +340,10 @@ fn main() -> ash::prelude::VkResult<()> {
             visualizer
                 .as_mut()
                 .unwrap()
-                .render(allocator.as_ref().unwrap(), &ui, None);
+                .render(allocator.as_ref().unwrap(), ui, None);
 
             // Finish ImGui Frame
-            let imgui_draw_data = ui.render();
+            let imgui_draw_data = imgui.render();
 
             record_and_submit_command_buffer(
                 &device,

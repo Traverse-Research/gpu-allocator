@@ -20,13 +20,13 @@ pub(crate) trait SubAllocatorVisualizer {
     fn supports_visualization(&self) -> bool {
         false
     }
-    fn draw_base_info(&self, ui: &Ui<'_>) {
+    fn draw_base_info(&self, ui: &Ui) {
         ui.text("No sub allocator information available");
     }
     fn draw_visualization(
         &self,
         _color_scheme: &ColorScheme,
-        _ui: &Ui<'_>,
+        _ui: &Ui,
         _bytes_per_unit: i32,
         _show_backtraces: bool,
     ) {
