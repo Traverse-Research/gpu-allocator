@@ -142,7 +142,6 @@ pub(crate) struct MemoryBlock {
     pub(crate) size: u64,
     pub(crate) mapped_ptr: *mut std::ffi::c_void,
     pub(crate) sub_allocator: Box<dyn allocator::SubAllocator>,
-    pub(crate) dedicated_block: bool,
     pub(crate) dedicated_allocation: bool,
 }
 
@@ -224,7 +223,6 @@ impl MemoryBlock {
             mapped_ptr,
             sub_allocator,
             dedicated_allocation,
-            dedicated_block,
         })
     }
 

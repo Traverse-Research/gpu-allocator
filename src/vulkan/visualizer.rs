@@ -138,14 +138,9 @@ impl AllocatorVisualizer {
                                             "mapped pointer: 0x{:x}",
                                             block.mapped_ptr as usize
                                         ));
-                                        ui.text(format!(
-                                            "dedicated block: {}",
-                                            block.dedicated_block
-                                        ));
-                                        ui.text(format!(
-                                            "dedicated allocation: {}",
-                                            block.dedicated_allocation
-                                        ));
+                                        if block.dedicated_allocation {
+                                            ui.text(format!("Dedicated Allocation",));
+                                        }
 
                                         block.sub_allocator.draw_base_info(ui);
 
