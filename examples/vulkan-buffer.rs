@@ -111,6 +111,7 @@ fn main() {
                 requirements,
                 location,
                 linear: true,
+                dedicated_allocation: false,
                 name: "Test allocation (Gpu Only)",
             })
             .unwrap();
@@ -143,6 +144,7 @@ fn main() {
                 requirements,
                 location,
                 linear: true,
+                dedicated_allocation: false,
                 name: "Test allocation (Cpu to Gpu)",
             })
             .unwrap();
@@ -175,6 +177,7 @@ fn main() {
                 requirements,
                 location,
                 linear: true,
+                dedicated_allocation: false,
                 name: "Test allocation (Gpu to Cpu)",
             })
             .unwrap();

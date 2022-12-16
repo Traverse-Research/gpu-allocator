@@ -1,6 +1,6 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 
-use std::fmt;
+use std::{fmt, mem::ManuallyDrop};
 
 use log::{debug, Level};
 
@@ -222,6 +222,18 @@ pub struct Allocation {
     heap: ID3D12Heap,
 
     name: Option<Box<str>>,
+}
+
+#[derive(Debug)]
+pub struct CommittedResource {
+    pub resource: ID3D12Resource,
+    pub size: u64,
+}
+
+#[derive(Debug)]
+pub struct PlacedResource {
+    pub resource: ManuallyDrop<ID3D12Resource>,
+    pub allocation: Allocation,
 }
 
 unsafe impl Send for Allocation {}
@@ -741,6 +753,77 @@ impl Allocator {
                         .report_memory_leaks(log_level, mem_type_i, block_i);
                 }
             }
+        }
+    }
+
+    /// Create a placed resource and place it in gpu-allocator managed memory.
+    /// Placed resources must be explicitly freed by calling [`Self::free_placed_resource`].
+    pub fn create_placed_resource(
+        &mut self,
+        resource_desc: &D3D12_RESOURCE_DESC,
+        initial_state: D3D12_RESOURCE_STATES,
+        allocation_desc: &AllocationCreateDesc<'_>,
+    ) -> Result<PlacedResource> {
+        let allocation = self.allocate(allocation_desc)?;
+
+        let mut result: Option<ID3D12Resource> = None;
+        if let Err(err) = unsafe {
+            self.device.CreatePlacedResource(
+                allocation.heap(),
+                allocation.offset(),
+                resource_desc,
+                initial_state,
+                None,
+                &mut result,
+            )
+        } {
+            Err(AllocationError::Internal(err.message().to_string()))
+        } else {
+            let resource = result.expect("Allocation succeeded but no resource was returned?");
+
+            Ok(PlacedResource {
+                resource: ManuallyDrop::new(resource),
+                allocation,
+            })
+        }
+    }
+
+    pub fn free_placed_resource(&mut self, resource: PlacedResource) -> Result<()> {
+        let _ = ManuallyDrop::into_inner(resource.resource);
+        self.free(resource.allocation)
+    }
+
+    /// Create a committed resource and let the driver handle all related allocations.
+    /// Dropping the committed resource will automatically free its memory.
+    pub fn create_committed_resource(
+        &mut self,
+        resource_desc: &D3D12_RESOURCE_DESC,
+        initial_state: D3D12_RESOURCE_STATES,
+        heap_properties: &D3D12_HEAP_PROPERTIES,
+        heap_flags: D3D12_HEAP_FLAGS,
+    ) -> Result<CommittedResource> {
+        let mut result: Option<ID3D12Resource> = None;
+        if let Err(err) = unsafe {
+            self.device.CreateCommittedResource(
+                heap_properties,
+                heap_flags,
+                resource_desc,
+                initial_state,
+                None,
+                &mut result,
+            )
+        } {
+            Err(AllocationError::Internal(err.message().to_string()))
+        } else {
+            let resource = result.expect("Allocation succeeded but no resource was returned?");
+
+            let allocation_info =
+                unsafe { self.device.GetResourceAllocationInfo(0, &[*resource_desc]) };
+
+            Ok(CommittedResource {
+                resource,
+                size: allocation_info.SizeInBytes,
+            })
         }
     }
 }

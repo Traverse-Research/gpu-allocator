@@ -283,6 +283,7 @@ impl ImGuiRenderer {
                     requirements,
                     location: MemoryLocation::GpuOnly,
                     linear: false,
+                    dedicated_allocation: false,
                 })
                 .unwrap();
             unsafe { device.bind_image_memory(image, allocation.memory(), allocation.offset()) }
@@ -323,6 +324,7 @@ impl ImGuiRenderer {
                         requirements,
                         location: MemoryLocation::CpuToGpu,
                         linear: true,
+                        dedicated_allocation: false,
                     })
                     .unwrap();
 
@@ -481,6 +483,7 @@ impl ImGuiRenderer {
                     requirements,
                     location: MemoryLocation::CpuToGpu,
                     linear: true,
+                    dedicated_allocation: false,
                 })
                 .unwrap();
 
@@ -506,6 +509,7 @@ impl ImGuiRenderer {
                     requirements,
                     location: MemoryLocation::CpuToGpu,
                     linear: true,
+                    dedicated_allocation: false,
                 })
                 .unwrap();
 
@@ -529,6 +533,7 @@ impl ImGuiRenderer {
                     requirements,
                     location: MemoryLocation::CpuToGpu,
                     linear: true,
+                    dedicated_allocation: false,
                 })
                 .unwrap();
 
