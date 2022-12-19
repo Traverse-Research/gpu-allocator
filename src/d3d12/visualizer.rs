@@ -309,7 +309,8 @@ impl AllocatorVisualizer {
     /// - If [`true`], the widget will be drawn and an (X) closing button will be added to the widget bar.
     pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui<'_>, opened: Option<&mut bool>) {
         if opened != Some(&mut false) {
-            self.render_breakdown(allocator, ui, opened);
+            self.render_main_window(ui, opened, allocator);
+            self.render_memory_block_windows(ui, allocator);
         }
     }
 
