@@ -24,6 +24,16 @@ mod public_winapi {
         fn as_windows(&self) -> &T;
     }
 
+    impl ToWinapi<winapi_d3d12::ID3D12Resource> for ID3D12Resource {
+        fn as_winapi(&self) -> *const winapi_d3d12::ID3D12Resource {
+            unsafe { std::mem::transmute_copy(self) }
+        }
+
+        fn as_winapi_mut(&mut self) -> *mut winapi_d3d12::ID3D12Resource {
+            unsafe { std::mem::transmute_copy(self) }
+        }
+    }
+
     impl ToWinapi<winapi_d3d12::ID3D12Device> for ID3D12Device {
         fn as_winapi(&self) -> *const winapi_d3d12::ID3D12Device {
             unsafe { std::mem::transmute_copy(self) }
