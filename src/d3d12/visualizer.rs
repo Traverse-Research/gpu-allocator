@@ -140,6 +140,14 @@ impl AllocatorVisualizer {
                             ));
                             ui.text(format!("total block size: {} KiB", total_block_size / 1024));
                             ui.text(format!("total allocated:  {} KiB", total_allocated / 1024));
+                            ui.text(format!(
+                                "num committed resource allocations: {}",
+                                mem_type.committed_allocations.num_allocations
+                            ));
+                            ui.text(format!(
+                                "total committed resource allocations size: {} KiB",
+                                mem_type.committed_allocations.total_size
+                            ));
 
                             let active_block_count = mem_type
                                 .memory_blocks

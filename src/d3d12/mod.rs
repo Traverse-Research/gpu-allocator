@@ -224,16 +224,29 @@ pub struct Allocation {
     name: Option<Box<str>>,
 }
 
+pub enum ResourceType<'a> {
+    /// Allocation equivalent to Dx12's CommittedResources.
+    Committed {
+        heap_properties: &'a D3D12_HEAP_PROPERTIES,
+        heap_flags: D3D12_HEAP_FLAGS,
+    },
+    /// Allocation equivalent to Dx12's PlacedResources.
+    Placed,
+}
+
 #[derive(Debug)]
-pub struct CommittedResource {
-    pub resource: ID3D12Resource,
+pub struct Resource {
+    pub allocation: Option<Allocation>,
+    pub resource: ManuallyDrop<ID3D12Resource>,
+    pub memory_location: MemoryLocation,
+    heap_category: HeapCategory,
     pub size: u64,
 }
 
 #[derive(Debug)]
-pub struct PlacedResource {
-    pub resource: ManuallyDrop<ID3D12Resource>,
-    pub allocation: Allocation,
+pub struct CommittedAllocationData {
+    pub num_allocations: usize,
+    pub total_size: u64,
 }
 
 unsafe impl Send for Allocation {}
@@ -334,6 +347,7 @@ unsafe impl Sync for MemoryBlock {}
 
 struct MemoryType {
     memory_blocks: Vec<Option<MemoryBlock>>,
+    committed_allocations: CommittedAllocationData,
     memory_location: MemoryLocation,
     heap_category: HeapCategory,
     heap_properties: D3D12_HEAP_PROPERTIES,
@@ -652,6 +666,10 @@ impl Allocator {
                     heap_properties,
                     memory_type_index: i,
                     active_general_blocks: 0,
+                    committed_allocations: CommittedAllocationData {
+                        num_allocations: 0,
+                        total_size: 0,
+                    },
                 },
             )
             .collect::<Vec<_>>();
@@ -756,74 +774,149 @@ impl Allocator {
         }
     }
 
-    /// Create a placed resource and place it in gpu-allocator managed memory.
-    /// Placed resources must be explicitly freed by calling [`Self::free_placed_resource`].
-    pub fn create_placed_resource(
+    /// Create a resource according to the provided parameters.
+    /// Created resources should be freed at the end of their lifetime by calling [`Self::free_resource`];
+    pub fn create_resource(
         &mut self,
+        name: &str,
+        memory_location: MemoryLocation,
+        resource_category: ResourceCategory,
         resource_desc: &D3D12_RESOURCE_DESC,
         initial_state: D3D12_RESOURCE_STATES,
-        allocation_desc: &AllocationCreateDesc<'_>,
-    ) -> Result<PlacedResource> {
-        let allocation = self.allocate(allocation_desc)?;
+        resource_type: ResourceType<'_>,
+    ) -> Result<Resource> {
+        match resource_type {
+            ResourceType::Committed {
+                heap_properties,
+                heap_flags,
+            } => {
+                let mut result: Option<ID3D12Resource> = None;
+                if let Err(err) = unsafe {
+                    self.device.CreateCommittedResource(
+                        heap_properties,
+                        heap_flags,
+                        resource_desc,
+                        initial_state,
+                        None,
+                        &mut result,
+                    )
+                } {
+                    Err(AllocationError::Internal(err.message().to_string()))
+                } else {
+                    let resource =
+                        result.expect("Allocation succeeded but no resource was returned?");
 
-        let mut result: Option<ID3D12Resource> = None;
-        if let Err(err) = unsafe {
-            self.device.CreatePlacedResource(
-                allocation.heap(),
-                allocation.offset(),
-                resource_desc,
-                initial_state,
-                None,
-                &mut result,
-            )
-        } {
-            Err(AllocationError::Internal(err.message().to_string()))
-        } else {
-            let resource = result.expect("Allocation succeeded but no resource was returned?");
+                    let allocation_info =
+                        unsafe { self.device.GetResourceAllocationInfo(0, &[*resource_desc]) };
 
-            Ok(PlacedResource {
-                resource: ManuallyDrop::new(resource),
-                allocation,
-            })
+                    let resource_category = if (resource_desc.Flags
+                        & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+                            | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
+                        != D3D12_RESOURCE_FLAG_NONE
+                    {
+                        ResourceCategory::RtvDsvTexture
+                    } else {
+                        ResourceCategory::OtherTexture
+                    };
+
+                    let memory_type = self
+                        .memory_types
+                        .iter_mut()
+                        .find(|memory_type| {
+                            let is_location_compatible = memory_location == MemoryLocation::Unknown
+                                || memory_location == memory_type.memory_location;
+
+                            let is_category_compatible = memory_type.heap_category
+                                == HeapCategory::All
+                                || memory_type.heap_category == resource_category.into();
+
+                            is_location_compatible && is_category_compatible
+                        })
+                        .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
+
+                    memory_type.committed_allocations.num_allocations += 1;
+                    memory_type.committed_allocations.total_size += allocation_info.SizeInBytes;
+
+                    Ok(Resource {
+                        allocation: None,
+                        resource: ManuallyDrop::new(resource),
+                        size: allocation_info.SizeInBytes,
+                        heap_category: resource_category.into(),
+                        memory_location,
+                    })
+                }
+            }
+            ResourceType::Placed => {
+                let allocation_desc = {
+                    let allocation_info =
+                        unsafe { self.device.GetResourceAllocationInfo(0, &[*resource_desc]) };
+
+                    AllocationCreateDesc {
+                        name,
+                        location: memory_location,
+                        size: allocation_info.SizeInBytes,
+                        alignment: allocation_info.Alignment,
+                        resource_category,
+                    }
+                };
+
+                let allocation = self.allocate(&allocation_desc)?;
+
+                let mut result: Option<ID3D12Resource> = None;
+                if let Err(err) = unsafe {
+                    self.device.CreatePlacedResource(
+                        allocation.heap(),
+                        allocation.offset(),
+                        resource_desc,
+                        initial_state,
+                        None,
+                        &mut result,
+                    )
+                } {
+                    Err(AllocationError::Internal(err.message().to_string()))
+                } else {
+                    let resource =
+                        result.expect("Allocation succeeded but no resource was returned?");
+                    let size = allocation.size();
+                    Ok(Resource {
+                        allocation: Some(allocation),
+                        resource: ManuallyDrop::new(resource),
+                        size,
+                        heap_category: resource_category.into(),
+                        memory_location,
+                    })
+                }
+            }
         }
     }
 
-    pub fn free_placed_resource(&mut self, resource: PlacedResource) -> Result<()> {
+    /// Free a resource and its memory.
+    pub fn free_resource(&mut self, resource: Resource) -> Result<()> {
+        let memory_location = resource.memory_location;
+        let heap_category = resource.heap_category;
         let _ = ManuallyDrop::into_inner(resource.resource);
-        self.free(resource.allocation)
-    }
-
-    /// Create a committed resource and let the driver handle all related allocations.
-    /// Dropping the committed resource will automatically free its memory.
-    pub fn create_committed_resource(
-        &mut self,
-        resource_desc: &D3D12_RESOURCE_DESC,
-        initial_state: D3D12_RESOURCE_STATES,
-        heap_properties: &D3D12_HEAP_PROPERTIES,
-        heap_flags: D3D12_HEAP_FLAGS,
-    ) -> Result<CommittedResource> {
-        let mut result: Option<ID3D12Resource> = None;
-        if let Err(err) = unsafe {
-            self.device.CreateCommittedResource(
-                heap_properties,
-                heap_flags,
-                resource_desc,
-                initial_state,
-                None,
-                &mut result,
-            )
-        } {
-            Err(AllocationError::Internal(err.message().to_string()))
+        if let Some(allocation) = resource.allocation {
+            self.free(allocation)
         } else {
-            let resource = result.expect("Allocation succeeded but no resource was returned?");
+            // Committed resource
+            let memory_type = self
+                .memory_types
+                .iter_mut()
+                .find(|memory_type| {
+                    let is_location_compatible = memory_location == MemoryLocation::Unknown
+                        || memory_location == memory_type.memory_location;
 
-            let allocation_info =
-                unsafe { self.device.GetResourceAllocationInfo(0, &[*resource_desc]) };
+                    let is_category_compatible = memory_type.heap_category == HeapCategory::All
+                        || memory_type.heap_category == heap_category;
 
-            Ok(CommittedResource {
-                resource,
-                size: allocation_info.SizeInBytes,
-            })
+                    is_location_compatible && is_category_compatible
+                })
+                .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
+
+            memory_type.committed_allocations.num_allocations -= 1;
+            memory_type.committed_allocations.total_size -= resource.size;
+
+            Ok(())
         }
     }
 }
