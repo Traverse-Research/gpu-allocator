@@ -64,6 +64,7 @@
 //!         requirements,
 //!         location: MemoryLocation::CpuToGpu,
 //!         linear: true, // Buffers are always linear
+//!         dedicated_allocation: false,
 //!     }).unwrap();
 //!
 //! // Bind memory to the buffer
