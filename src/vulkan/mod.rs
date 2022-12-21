@@ -136,6 +136,16 @@ impl Default for Allocation {
     }
 }
 
+pub enum BlockType {
+    /// This block only contains a single resource.
+    Dedicated {
+        /// When true, the allocation behind this block will be a "dedicated allocation".
+        dedicated_allocation: bool,
+    },
+    /// This block can contain more than one resource.
+    Shared,
+}
+
 #[derive(Debug)]
 pub(crate) struct MemoryBlock {
     pub(crate) device_memory: vk::DeviceMemory,
@@ -151,15 +161,15 @@ impl MemoryBlock {
         size: u64,
         mem_type_index: usize,
         mapped: bool,
-        mut dedicated_block: bool, // True if this allocation needs a dedicated block within the GPU allocator.
-        dedicated_allocation: bool, // True if the memory should be flagged as dedicated to the graphics driver.
+        block_type: BlockType,
         buffer_device_address: bool,
     ) -> Result<Self> {
-        // If the memory allocation is dedicated, then we can't share it with other resources either.
-        // Make sure it gets its own block too in this case.
-        if dedicated_allocation {
-            dedicated_block = true;
-        }
+        let dedicated_allocation = match block_type {
+            BlockType::Dedicated {
+                dedicated_allocation,
+            } => dedicated_allocation,
+            BlockType::Shared => false,
+        };
 
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::builder()
@@ -211,11 +221,12 @@ impl MemoryBlock {
             std::ptr::null_mut()
         };
 
-        let sub_allocator: Box<dyn allocator::SubAllocator> = if dedicated_block {
-            Box::new(allocator::DedicatedBlockAllocator::new(size))
-        } else {
-            Box::new(allocator::FreeListAllocator::new(size))
-        };
+        let sub_allocator: Box<dyn allocator::SubAllocator> =
+            if matches!(block_type, BlockType::Dedicated { .. }) {
+                Box::new(allocator::DedicatedBlockAllocator::new(size))
+            } else {
+                Box::new(allocator::FreeListAllocator::new(size))
+            };
 
         Ok(Self {
             device_memory,
@@ -280,17 +291,22 @@ impl MemoryType {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
-        let dedicated_block = size > memblock_size;
+        let block_type = if size > memblock_size {
+            BlockType::Dedicated {
+                dedicated_allocation: desc.dedicated_allocation,
+            }
+        } else {
+            BlockType::Shared
+        };
 
-        // Create a dedicated block for large memory allocations
-        if dedicated_block || desc.dedicated_allocation {
+        // Create a dedicated block for large memory allocations or allocations that require dedicated memory allocations.
+        if matches!(block_type, BlockType::Dedicated { .. }) {
             let mem_block = MemoryBlock::new(
                 device,
                 size,
                 self.memory_type_index,
                 self.mappable,
-                dedicated_block,
-                desc.dedicated_allocation,
+                block_type,
                 self.buffer_device_address,
             )?;
 
@@ -386,8 +402,7 @@ impl MemoryType {
             memblock_size,
             self.memory_type_index,
             self.mappable,
-            dedicated_block,
-            desc.dedicated_allocation,
+            block_type,
             self.buffer_device_address,
         )?;
 

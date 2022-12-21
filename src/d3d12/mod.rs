@@ -97,6 +97,17 @@ pub enum ResourceCategory {
     OtherTexture,
 }
 
+#[derive(Clone, Copy)]
+pub struct ResourceCreateDesc<'a> {
+    pub name: &'a str,
+    pub memory_location: MemoryLocation,
+    pub resource_category: ResourceCategory,
+    pub resource_desc: &'a D3D12_RESOURCE_DESC,
+    pub clear_value: Option<&'a D3D12_CLEAR_VALUE>,
+    pub initial_state: D3D12_RESOURCE_STATES,
+    pub resource_type: &'a ResourceType<'a>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum HeapCategory {
     All,
@@ -786,17 +797,8 @@ impl Allocator {
 
     /// Create a resource according to the provided parameters.
     /// Created resources should be freed at the end of their lifetime by calling [`Self::free_resource`];
-    pub fn create_resource(
-        &mut self,
-        name: &str,
-        memory_location: MemoryLocation,
-        resource_category: ResourceCategory,
-        resource_desc: &D3D12_RESOURCE_DESC,
-        clear_value: Option<&D3D12_CLEAR_VALUE>,
-        initial_state: D3D12_RESOURCE_STATES,
-        resource_type: &ResourceType<'_>,
-    ) -> Result<Resource> {
-        match resource_type {
+    pub fn create_resource(&mut self, desc: &ResourceCreateDesc<'_>) -> Result<Resource> {
+        match desc.resource_type {
             ResourceType::Committed {
                 heap_properties,
                 heap_flags,
@@ -804,14 +806,14 @@ impl Allocator {
                 let mut result: Option<ID3D12Resource> = None;
 
                 let clear_value: Option<*const D3D12_CLEAR_VALUE> =
-                    clear_value.map(|v| <*const _>::cast(v));
+                    desc.clear_value.map(|v| <*const _>::cast(v));
 
                 if let Err(err) = unsafe {
                     self.device.CreateCommittedResource(
                         *heap_properties,
                         *heap_flags,
-                        resource_desc,
-                        initial_state,
+                        desc.resource_desc,
+                        desc.initial_state,
                         clear_value,
                         &mut result,
                     )
@@ -821,10 +823,12 @@ impl Allocator {
                     let resource =
                         result.expect("Allocation succeeded but no resource was returned?");
 
-                    let allocation_info =
-                        unsafe { self.device.GetResourceAllocationInfo(0, &[*resource_desc]) };
+                    let allocation_info = unsafe {
+                        self.device
+                            .GetResourceAllocationInfo(0, &[*desc.resource_desc])
+                    };
 
-                    let resource_category = if (resource_desc.Flags
+                    let resource_category = if (desc.resource_desc.Flags
                         & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
                             | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
                         != D3D12_RESOURCE_FLAG_NONE
@@ -838,8 +842,9 @@ impl Allocator {
                         .memory_types
                         .iter_mut()
                         .find(|memory_type| {
-                            let is_location_compatible = memory_location == MemoryLocation::Unknown
-                                || memory_location == memory_type.memory_location;
+                            let is_location_compatible = desc.memory_location
+                                == MemoryLocation::Unknown
+                                || desc.memory_location == memory_type.memory_location;
 
                             let is_category_compatible = memory_type.heap_category
                                 == HeapCategory::All
@@ -857,21 +862,23 @@ impl Allocator {
                         resource: ManuallyDrop::new(resource),
                         size: allocation_info.SizeInBytes,
                         heap_category: resource_category.into(),
-                        memory_location,
+                        memory_location: desc.memory_location,
                     })
                 }
             }
             ResourceType::Placed => {
                 let allocation_desc = {
-                    let allocation_info =
-                        unsafe { self.device.GetResourceAllocationInfo(0, &[*resource_desc]) };
+                    let allocation_info = unsafe {
+                        self.device
+                            .GetResourceAllocationInfo(0, &[*desc.resource_desc])
+                    };
 
                     AllocationCreateDesc {
-                        name,
-                        location: memory_location,
+                        name: desc.name,
+                        location: desc.memory_location,
                         size: allocation_info.SizeInBytes,
                         alignment: allocation_info.Alignment,
-                        resource_category,
+                        resource_category: desc.resource_category,
                     }
                 };
 
@@ -882,8 +889,8 @@ impl Allocator {
                     self.device.CreatePlacedResource(
                         allocation.heap(),
                         allocation.offset(),
-                        resource_desc,
-                        initial_state,
+                        desc.resource_desc,
+                        desc.initial_state,
                         None,
                         &mut result,
                     )
@@ -897,8 +904,8 @@ impl Allocator {
                         allocation: Some(allocation),
                         resource: ManuallyDrop::new(resource),
                         size,
-                        heap_category: resource_category.into(),
-                        memory_location,
+                        heap_category: desc.resource_category.into(),
+                        memory_location: desc.memory_location,
                     })
                 }
             }
