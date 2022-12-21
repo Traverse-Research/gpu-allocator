@@ -794,7 +794,7 @@ impl Allocator {
         resource_desc: &D3D12_RESOURCE_DESC,
         clear_value: Option<&D3D12_CLEAR_VALUE>,
         initial_state: D3D12_RESOURCE_STATES,
-        resource_type: ResourceType<'_>,
+        resource_type: &ResourceType<'_>,
     ) -> Result<Resource> {
         match resource_type {
             ResourceType::Committed {
@@ -804,12 +804,12 @@ impl Allocator {
                 let mut result: Option<ID3D12Resource> = None;
 
                 let clear_value: Option<*const D3D12_CLEAR_VALUE> =
-                    clear_value.map(|v| v as *const D3D12_CLEAR_VALUE);
+                    clear_value.map(|v| <*const _>::cast(v));
 
                 if let Err(err) = unsafe {
                     self.device.CreateCommittedResource(
-                        heap_properties,
-                        heap_flags,
+                        *heap_properties,
+                        *heap_flags,
                         resource_desc,
                         initial_state,
                         clear_value,
