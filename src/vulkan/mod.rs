@@ -161,13 +161,13 @@ impl MemoryBlock {
         size: u64,
         mem_type_index: usize,
         mapped: bool,
-        block_type: BlockType,
+        block_type: &BlockType,
         buffer_device_address: bool,
     ) -> Result<Self> {
         let dedicated_allocation = match block_type {
             BlockType::Dedicated {
                 dedicated_allocation,
-            } => dedicated_allocation,
+            } => *dedicated_allocation,
             BlockType::Shared => false,
         };
 
@@ -291,7 +291,7 @@ impl MemoryType {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
-        let block_type = if size > memblock_size {
+        let block_type = if size > memblock_size || desc.dedicated_allocation {
             BlockType::Dedicated {
                 dedicated_allocation: desc.dedicated_allocation,
             }
@@ -306,7 +306,7 @@ impl MemoryType {
                 size,
                 self.memory_type_index,
                 self.mappable,
-                block_type,
+                &block_type,
                 self.buffer_device_address,
             )?;
 
@@ -402,7 +402,7 @@ impl MemoryType {
             memblock_size,
             self.memory_type_index,
             self.mappable,
-            block_type,
+            &block_type,
             self.buffer_device_address,
         )?;
 
