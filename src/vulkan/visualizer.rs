@@ -139,7 +139,7 @@ impl AllocatorVisualizer {
                                             block.mapped_ptr as usize
                                         ));
                                         if block.dedicated_allocation {
-                                            ui.text(format!("Dedicated Allocation",));
+                                            ui.text("Dedicated Allocation");
                                         }
 
                                         block.sub_allocator.draw_base_info(ui);
