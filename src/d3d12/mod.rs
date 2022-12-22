@@ -246,12 +246,12 @@ pub struct Allocation {
 }
 
 pub enum ResourceType<'a> {
-    /// Allocation equivalent to Dx12's CommittedResources.
+    /// Allocation equivalent to Dx12's CommittedResource.
     Committed {
         heap_properties: &'a D3D12_HEAP_PROPERTIES,
         heap_flags: D3D12_HEAP_FLAGS,
     },
-    /// Allocation equivalent to Dx12's PlacedResources.
+    /// Allocation equivalent to Dx12's PlacedResource.
     Placed,
 }
 
@@ -260,12 +260,12 @@ pub struct Resource {
     pub allocation: Option<Allocation>,
     pub resource: ManuallyDrop<ID3D12Resource>,
     pub memory_location: MemoryLocation,
-    heap_category: HeapCategory,
+    memory_type_index: Option<usize>,
     pub size: u64,
 }
 
 #[derive(Debug)]
-pub struct CommittedAllocationData {
+pub struct CommittedAllocationStatistics {
     pub num_allocations: usize,
     pub total_size: u64,
 }
@@ -368,7 +368,7 @@ unsafe impl Sync for MemoryBlock {}
 
 struct MemoryType {
     memory_blocks: Vec<Option<MemoryBlock>>,
-    committed_allocations: CommittedAllocationData,
+    committed_allocations: CommittedAllocationStatistics,
     memory_location: MemoryLocation,
     heap_category: HeapCategory,
     heap_properties: D3D12_HEAP_PROPERTIES,
@@ -687,7 +687,7 @@ impl Allocator {
                     heap_properties,
                     memory_type_index: i,
                     active_general_blocks: 0,
-                    committed_allocations: CommittedAllocationData {
+                    committed_allocations: CommittedAllocationStatistics {
                         num_allocations: 0,
                         total_size: 0,
                     },
@@ -796,7 +796,7 @@ impl Allocator {
     }
 
     /// Create a resource according to the provided parameters.
-    /// Created resources should be freed at the end of their lifetime by calling [`Self::free_resource`];
+    /// Created resources should be freed at the end of their lifetime by calling [`Self::free_resource()`].
     pub fn create_resource(&mut self, desc: &ResourceCreateDesc<'_>) -> Result<Resource> {
         match desc.resource_type {
             ResourceType::Committed {
@@ -806,7 +806,7 @@ impl Allocator {
                 let mut result: Option<ID3D12Resource> = None;
 
                 let clear_value: Option<*const D3D12_CLEAR_VALUE> =
-                    desc.clear_value.map(|v| <*const _>::cast(v));
+                    desc.clear_value.map(|v| -> *const _ { v });
 
                 if let Err(err) = unsafe {
                     self.device.CreateCommittedResource(
@@ -828,16 +828,6 @@ impl Allocator {
                             .GetResourceAllocationInfo(0, &[*desc.resource_desc])
                     };
 
-                    let resource_category = if (desc.resource_desc.Flags
-                        & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
-                            | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
-                        != D3D12_RESOURCE_FLAG_NONE
-                    {
-                        ResourceCategory::RtvDsvTexture
-                    } else {
-                        ResourceCategory::OtherTexture
-                    };
-
                     let memory_type = self
                         .memory_types
                         .iter_mut()
@@ -848,7 +838,7 @@ impl Allocator {
 
                             let is_category_compatible = memory_type.heap_category
                                 == HeapCategory::All
-                                || memory_type.heap_category == resource_category.into();
+                                || memory_type.heap_category == desc.resource_category.into();
 
                             is_location_compatible && is_category_compatible
                         })
@@ -861,8 +851,8 @@ impl Allocator {
                         allocation: None,
                         resource: ManuallyDrop::new(resource),
                         size: allocation_info.SizeInBytes,
-                        heap_category: resource_category.into(),
                         memory_location: desc.memory_location,
+                        memory_type_index: Some(memory_type.memory_type_index),
                     })
                 }
             }
@@ -904,8 +894,8 @@ impl Allocator {
                         allocation: Some(allocation),
                         resource: ManuallyDrop::new(resource),
                         size,
-                        heap_category: desc.resource_category.into(),
                         memory_location: desc.memory_location,
+                        memory_type_index: None,
                     })
                 }
             }
@@ -914,30 +904,18 @@ impl Allocator {
 
     /// Free a resource and its memory.
     pub fn free_resource(&mut self, resource: Resource) -> Result<()> {
-        let memory_location = resource.memory_location;
-        let heap_category = resource.heap_category;
         let _ = ManuallyDrop::into_inner(resource.resource);
         if let Some(allocation) = resource.allocation {
             self.free(allocation)
         } else {
-            // Committed resource
-            let memory_type = self
-                .memory_types
-                .iter_mut()
-                .find(|memory_type| {
-                    let is_location_compatible = memory_location == MemoryLocation::Unknown
-                        || memory_location == memory_type.memory_location;
+            // Committed resources are implicitly dropped when their refcount reaches 0.
+            // We only have to change the allocation and size tracking.
+            if let Some(memory_type_index) = resource.memory_type_index {
+                let memory_type = &mut self.memory_types[memory_type_index];
 
-                    let is_category_compatible = memory_type.heap_category == HeapCategory::All
-                        || memory_type.heap_category == heap_category;
-
-                    is_location_compatible && is_category_compatible
-                })
-                .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
-
-            memory_type.committed_allocations.num_allocations -= 1;
-            memory_type.committed_allocations.total_size -= resource.size;
-
+                memory_type.committed_allocations.num_allocations -= 1;
+                memory_type.committed_allocations.total_size -= resource.size;
+            }
             Ok(())
         }
     }

@@ -141,11 +141,11 @@ impl AllocatorVisualizer {
                             ui.text(format!("total block size: {} KiB", total_block_size / 1024));
                             ui.text(format!("total allocated:  {} KiB", total_allocated / 1024));
                             ui.text(format!(
-                                "num committed resource allocations: {}",
+                                "committed resource allocations: {}",
                                 mem_type.committed_allocations.num_allocations
                             ));
                             ui.text(format!(
-                                "total committed resource allocations size: {} KiB",
+                                "total committed resource allocations: {} KiB",
                                 mem_type.committed_allocations.total_size
                             ));
 
@@ -250,7 +250,7 @@ impl AllocatorVisualizer {
                     // Imgui can actually modify this number to be out of bounds, so we will clamp manually.
                     window.bytes_per_unit = window
                         .bytes_per_unit
-                        .clamp(BYTES_PER_UNIT_MAX, BYTES_PER_UNIT_MIN);
+                        .clamp(BYTES_PER_UNIT_MIN, BYTES_PER_UNIT_MAX);
 
                     // Draw the visualization in a child window.
                     imgui::ChildWindow::new(&format!(

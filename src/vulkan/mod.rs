@@ -25,8 +25,8 @@ pub struct AllocationCreateDesc<'a> {
     pub location: MemoryLocation,
     /// If the resource is linear (buffer / linear texture) or a regular (tiled) texture.
     pub linear: bool,
-    /// True if the memory should be allocated in dedicated system memory.
-    /// If false, the memory will be placed in a potentially shared allocation block.
+    /// This allocation should be placed in dedicated system memory according to the driver.
+    /// It will otherwise be placed in a potentially shared allocation block.
     pub dedicated_allocation: bool,
 }
 
@@ -139,7 +139,8 @@ impl Default for Allocation {
 pub enum BlockType {
     /// This block only contains a single resource.
     Dedicated {
-        /// When true, the allocation behind this block will be a "dedicated allocation".
+        /// When true, the allocation behind this block will be a driver managed "dedicated allocation".
+        /// Otherwise the block will still be dedicated, but with a regular allocation backing it.
         dedicated_allocation: bool,
     },
     /// This block can contain more than one resource.
@@ -188,8 +189,10 @@ impl MemoryBlock {
             // Flag the memory as dedicated if required.
             let mut dedicated_memory_info = vk::MemoryDedicatedAllocateInfo::builder();
             let alloc_info = if dedicated_allocation {
-                // We don't yet know the buffer nor the image that will be placed in this memory.
-                // The user has to bind them after the allocation has been made.
+                // The MemoryDedicatedAllocateInfo struct contains a field for the buffer or image being created.
+                // We don't yet know the buffer nor the image that will be placed in this memory, so
+                // the user has to bind them after the allocation has been made.
+                // The spec doesn't say that either pointer must be valid, and it seems to work without specifying them.
                 alloc_info.push_next(&mut dedicated_memory_info)
             } else {
                 alloc_info
@@ -351,7 +354,7 @@ impl MemoryType {
                 device_memory: mem_block.device_memory,
                 mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
                 name: Some(desc.name.into()),
-                dedicated_allocation: false,
+                dedicated_allocation: desc.dedicated_allocation,
             });
         }
 
@@ -383,7 +386,7 @@ impl MemoryType {
                             memory_type_index: self.memory_type_index,
                             device_memory: mem_block.device_memory,
                             mapped_ptr,
-                            dedicated_allocation: desc.dedicated_allocation,
+                            dedicated_allocation: false,
                             name: Some(desc.name.into()),
                         });
                     }
