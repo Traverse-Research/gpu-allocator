@@ -15,6 +15,19 @@ use crate::{
     allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result,
 };
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum AllocationScheme {
+    /// This allocation will be for a buffer, and it will be driver managed using vulkans DedicatedAllocation feature.
+    /// The driver will be able to perform optimizations in some cases with this type of allocation.
+    DedicatedBuffer { buffer: *const vk::Buffer },
+    /// This allocation will be for a image, and it will be driver managed using vulkans DedicatedAllocation feature.
+    /// The driver will be able to perform optimizations in some cases with this type of allocation.
+    DedicatedImage { image: *const vk::Image },
+    /// This allocation will be managed by the GPU allocator.
+    /// It is possible that the allocation will reside in an allocation block shared with other resources.
+    GpuAllocatorManaged,
+}
+
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
     /// Name of the allocation, for tracking and debugging purposes
@@ -25,9 +38,8 @@ pub struct AllocationCreateDesc<'a> {
     pub location: MemoryLocation,
     /// If the resource is linear (buffer / linear texture) or a regular (tiled) texture.
     pub linear: bool,
-    /// This allocation should be placed in dedicated system memory according to the driver.
-    /// It will otherwise be placed in a potentially shared allocation block.
-    pub dedicated_allocation: bool,
+    /// Determines how this allocation should be managed.
+    pub allocation_scheme: AllocationScheme,
 }
 
 pub struct AllocatorCreateDesc {
@@ -136,17 +148,6 @@ impl Default for Allocation {
     }
 }
 
-pub enum BlockType {
-    /// This block only contains a single resource.
-    Dedicated {
-        /// When true, the allocation behind this block will be a driver managed "dedicated allocation".
-        /// Otherwise the block will still be dedicated, but with a regular allocation backing it.
-        dedicated_allocation: bool,
-    },
-    /// This block can contain more than one resource.
-    Shared,
-}
-
 #[derive(Debug)]
 pub(crate) struct MemoryBlock {
     pub(crate) device_memory: vk::DeviceMemory,
@@ -162,16 +163,11 @@ impl MemoryBlock {
         size: u64,
         mem_type_index: usize,
         mapped: bool,
-        block_type: &BlockType,
         buffer_device_address: bool,
+        allocation_scheme: &AllocationScheme,
+        requires_personal_block: bool,
     ) -> Result<Self> {
-        let dedicated_allocation = match block_type {
-            BlockType::Dedicated {
-                dedicated_allocation,
-            } => *dedicated_allocation,
-            BlockType::Shared => false,
-        };
-
+        let dedicated_allocation = *allocation_scheme != AllocationScheme::GpuAllocatorManaged;
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::builder()
                 .allocation_size(size)
@@ -188,14 +184,16 @@ impl MemoryBlock {
 
             // Flag the memory as dedicated if required.
             let mut dedicated_memory_info = vk::MemoryDedicatedAllocateInfo::builder();
-            let alloc_info = if dedicated_allocation {
-                // The MemoryDedicatedAllocateInfo struct contains a field for the buffer or image being created.
-                // We don't yet know the buffer nor the image that will be placed in this memory, so
-                // the user has to bind them after the allocation has been made.
-                // The spec doesn't say that either pointer must be valid, and it seems to work without specifying them.
-                alloc_info.push_next(&mut dedicated_memory_info)
-            } else {
-                alloc_info
+            let alloc_info = match allocation_scheme {
+                AllocationScheme::DedicatedBuffer { buffer } => {
+                    dedicated_memory_info = dedicated_memory_info.buffer(unsafe { **buffer });
+                    alloc_info.push_next(&mut dedicated_memory_info)
+                }
+                AllocationScheme::DedicatedImage { image } => {
+                    dedicated_memory_info = dedicated_memory_info.image(unsafe { **image });
+                    alloc_info.push_next(&mut dedicated_memory_info)
+                }
+                AllocationScheme::GpuAllocatorManaged => alloc_info,
             };
 
             unsafe { device.allocate_memory(&alloc_info, None) }.map_err(|e| match e {
@@ -225,7 +223,9 @@ impl MemoryBlock {
         };
 
         let sub_allocator: Box<dyn allocator::SubAllocator> =
-            if matches!(block_type, BlockType::Dedicated { .. }) {
+            if !matches!(allocation_scheme, AllocationScheme::GpuAllocatorManaged)
+                || requires_personal_block
+            {
                 Box::new(allocator::DedicatedBlockAllocator::new(size))
             } else {
                 Box::new(allocator::FreeListAllocator::new(size))
@@ -294,23 +294,19 @@ impl MemoryType {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
-        let block_type = if size > memblock_size || desc.dedicated_allocation {
-            BlockType::Dedicated {
-                dedicated_allocation: desc.dedicated_allocation,
-            }
-        } else {
-            BlockType::Shared
-        };
+        let dedicated_allocation = desc.allocation_scheme != AllocationScheme::GpuAllocatorManaged;
+        let requires_personal_block = size > memblock_size;
 
         // Create a dedicated block for large memory allocations or allocations that require dedicated memory allocations.
-        if matches!(block_type, BlockType::Dedicated { .. }) {
+        if dedicated_allocation || requires_personal_block {
             let mem_block = MemoryBlock::new(
                 device,
                 size,
                 self.memory_type_index,
                 self.mappable,
-                &block_type,
                 self.buffer_device_address,
+                &desc.allocation_scheme,
+                requires_personal_block,
             )?;
 
             let mut block_index = None;
@@ -354,7 +350,7 @@ impl MemoryType {
                 device_memory: mem_block.device_memory,
                 mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
                 name: Some(desc.name.into()),
-                dedicated_allocation: desc.dedicated_allocation,
+                dedicated_allocation,
             });
         }
 
@@ -405,8 +401,9 @@ impl MemoryType {
             memblock_size,
             self.memory_type_index,
             self.mappable,
-            &block_type,
             self.buffer_device_address,
+            &desc.allocation_scheme,
+            false,
         )?;
 
         let new_block_index = if let Some(block_index) = empty_block_index {

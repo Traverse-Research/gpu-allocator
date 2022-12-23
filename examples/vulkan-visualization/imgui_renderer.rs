@@ -1,7 +1,7 @@
 use ash::vk;
 
 use crate::helper::record_and_submit_command_buffer;
-use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme, Allocator};
 use gpu_allocator::MemoryLocation;
 
 #[repr(C)]
@@ -283,7 +283,7 @@ impl ImGuiRenderer {
                     requirements,
                     location: MemoryLocation::GpuOnly,
                     linear: false,
-                    dedicated_allocation: false,
+                    allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 })
                 .unwrap();
             unsafe { device.bind_image_memory(image, allocation.memory(), allocation.offset()) }
@@ -324,7 +324,7 @@ impl ImGuiRenderer {
                         requirements,
                         location: MemoryLocation::CpuToGpu,
                         linear: true,
-                        dedicated_allocation: false,
+                        allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                     })
                     .unwrap();
 
@@ -483,7 +483,7 @@ impl ImGuiRenderer {
                     requirements,
                     location: MemoryLocation::CpuToGpu,
                     linear: true,
-                    dedicated_allocation: false,
+                    allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 })
                 .unwrap();
 
@@ -509,7 +509,7 @@ impl ImGuiRenderer {
                     requirements,
                     location: MemoryLocation::CpuToGpu,
                     linear: true,
-                    dedicated_allocation: false,
+                    allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 })
                 .unwrap();
 
@@ -533,7 +533,7 @@ impl ImGuiRenderer {
                     requirements,
                     location: MemoryLocation::CpuToGpu,
                     linear: true,
-                    dedicated_allocation: false,
+                    allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 })
                 .unwrap();
 
