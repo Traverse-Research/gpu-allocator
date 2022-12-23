@@ -19,10 +19,10 @@ use crate::{
 pub enum AllocationScheme {
     /// This allocation will be for a buffer, and it will be driver managed using vulkans DedicatedAllocation feature.
     /// The driver will be able to perform optimizations in some cases with this type of allocation.
-    DedicatedBuffer { buffer: *const vk::Buffer },
+    DedicatedBuffer { buffer: vk::Buffer },
     /// This allocation will be for a image, and it will be driver managed using vulkans DedicatedAllocation feature.
     /// The driver will be able to perform optimizations in some cases with this type of allocation.
-    DedicatedImage { image: *const vk::Image },
+    DedicatedImage { image: vk::Image },
     /// This allocation will be managed by the GPU allocator.
     /// It is possible that the allocation will reside in an allocation block shared with other resources.
     GpuAllocatorManaged,
@@ -186,11 +186,11 @@ impl MemoryBlock {
             let mut dedicated_memory_info = vk::MemoryDedicatedAllocateInfo::builder();
             let alloc_info = match allocation_scheme {
                 AllocationScheme::DedicatedBuffer { buffer } => {
-                    dedicated_memory_info = dedicated_memory_info.buffer(unsafe { **buffer });
+                    dedicated_memory_info = dedicated_memory_info.buffer(*buffer);
                     alloc_info.push_next(&mut dedicated_memory_info)
                 }
                 AllocationScheme::DedicatedImage { image } => {
-                    dedicated_memory_info = dedicated_memory_info.image(unsafe { **image });
+                    dedicated_memory_info = dedicated_memory_info.image(*image);
                     alloc_info.push_next(&mut dedicated_memory_info)
                 }
                 AllocationScheme::GpuAllocatorManaged => alloc_info,
