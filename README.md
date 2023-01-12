@@ -59,6 +59,7 @@ let allocation = allocator
         requirements,
         location: MemoryLocation::CpuToGpu,
         linear: true, // Buffers are always linear
+        allocation_scheme: AllocationScheme::GpuAllocatorManaged,
     }).unwrap();
 
 // Bind memory to the buffer

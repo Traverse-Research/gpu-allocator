@@ -140,6 +140,14 @@ impl AllocatorVisualizer {
                             ));
                             ui.text(format!("total block size: {} KiB", total_block_size / 1024));
                             ui.text(format!("total allocated:  {} KiB", total_allocated / 1024));
+                            ui.text(format!(
+                                "committed resource allocations: {}",
+                                mem_type.committed_allocations.num_allocations
+                            ));
+                            ui.text(format!(
+                                "total committed resource allocations: {} KiB",
+                                mem_type.committed_allocations.total_size
+                            ));
 
                             let active_block_count = mem_type
                                 .memory_blocks
@@ -242,8 +250,7 @@ impl AllocatorVisualizer {
                     // Imgui can actually modify this number to be out of bounds, so we will clamp manually.
                     window.bytes_per_unit = window
                         .bytes_per_unit
-                        .min(BYTES_PER_UNIT_MAX)
-                        .max(BYTES_PER_UNIT_MIN);
+                        .clamp(BYTES_PER_UNIT_MIN, BYTES_PER_UNIT_MAX);
 
                     // Draw the visualization in a child window.
                     imgui::ChildWindow::new(&format!(
@@ -301,7 +308,8 @@ impl AllocatorVisualizer {
     /// - If [`true`], the widget will be drawn and an (X) closing button will be added to the widget bar.
     pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui<'_>, opened: Option<&mut bool>) {
         if opened != Some(&mut false) {
-            self.render_breakdown(allocator, ui, opened);
+            self.render_main_window(ui, opened, allocator);
+            self.render_memory_block_windows(ui, allocator);
         }
     }
 

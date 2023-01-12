@@ -3,7 +3,9 @@ use ash::vk;
 use std::default::Default;
 use std::ffi::CString;
 
-use gpu_allocator::vulkan::{AllocationCreateDesc, Allocator, AllocatorCreateDesc};
+use gpu_allocator::vulkan::{
+    AllocationCreateDesc, AllocationScheme, Allocator, AllocatorCreateDesc,
+};
 use gpu_allocator::MemoryLocation;
 
 fn main() {
@@ -111,6 +113,7 @@ fn main() {
                 requirements,
                 location,
                 linear: true,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 name: "Test allocation (Gpu Only)",
             })
             .unwrap();
@@ -143,6 +146,7 @@ fn main() {
                 requirements,
                 location,
                 linear: true,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 name: "Test allocation (Cpu to Gpu)",
             })
             .unwrap();
@@ -175,6 +179,7 @@ fn main() {
                 requirements,
                 location,
                 linear: true,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 name: "Test allocation (Gpu to Cpu)",
             })
             .unwrap();

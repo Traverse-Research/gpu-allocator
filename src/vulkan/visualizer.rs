@@ -138,6 +138,9 @@ impl AllocatorVisualizer {
                                             "mapped pointer: 0x{:x}",
                                             block.mapped_ptr as usize
                                         ));
+                                        if block.dedicated_allocation {
+                                            ui.text("Dedicated Allocation");
+                                        }
 
                                         block.sub_allocator.draw_base_info(ui);
 
@@ -218,8 +221,7 @@ impl AllocatorVisualizer {
                     // Imgui can actually modify this number to be out of bounds, so we will clamp manually.
                     window.bytes_per_unit = window
                         .bytes_per_unit
-                        .min(BYTES_PER_UNIT_MAX)
-                        .max(BYTES_PER_UNIT_MIN);
+                        .clamp(BYTES_PER_UNIT_MIN, BYTES_PER_UNIT_MAX);
 
                     // Draw the visualization in a child window.
                     imgui::ChildWindow::new(&format!(
