@@ -252,7 +252,7 @@ impl ImGuiRenderer {
         };
 
         let (font_image, font_image_memory, font_image_view) = {
-            let mut fonts = imgui.fonts();
+            let fonts = imgui.fonts();
             let font_atlas = fonts.build_rgba32_texture();
 
             // Create image

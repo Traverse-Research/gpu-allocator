@@ -279,7 +279,7 @@ impl ImGuiRenderer {
                 <*mut *mut ID3D12PipelineState>::cast(&mut pipeline),
             );
             if FAILED(hr) {
-                panic!("Failed to create imgui pipeline.");
+                panic!("Failed to create imgui pipeline: {:#x}", hr);
             }
 
             pipeline.as_mut().unwrap()
@@ -292,7 +292,7 @@ impl ImGuiRenderer {
             font_image_upload_buffer,
             font_image_upload_buffer_memory,
         ) = {
-            let mut fonts = imgui.fonts();
+            let fonts = imgui.fonts();
             let font_atlas = fonts.build_rgba32_texture();
 
             let desc = D3D12_RESOURCE_DESC {

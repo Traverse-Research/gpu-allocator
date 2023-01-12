@@ -6,7 +6,7 @@ impl SubAllocatorVisualizer for FreeListAllocator {
         true
     }
 
-    fn draw_base_info(&self, ui: &imgui::Ui<'_>) {
+    fn draw_base_info(&self, ui: &imgui::Ui) {
         ui.text("free list sub-allocator");
         ui.text(format!("chunk count: {}", self.chunks.len()));
         ui.text(format!("chunk id counter: {}", self.chunk_id_counter));
@@ -15,7 +15,7 @@ impl SubAllocatorVisualizer for FreeListAllocator {
     fn draw_visualization(
         &self,
         color_scheme: &ColorScheme,
-        ui: &imgui::Ui<'_>,
+        ui: &imgui::Ui,
         bytes_per_unit: i32,
         show_backtraces: bool,
     ) {

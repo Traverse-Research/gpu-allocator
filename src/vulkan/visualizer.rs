@@ -47,13 +47,8 @@ impl AllocatorVisualizer {
         self.color_scheme = color_scheme;
     }
 
-    fn render_main_window(
-        &mut self,
-        ui: &imgui::Ui<'_>,
-        opened: Option<&mut bool>,
-        alloc: &Allocator,
-    ) {
-        let mut window = imgui::Window::new("Allocator visualization");
+    fn render_main_window(&mut self, ui: &imgui::Ui, opened: Option<&mut bool>, alloc: &Allocator) {
+        let mut window = ui.window("Allocator visualization");
 
         if let Some(opened) = opened {
             window = window.opened(opened);
@@ -61,7 +56,7 @@ impl AllocatorVisualizer {
 
         window
             .size([512.0, 512.0], imgui::Condition::FirstUseEver)
-            .build(ui, || {
+            .build(|| {
                 use imgui::*;
 
                 ui.text(format!(
@@ -122,7 +117,7 @@ impl AllocatorVisualizer {
                             ui.text(format!("block count: {}", active_block_count));
                             for (block_i, block) in mem_type.memory_blocks.iter().enumerate() {
                                 if let Some(block) = block {
-                                    TreeNode::new(format!("Block: {}", block_i)).build(ui, || {
+                                    if ui.tree_node(format!("Block: {}", block_i)).is_some() {
                                         use ash::vk::Handle;
                                         ui.indent();
                                         ui.text(format!("size: {} KiB", block.size / 1024));
@@ -162,7 +157,7 @@ impl AllocatorVisualizer {
                                             }
                                         }
                                         ui.unindent();
-                                    });
+                                    }
                                 }
                             }
                         }
@@ -172,7 +167,7 @@ impl AllocatorVisualizer {
             });
     }
 
-    fn render_memory_block_windows(&mut self, ui: &imgui::Ui<'_>, alloc: &Allocator) {
+    fn render_memory_block_windows(&mut self, ui: &imgui::Ui, alloc: &Allocator) {
         // Copy here to workaround the borrow checker.
         let focus_opt = self.focus;
         // Keep track of a list of windows that are signaled by imgui to be closed.
@@ -183,7 +178,7 @@ impl AllocatorVisualizer {
             // Determine if this window needs focus.
             let focus = focus_opt.map_or(false, |focus_i| window_i == focus_i);
             let mut is_open = true;
-            imgui::Window::new(format!(
+            ui.window(format!(
                 "Block Visualizer##memtype({})block({})",
                 window.memory_type_index, window.block_index
             ))
@@ -193,7 +188,7 @@ impl AllocatorVisualizer {
             .scrollable(true)
             .focused(focus)
             .opened(&mut is_open)
-            .build(ui, || {
+            .build(|| {
                 use imgui::*;
 
                 let memblock = &alloc.memory_types[window.memory_type_index].memory_blocks
@@ -224,13 +219,13 @@ impl AllocatorVisualizer {
                         .clamp(BYTES_PER_UNIT_MIN, BYTES_PER_UNIT_MAX);
 
                     // Draw the visualization in a child window.
-                    imgui::ChildWindow::new(&format!(
+                    ui.child_window(format!(
                         "Visualization Sub-window##memtype({})block({})",
                         window.memory_type_index, window.block_index
                     ))
                     .scrollable(true)
                     .scroll_bar(true)
-                    .build(ui, || {
+                    .build(|| {
                         memblock.sub_allocator.draw_visualization(
                             color_scheme,
                             ui,
@@ -277,7 +272,7 @@ impl AllocatorVisualizer {
     /// When passing `Some(&mut bool)`:
     /// - If [`false`], the widget won't be drawn.
     /// - If [`true`], the widget will be drawn and an (X) closing button will be added to the widget bar.
-    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui<'_>, opened: Option<&mut bool>) {
+    pub fn render(&mut self, allocator: &Allocator, ui: &imgui::Ui, opened: Option<&mut bool>) {
         if opened != Some(&mut false) {
             self.render_main_window(ui, opened, allocator);
             self.render_memory_block_windows(ui, allocator);
@@ -287,7 +282,7 @@ impl AllocatorVisualizer {
     pub fn render_breakdown(
         &mut self,
         allocator: &Allocator,
-        ui: &imgui::Ui<'_>,
+        ui: &imgui::Ui,
         opened: Option<&mut bool>,
     ) {
         let mut allocation_report = vec![];
@@ -310,18 +305,19 @@ impl AllocatorVisualizer {
             total_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
         }
 
-        let mut window = imgui::Window::new(format!(
-            "Allocation Breakdown ({})###allocation_breakdown_window",
-            fmt_bytes(total_size_in_bytes)
-        ))
-        .position([20.0f32, 80.0f32], imgui::Condition::FirstUseEver)
-        .size([460.0f32, 420.0f32], imgui::Condition::FirstUseEver);
+        let mut window = ui
+            .window(format!(
+                "Allocation Breakdown ({})###allocation_breakdown_window",
+                fmt_bytes(total_size_in_bytes)
+            ))
+            .position([20.0f32, 80.0f32], imgui::Condition::FirstUseEver)
+            .size([460.0f32, 420.0f32], imgui::Condition::FirstUseEver);
 
         if let Some(opened) = opened {
             window = window.opened(opened);
         }
 
-        window.build(ui, || {
+        window.build(|| {
             ui.input_text("Filter", &mut self.breakdown_filter).build();
 
             if let Some(_k) = ui.begin_table_header_with_flags(
