@@ -33,7 +33,8 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
         };
         let adapter4: IDXGIAdapter4 = adapter1.cast().unwrap();
 
-        let desc = unsafe { adapter4.GetDesc3() }.unwrap();
+        let mut desc = Default::default();
+        unsafe { adapter4.GetDesc3(&mut desc) }.unwrap();
         // Skip software adapters
         // Vote for https://github.com/microsoft/windows-rs/issues/793!
         if (desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE) == DXGI_ADAPTER_FLAG3_SOFTWARE {
