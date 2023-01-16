@@ -24,7 +24,6 @@ pub enum AllocationScheme {
     /// it to perform optimizations on this type of allocation.
     DedicatedImage(vk::Image),
     /// The memory for this resource will be allocated and managed by gpu-allocator.
-    /// It is possible that the allocation will reside in memory shared with other resources.
     GpuAllocatorManaged,
 }
 

@@ -233,18 +233,6 @@ pub struct AllocatorCreateDesc {
     pub debug_settings: AllocatorDebugSettings,
 }
 
-#[derive(Debug)]
-pub struct Allocation {
-    chunk_id: Option<std::num::NonZeroU64>,
-    offset: u64,
-    size: u64,
-    memory_block_index: usize,
-    memory_type_index: usize,
-    heap: ID3D12Heap,
-
-    name: Option<Box<str>>,
-}
-
 pub enum ResourceType<'a> {
     /// Allocation equivalent to Dx12's CommittedResource.
     Committed {
@@ -282,6 +270,18 @@ impl Drop for Resource {
 pub struct CommittedAllocationStatistics {
     pub num_allocations: usize,
     pub total_size: u64,
+}
+
+#[derive(Debug)]
+pub struct Allocation {
+    chunk_id: Option<std::num::NonZeroU64>,
+    offset: u64,
+    size: u64,
+    memory_block_index: usize,
+    memory_type_index: usize,
+    heap: ID3D12Heap,
+
+    name: Option<Box<str>>,
 }
 
 unsafe impl Send for Allocation {}
@@ -918,11 +918,14 @@ impl Allocator {
 
     /// Free a resource and its memory.
     pub fn free_resource(&mut self, mut resource: Resource) -> Result<()> {
+        // Explicitly drop the resource, which is backed by a refcounted COM object, before we free the allocated memory.
+        // The windows-rs crate implicitly releases the resource here.
         let _ = resource.resource.take();
+
         if let Some(allocation) = resource.allocation.take() {
             self.free(allocation)
         } else {
-            // Dx12 Committed resources are implicitly dropped when their refcount reaches 0.
+            // Dx12 CommittedResources do not have an application managed allocation.
             // We only have to update the tracked allocation count and memory usage.
             if let Some(memory_type_index) = resource.memory_type_index {
                 let memory_type = &mut self.memory_types[memory_type_index];
