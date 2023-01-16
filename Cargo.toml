@@ -26,7 +26,7 @@ thiserror = "1.0"
 # such as the ability to link/load a Vulkan library.
 ash = { version = ">=0.34, <=0.37", optional = true, default-features = false, features = ["debug"] }
 # Only needed for visualizer.
-imgui = { version = "0.9", features = ["tables-api"], optional = true }
+imgui = { version = "0.10", features = ["tables-api"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # Only needed for public-winapi interop helpers
