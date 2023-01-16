@@ -1,6 +1,6 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 
-use std::{fmt, mem::ManuallyDrop};
+use std::fmt;
 
 use log::{debug, warn, Level};
 
