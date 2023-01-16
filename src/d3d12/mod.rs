@@ -4,7 +4,10 @@ use std::fmt;
 
 use log::{debug, warn, Level};
 
-use windows::Win32::{Foundation::E_OUTOFMEMORY, Graphics::Direct3D12::*};
+use windows::Win32::{
+    Foundation::E_OUTOFMEMORY,
+    Graphics::{Direct3D::WKPDID_D3DDebugObjectNameW, Direct3D12::*},
+};
 
 #[cfg(feature = "public-winapi")]
 mod public_winapi {
@@ -260,8 +263,18 @@ impl Resource {
 
 impl Drop for Resource {
     fn drop(&mut self) {
-        if self.resource.is_some() {
-            warn!("Dropping resource that was not freed. Was `Allocator::free_resource()` not called?")
+        if let Some(resource) = &self.resource {
+            let mut name = vec![0u8; 128];
+            let mut name_len = name.len() as u32;
+            let _ = unsafe {
+                resource.GetPrivateData(
+                    &WKPDID_D3DDebugObjectNameW,
+                    &mut name_len,
+                    Some(name.as_mut_ptr().cast()),
+                )
+            };
+            let name = String::from_utf8(name).unwrap_or_else(|_| "Unknown".into());
+            warn!("Dropping resource `{}` that was not freed. Was `Allocator::free_resource()` not called?", name);
         }
     }
 }
@@ -920,7 +933,10 @@ impl Allocator {
     pub fn free_resource(&mut self, mut resource: Resource) -> Result<()> {
         // Explicitly drop the resource, which is backed by a refcounted COM object, before we free the allocated memory.
         // The windows-rs crate implicitly releases the resource here.
-        let _ = resource.resource.take();
+        let _ = resource
+            .resource
+            .take()
+            .expect("Resource was already freed.");
 
         if let Some(allocation) = resource.allocation.take() {
             self.free(allocation)
