@@ -2,7 +2,7 @@
 
 use std::{fmt, mem::ManuallyDrop};
 
-use log::{debug, Level};
+use log::{debug, warn, Level};
 
 use windows::Win32::{Foundation::E_OUTOFMEMORY, Graphics::Direct3D12::*};
 
@@ -258,10 +258,24 @@ pub enum ResourceType<'a> {
 #[derive(Debug)]
 pub struct Resource {
     pub allocation: Option<Allocation>,
-    pub resource: ManuallyDrop<ID3D12Resource>,
+    resource: Option<ID3D12Resource>,
     pub memory_location: MemoryLocation,
     memory_type_index: Option<usize>,
     pub size: u64,
+}
+
+impl Resource {
+    pub fn resource(&self) -> &ID3D12Resource {
+        self.resource.as_ref().expect("Resource was already freed.")
+    }
+}
+
+impl Drop for Resource {
+    fn drop(&mut self) {
+        if self.resource.is_some() {
+            warn!("Dropping resource that was not freed. Was `Allocator::free_resource()` not called?")
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -849,7 +863,7 @@ impl Allocator {
 
                     Ok(Resource {
                         allocation: None,
-                        resource: ManuallyDrop::new(resource),
+                        resource: Some(resource),
                         size: allocation_info.SizeInBytes,
                         memory_location: desc.memory_location,
                         memory_type_index: Some(memory_type.memory_type_index),
@@ -892,7 +906,7 @@ impl Allocator {
                     let size = allocation.size();
                     Ok(Resource {
                         allocation: Some(allocation),
-                        resource: ManuallyDrop::new(resource),
+                        resource: Some(resource),
                         size,
                         memory_location: desc.memory_location,
                         memory_type_index: None,
@@ -903,13 +917,13 @@ impl Allocator {
     }
 
     /// Free a resource and its memory.
-    pub fn free_resource(&mut self, resource: Resource) -> Result<()> {
-        let _ = ManuallyDrop::into_inner(resource.resource);
-        if let Some(allocation) = resource.allocation {
+    pub fn free_resource(&mut self, mut resource: Resource) -> Result<()> {
+        let _ = resource.resource.take();
+        if let Some(allocation) = resource.allocation.take() {
             self.free(allocation)
         } else {
-            // Committed resources are implicitly dropped when their refcount reaches 0.
-            // We only have to change the allocation and size tracking.
+            // Dx12 Committed resources are implicitly dropped when their refcount reaches 0.
+            // We only have to update the tracked allocation count and memory usage.
             if let Some(memory_type_index) = resource.memory_type_index {
                 let memory_type = &mut self.memory_types[memory_type_index];
 

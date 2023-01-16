@@ -17,14 +17,14 @@ use crate::{
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum AllocationScheme {
-    /// This allocation will be for a buffer, and it will be driver managed using vulkans DedicatedAllocation feature.
-    /// The driver will be able to perform optimizations in some cases with this type of allocation.
-    DedicatedBuffer { buffer: vk::Buffer },
-    /// This allocation will be for a image, and it will be driver managed using vulkans DedicatedAllocation feature.
-    /// The driver will be able to perform optimizations in some cases with this type of allocation.
-    DedicatedImage { image: vk::Image },
-    /// This allocation will be managed by the GPU allocator.
-    /// It is possible that the allocation will reside in an allocation block shared with other resources.
+    /// Perform a dedicated, driver-managed allocation for the given buffer, allowing
+    /// it to perform optimizations on this type of allocation.
+    DedicatedBuffer(vk::Buffer),
+    /// Perform a dedicated, driver-managed allocation for the given image, allowing
+    /// it to perform optimizations on this type of allocation.
+    DedicatedImage(vk::Image),
+    /// The memory for this resource will be allocated and managed by gpu-allocator.
+    /// It is possible that the allocation will reside in [`vk::Memory`] shared with other resources.
     GpuAllocatorManaged,
 }
 
@@ -164,10 +164,10 @@ impl MemoryBlock {
         mem_type_index: usize,
         mapped: bool,
         buffer_device_address: bool,
-        allocation_scheme: &AllocationScheme,
+        allocation_scheme: AllocationScheme,
         requires_personal_block: bool,
     ) -> Result<Self> {
-        let dedicated_allocation = *allocation_scheme != AllocationScheme::GpuAllocatorManaged;
+        let dedicated_allocation = allocation_scheme != AllocationScheme::GpuAllocatorManaged;
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::builder()
                 .allocation_size(size)
@@ -185,12 +185,12 @@ impl MemoryBlock {
             // Flag the memory as dedicated if required.
             let mut dedicated_memory_info = vk::MemoryDedicatedAllocateInfo::builder();
             let alloc_info = match allocation_scheme {
-                AllocationScheme::DedicatedBuffer { buffer } => {
-                    dedicated_memory_info = dedicated_memory_info.buffer(*buffer);
+                AllocationScheme::DedicatedBuffer(buffer) => {
+                    dedicated_memory_info = dedicated_memory_info.buffer(buffer);
                     alloc_info.push_next(&mut dedicated_memory_info)
                 }
-                AllocationScheme::DedicatedImage { image } => {
-                    dedicated_memory_info = dedicated_memory_info.image(*image);
+                AllocationScheme::DedicatedImage(image) => {
+                    dedicated_memory_info = dedicated_memory_info.image(image);
                     alloc_info.push_next(&mut dedicated_memory_info)
                 }
                 AllocationScheme::GpuAllocatorManaged => alloc_info,
@@ -222,14 +222,14 @@ impl MemoryBlock {
             std::ptr::null_mut()
         };
 
-        let sub_allocator: Box<dyn allocator::SubAllocator> =
-            if !matches!(allocation_scheme, AllocationScheme::GpuAllocatorManaged)
-                || requires_personal_block
-            {
-                Box::new(allocator::DedicatedBlockAllocator::new(size))
-            } else {
-                Box::new(allocator::FreeListAllocator::new(size))
-            };
+        let sub_allocator: Box<dyn allocator::SubAllocator> = if allocation_scheme
+            != AllocationScheme::GpuAllocatorManaged
+            || requires_personal_block
+        {
+            Box::new(allocator::DedicatedBlockAllocator::new(size))
+        } else {
+            Box::new(allocator::FreeListAllocator::new(size))
+        };
 
         Ok(Self {
             device_memory,
@@ -305,7 +305,7 @@ impl MemoryType {
                 self.memory_type_index,
                 self.mappable,
                 self.buffer_device_address,
-                &desc.allocation_scheme,
+                desc.allocation_scheme,
                 requires_personal_block,
             )?;
 
@@ -402,7 +402,7 @@ impl MemoryType {
             self.memory_type_index,
             self.mappable,
             self.buffer_device_address,
-            &desc.allocation_scheme,
+            desc.allocation_scheme,
             false,
         )?;
 
