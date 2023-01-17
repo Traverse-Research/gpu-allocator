@@ -248,6 +248,7 @@ pub enum ResourceType<'a> {
 
 #[derive(Debug)]
 pub struct Resource {
+    name: String,
     pub allocation: Option<Allocation>,
     resource: Option<ID3D12Resource>,
     pub memory_location: MemoryLocation,
@@ -264,17 +265,7 @@ impl Resource {
 impl Drop for Resource {
     fn drop(&mut self) {
         if let Some(resource) = &self.resource {
-            let mut name = vec![0u8; 128];
-            let mut name_len = name.len() as u32;
-            let _ = unsafe {
-                resource.GetPrivateData(
-                    &WKPDID_D3DDebugObjectNameW,
-                    &mut name_len,
-                    Some(name.as_mut_ptr().cast()),
-                )
-            };
-            let name = String::from_utf8(name).unwrap_or_else(|_| "Unknown".into());
-            warn!("Dropping resource `{}` that was not freed. Was `Allocator::free_resource()` not called?", name);
+            warn!("Dropping resource `{}` that was not freed. Was `Allocator::free_resource()` not called?", self.name);
         }
     }
 }
@@ -875,6 +866,7 @@ impl Allocator {
                     memory_type.committed_allocations.total_size += allocation_info.SizeInBytes;
 
                     Ok(Resource {
+                        name: desc.name.into(),
                         allocation: None,
                         resource: Some(resource),
                         size: allocation_info.SizeInBytes,
@@ -918,6 +910,7 @@ impl Allocator {
                         result.expect("Allocation succeeded but no resource was returned?");
                     let size = allocation.size();
                     Ok(Resource {
+                        name: desc.name.into(),
                         allocation: Some(allocation),
                         resource: Some(resource),
                         size,
