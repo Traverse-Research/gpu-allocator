@@ -41,6 +41,19 @@ pub struct AllocationCreateDesc<'a> {
     pub allocation_scheme: AllocationScheme,
 }
 
+/// Wrapper type to only mark a raw pointer [`Send`] + [`Sync`] without having to
+/// mark the entire [`Allocation`] as such, instead relying on the compiler to
+/// auto-implement this or fail if fields are added that violate this constraint
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SendSyncPtr(std::ptr::NonNull<std::ffi::c_void>);
+// Sending is fine because mapped_ptr does not change based on the thread we are in
+unsafe impl Send for SendSyncPtr {}
+// Sync is also okay because Sending &Allocation is safe: a mutable reference
+// to the data in mapped_ptr is never exposed while `self` is immutably borrowed.
+// In order to break safety guarantees, the user needs to `unsafe`ly dereference
+// `mapped_ptr` themselves.
+unsafe impl Sync for SendSyncPtr {}
+
 pub struct AllocatorCreateDesc {
     pub instance: ash::Instance,
     pub device: ash::Device,
@@ -57,19 +70,11 @@ pub struct Allocation {
     memory_block_index: usize,
     memory_type_index: usize,
     device_memory: vk::DeviceMemory,
-    mapped_ptr: Option<std::ptr::NonNull<std::ffi::c_void>>,
+    mapped_ptr: Option<SendSyncPtr>,
     dedicated_allocation: bool,
 
     name: Option<Box<str>>,
 }
-
-// Sending is fine because mapped_ptr does not change based on the thread we are in
-unsafe impl Send for Allocation {}
-// Sync is also okay because Sending &Allocation is safe: a mutable reference
-// to the data in mapped_ptr is never exposed while `self` is immutably borrowed.
-// In order to break safety guarantees, the user needs to `unsafe`ly dereference
-// `mapped_ptr` themselves.
-unsafe impl Sync for Allocation {}
 
 impl Allocation {
     pub fn chunk_id(&self) -> Option<std::num::NonZeroU64> {
@@ -107,7 +112,7 @@ impl Allocation {
     /// Returns a valid mapped pointer if the memory is host visible, otherwise it will return None.
     /// The pointer already points to the exact memory region of the suballocation, so no offset needs to be applied.
     pub fn mapped_ptr(&self) -> Option<std::ptr::NonNull<std::ffi::c_void>> {
-        self.mapped_ptr
+        self.mapped_ptr.map(|SendSyncPtr(p)| p)
     }
 
     /// Returns a valid mapped slice if the memory is host visible, otherwise it will return None.
@@ -151,7 +156,7 @@ impl Default for Allocation {
 pub(crate) struct MemoryBlock {
     pub(crate) device_memory: vk::DeviceMemory,
     pub(crate) size: u64,
-    pub(crate) mapped_ptr: *mut std::ffi::c_void,
+    pub(crate) mapped_ptr: Option<SendSyncPtr>,
     pub(crate) sub_allocator: Box<dyn allocator::SubAllocator>,
     pub(crate) dedicated_allocation: bool,
 }
@@ -204,22 +209,27 @@ impl MemoryBlock {
             })?
         };
 
-        let mapped_ptr = if mapped {
-            unsafe {
-                device.map_memory(
-                    device_memory,
-                    0,
-                    vk::WHOLE_SIZE,
-                    vk::MemoryMapFlags::empty(),
-                )
-            }
-            .map_err(|e| {
-                unsafe { device.free_memory(device_memory, None) };
-                AllocationError::FailedToMap(e.to_string())
-            })?
-        } else {
-            std::ptr::null_mut()
-        };
+        let mapped_ptr = mapped
+            .then(|| {
+                unsafe {
+                    device.map_memory(
+                        device_memory,
+                        0,
+                        vk::WHOLE_SIZE,
+                        vk::MemoryMapFlags::empty(),
+                    )
+                }
+                .map_err(|e| {
+                    unsafe { device.free_memory(device_memory, None) };
+                    AllocationError::FailedToMap(e.to_string())
+                })
+                .and_then(|p| {
+                    std::ptr::NonNull::new(p).map(SendSyncPtr).ok_or_else(|| {
+                        AllocationError::FailedToMap("Returned mapped pointer is null".to_owned())
+                    })
+                })
+            })
+            .transpose()?;
 
         let sub_allocator: Box<dyn allocator::SubAllocator> = if allocation_scheme
             != AllocationScheme::GpuAllocatorManaged
@@ -240,18 +250,13 @@ impl MemoryBlock {
     }
 
     fn destroy(self, device: &ash::Device) {
-        if !self.mapped_ptr.is_null() {
+        if self.mapped_ptr.is_some() {
             unsafe { device.unmap_memory(self.device_memory) };
         }
 
         unsafe { device.free_memory(self.device_memory, None) };
     }
 }
-
-// `mapped_ptr` is safe to send or share across threads because
-// it is never exposed publicly through [`MemoryBlock`].
-unsafe impl Send for MemoryBlock {}
-unsafe impl Sync for MemoryBlock {}
 
 #[derive(Debug)]
 pub(crate) struct MemoryType {
@@ -347,7 +352,7 @@ impl MemoryType {
                 memory_block_index: block_index,
                 memory_type_index: self.memory_type_index,
                 device_memory: mem_block.device_memory,
-                mapped_ptr: std::ptr::NonNull::new(mem_block.mapped_ptr),
+                mapped_ptr: mem_block.mapped_ptr,
                 name: Some(desc.name.into()),
                 dedicated_allocation,
             });
@@ -367,9 +372,10 @@ impl MemoryType {
 
                 match allocation {
                     Ok((offset, chunk_id)) => {
-                        let mapped_ptr = if !mem_block.mapped_ptr.is_null() {
-                            let offset_ptr = unsafe { mem_block.mapped_ptr.add(offset as usize) };
-                            std::ptr::NonNull::new(offset_ptr)
+                        let mapped_ptr = if let Some(SendSyncPtr(mapped_ptr)) = mem_block.mapped_ptr
+                        {
+                            let offset_ptr = unsafe { mapped_ptr.as_ptr().add(offset as usize) };
+                            std::ptr::NonNull::new(offset_ptr).map(SendSyncPtr)
                         } else {
                             None
                         };
@@ -439,9 +445,9 @@ impl MemoryType {
             },
         };
 
-        let mapped_ptr = if !mem_block.mapped_ptr.is_null() {
-            let offset_ptr = unsafe { mem_block.mapped_ptr.add(offset as usize) };
-            std::ptr::NonNull::new(offset_ptr)
+        let mapped_ptr = if let Some(SendSyncPtr(mapped_ptr)) = mem_block.mapped_ptr {
+            let offset_ptr = unsafe { mapped_ptr.as_ptr().add(offset as usize) };
+            std::ptr::NonNull::new(offset_ptr).map(SendSyncPtr)
         } else {
             None
         };

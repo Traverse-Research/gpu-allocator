@@ -39,7 +39,7 @@ pub(crate) trait SubAllocatorBase: crate::visualizer::SubAllocatorVisualizer {}
 #[cfg(not(feature = "visualizer"))]
 pub(crate) trait SubAllocatorBase {}
 
-pub(crate) trait SubAllocator: SubAllocatorBase + std::fmt::Debug {
+pub(crate) trait SubAllocator: SubAllocatorBase + std::fmt::Debug + Sync + Send {
     fn allocate(
         &mut self,
         size: u64,

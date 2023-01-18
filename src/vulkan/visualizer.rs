@@ -129,10 +129,12 @@ impl AllocatorVisualizer {
                                             "vk device memory: 0x{:x}",
                                             block.device_memory.as_raw()
                                         ));
-                                        ui.text(format!(
-                                            "mapped pointer: 0x{:x}",
-                                            block.mapped_ptr as usize
-                                        ));
+                                        if let Some(mapped_ptr) = block.mapped_ptr {
+                                            ui.text(format!(
+                                                "mapped pointer: {:#p}",
+                                                mapped_ptr.0.as_ptr()
+                                            ));
+                                        }
                                         if block.dedicated_allocation {
                                             ui.text("Dedicated Allocation");
                                         }
