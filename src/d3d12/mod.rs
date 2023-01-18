@@ -1,8 +1,8 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 
-use std::{fmt, mem::ManuallyDrop};
+use std::fmt;
 
-use log::{debug, Level};
+use log::{debug, warn, Level};
 
 use windows::Win32::{Foundation::E_OUTOFMEMORY, Graphics::Direct3D12::*};
 
@@ -233,18 +233,6 @@ pub struct AllocatorCreateDesc {
     pub debug_settings: AllocatorDebugSettings,
 }
 
-#[derive(Debug)]
-pub struct Allocation {
-    chunk_id: Option<std::num::NonZeroU64>,
-    offset: u64,
-    size: u64,
-    memory_block_index: usize,
-    memory_type_index: usize,
-    heap: ID3D12Heap,
-
-    name: Option<Box<str>>,
-}
-
 pub enum ResourceType<'a> {
     /// Allocation equivalent to Dx12's CommittedResource.
     Committed {
@@ -257,17 +245,44 @@ pub enum ResourceType<'a> {
 
 #[derive(Debug)]
 pub struct Resource {
+    name: String,
     pub allocation: Option<Allocation>,
-    pub resource: ManuallyDrop<ID3D12Resource>,
+    resource: Option<ID3D12Resource>,
     pub memory_location: MemoryLocation,
     memory_type_index: Option<usize>,
     pub size: u64,
+}
+
+impl Resource {
+    pub fn resource(&self) -> &ID3D12Resource {
+        self.resource.as_ref().expect("Resource was already freed.")
+    }
+}
+
+impl Drop for Resource {
+    fn drop(&mut self) {
+        if self.resource.is_some() {
+            warn!("Dropping resource `{}` that was not freed. Call `Allocator::free_resource(resource)` instead.", self.name);
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct CommittedAllocationStatistics {
     pub num_allocations: usize,
     pub total_size: u64,
+}
+
+#[derive(Debug)]
+pub struct Allocation {
+    chunk_id: Option<std::num::NonZeroU64>,
+    offset: u64,
+    size: u64,
+    memory_block_index: usize,
+    memory_type_index: usize,
+    heap: ID3D12Heap,
+
+    name: Option<Box<str>>,
 }
 
 impl Allocation {
@@ -813,8 +828,9 @@ impl Allocator {
                     memory_type.committed_allocations.total_size += allocation_info.SizeInBytes;
 
                     Ok(Resource {
+                        name: desc.name.into(),
                         allocation: None,
-                        resource: ManuallyDrop::new(resource),
+                        resource: Some(resource),
                         size: allocation_info.SizeInBytes,
                         memory_location: desc.memory_location,
                         memory_type_index: Some(memory_type.memory_type_index),
@@ -856,8 +872,9 @@ impl Allocator {
                         result.expect("Allocation succeeded but no resource was returned?");
                     let size = allocation.size();
                     Ok(Resource {
+                        name: desc.name.into(),
                         allocation: Some(allocation),
-                        resource: ManuallyDrop::new(resource),
+                        resource: Some(resource),
                         size,
                         memory_location: desc.memory_location,
                         memory_type_index: None,
@@ -868,13 +885,19 @@ impl Allocator {
     }
 
     /// Free a resource and its memory.
-    pub fn free_resource(&mut self, resource: Resource) -> Result<()> {
-        let _ = ManuallyDrop::into_inner(resource.resource);
-        if let Some(allocation) = resource.allocation {
+    pub fn free_resource(&mut self, mut resource: Resource) -> Result<()> {
+        // Explicitly drop the resource (which is backed by a refcounted COM object)
+        // before freeing allocated memory. Windows-rs performs a Release() on drop().
+        let _ = resource
+            .resource
+            .take()
+            .expect("Resource was already freed.");
+
+        if let Some(allocation) = resource.allocation.take() {
             self.free(allocation)
         } else {
-            // Committed resources are implicitly dropped when their refcount reaches 0.
-            // We only have to change the allocation and size tracking.
+            // Dx12 CommittedResources do not have an application managed allocation.
+            // We only have to update the tracked allocation count and memory usage.
             if let Some(memory_type_index) = resource.memory_type_index {
                 let memory_type = &mut self.memory_types[memory_type_index];
 
