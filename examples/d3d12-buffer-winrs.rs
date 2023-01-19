@@ -3,7 +3,7 @@ use gpu_allocator::d3d12::{
     AllocationCreateDesc, Allocator, AllocatorCreateDesc, ResourceCategory,
 };
 use gpu_allocator::MemoryLocation;
-use log::error;
+use log::*;
 use windows::core::{Interface, Result};
 use windows::Win32::{
     Foundation::E_NOINTERFACE,
@@ -55,7 +55,7 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
                     let mut device = None;
                     match unsafe { D3D12CreateDevice(&adapter4, feature_level, &mut device) } {
                         Ok(()) => {
-                            println!("Using D3D12 feature level: {}", feature_level_name);
+                            info!("Using D3D12 feature level: {}", feature_level_name);
                             Some(device.unwrap())
                         }
                         Err(e) if e.code() == E_NOINTERFACE => {
@@ -63,7 +63,7 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
                             None
                         }
                         Err(e) => {
-                            println!(
+                            info!(
                                 "D3D12 feature level {} not supported: {}",
                                 feature_level_name, e
                             );
@@ -80,6 +80,8 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
 }
 
 fn main() -> Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
+
     let dxgi_factory = unsafe { CreateDXGIFactory2(0) }?;
 
     let device = create_d3d12_device(&dxgi_factory).expect("Failed to create D3D12 device.");
@@ -132,7 +134,7 @@ fn main() -> Result<()> {
         drop(resource);
 
         allocator.free(allocation).unwrap();
-        println!("Allocation and deallocation of GpuOnly memory was successful.");
+        info!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
     // Test allocating Cpu to Gpu memory
@@ -180,7 +182,7 @@ fn main() -> Result<()> {
         drop(resource);
 
         allocator.free(allocation).unwrap();
-        println!("Allocation and deallocation of CpuToGpu memory was successful.");
+        info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     // Test allocating Gpu to Cpu memory
@@ -228,7 +230,7 @@ fn main() -> Result<()> {
         drop(resource);
 
         allocator.free(allocation).unwrap();
-        println!("Allocation and deallocation of CpuToGpu memory was successful.");
+        info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     Ok(())

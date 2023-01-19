@@ -1,4 +1,5 @@
 use ash::vk;
+use log::info;
 
 use std::default::Default;
 use std::ffi::CString;
@@ -9,9 +10,11 @@ use gpu_allocator::vulkan::{
 use gpu_allocator::MemoryLocation;
 
 fn main() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
+
     let entry = unsafe { ash::Entry::load() }.unwrap();
 
-    // Create vulkan instance
+    // Create Vulkan instance
     let instance = {
         let app_name = CString::new("Vulkan gpu-allocator test").unwrap();
 
@@ -128,7 +131,7 @@ fn main() {
 
         unsafe { device.destroy_buffer(test_buffer, None) };
 
-        println!("Allocation and deallocation of GpuOnly memory was successful.");
+        info!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
     // Test allocating Cpu to Gpu memory
@@ -161,7 +164,7 @@ fn main() {
 
         unsafe { device.destroy_buffer(test_buffer, None) };
 
-        println!("Allocation and deallocation of CpuToGpu memory was successful.");
+        info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
     // Test allocating Gpu to Cpu memory
@@ -194,7 +197,7 @@ fn main() {
 
         unsafe { device.destroy_buffer(test_buffer, None) };
 
-        println!("Allocation and deallocation of GpuToCpu memory was successful.");
+        info!("Allocation and deallocation of GpuToCpu memory was successful.");
     }
 
     drop(allocator); // Explicitly drop before destruction of device and instance.
