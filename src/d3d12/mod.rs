@@ -4,7 +4,8 @@ use std::fmt;
 
 use log::{debug, warn, Level};
 
-use windows::Win32::{Foundation::E_OUTOFMEMORY, Graphics::Direct3D12::*};
+use microsoft_directx::Microsoft::DirectX::Direct3D12::*;
+use windows::Win32::Foundation::E_OUTOFMEMORY;
 
 #[cfg(feature = "public-winapi")]
 mod public_winapi {

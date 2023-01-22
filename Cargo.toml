@@ -36,12 +36,11 @@ winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "
 version = "0.44"
 features = [
     "Win32_Foundation",
-    "Win32_Graphics",
-    "Win32_Graphics_Direct3D",
-    "Win32_Graphics_Direct3D12",
-    "Win32_Graphics_Dxgi",
-    "Win32_Graphics_Dxgi_Common",
 ]
+optional = true
+
+[target.'cfg(windows)'.dependencies.microsoft-directx]
+version = "0.0.0-alpha.2"
 optional = true
 
 [dev-dependencies]
@@ -57,14 +56,9 @@ winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", 
 
 [target.'cfg(windows)'.dev-dependencies.windows]
 version = "0.44"
-features = [
-    "Win32_Foundation",
-    "Win32_Graphics",
-    "Win32_Graphics_Direct3D",
-    "Win32_Graphics_Direct3D12",
-    "Win32_Graphics_Dxgi",
-    "Win32_Graphics_Dxgi_Common",
-]
+
+[target.'cfg(windows)'.dev-dependencies.microsoft-directx]
+version = "0.0.0-alpha.2"
 
 [[example]]
 name = "vulkan-buffer"
@@ -90,7 +84,7 @@ required-features = ["d3d12", "public-winapi", "visualizer"]
 [features]
 visualizer = ["imgui"]
 vulkan = ["ash"]
-d3d12 = ["windows"]
+d3d12 = ["windows", "microsoft-directx"]
 # Expose helper functionality for winapi types to interface with gpu-allocator, which is primarily windows-rs driven
 public-winapi = ["dep:winapi"]
 
