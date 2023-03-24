@@ -1,6 +1,5 @@
 #![windows_subsystem = "windows"]
 //! Example showcasing [`winapi`] interop with [`gpu-allocator`] which is driven by the [`windows`] crate.
-use gpu_allocator::AllocationSizes;
 use log::info;
 use raw_window_handle::HasRawWindowHandle;
 
