@@ -231,6 +231,7 @@ fn main() -> ash::prelude::VkResult<()> {
             physical_device: pdevice,
             debug_settings: Default::default(),
             buffer_device_address: false,
+            allocation_sizes: Default::default(),
         })
         .unwrap(),
     );

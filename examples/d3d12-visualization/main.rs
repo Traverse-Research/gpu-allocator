@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"]
 //! Example showcasing [`winapi`] interop with [`gpu-allocator`] which is driven by the [`windows`] crate.
+use gpu_allocator::AllocationSizes;
 use log::info;
 use raw_window_handle::HasRawWindowHandle;
 
@@ -358,6 +359,7 @@ fn main() {
         let mut allocator = Allocator::new(&AllocatorCreateDesc {
             device: device.as_windows().clone(),
             debug_settings: Default::default(),
+            allocation_sizes: Default::default(),
         })
         .unwrap();
 

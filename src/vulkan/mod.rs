@@ -12,7 +12,8 @@ use log::{debug, Level};
 use std::fmt;
 
 use crate::{
-    allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result,
+    allocator::fmt_bytes, AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation,
+    Result,
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -60,6 +61,7 @@ pub struct AllocatorCreateDesc {
     pub physical_device: ash::vk::PhysicalDevice,
     pub debug_settings: AllocatorDebugSettings,
     pub buffer_device_address: bool,
+    pub allocation_sizes: AllocationSizes,
 }
 
 #[derive(Debug)]
@@ -269,9 +271,6 @@ pub(crate) struct MemoryType {
     pub(crate) buffer_device_address: bool,
 }
 
-const DEFAULT_DEVICE_MEMBLOCK_SIZE: u64 = 256 * 1024 * 1024;
-const DEFAULT_HOST_MEMBLOCK_SIZE: u64 = 64 * 1024 * 1024;
-
 impl MemoryType {
     fn allocate(
         &mut self,
@@ -279,6 +278,7 @@ impl MemoryType {
         desc: &AllocationCreateDesc<'_>,
         granularity: u64,
         backtrace: Option<backtrace::Backtrace>,
+        allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = if desc.linear {
             AllocationType::Linear
@@ -290,9 +290,9 @@ impl MemoryType {
             .memory_properties
             .contains(vk::MemoryPropertyFlags::HOST_VISIBLE)
         {
-            DEFAULT_HOST_MEMBLOCK_SIZE
+            allocation_sizes.host_memblock_size
         } else {
-            DEFAULT_DEVICE_MEMBLOCK_SIZE
+            allocation_sizes.device_memblock_size
         };
 
         let size = desc.requirements.size;
@@ -505,6 +505,7 @@ pub struct Allocator {
     device: ash::Device,
     pub(crate) buffer_image_granularity: u64,
     pub(crate) debug_settings: AllocatorDebugSettings,
+    allocation_sizes: AllocationSizes,
 }
 
 impl fmt::Debug for Allocator {
@@ -621,6 +622,7 @@ impl Allocator {
             device: desc.device.clone(),
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
+            allocation_sizes: AllocationSizes::default(),
         })
     }
 
@@ -694,6 +696,7 @@ impl Allocator {
                 desc,
                 self.buffer_image_granularity,
                 backtrace.clone(),
+                &self.allocation_sizes,
             )
         };
 
@@ -715,6 +718,7 @@ impl Allocator {
                     desc,
                     self.buffer_image_granularity,
                     backtrace,
+                    &self.allocation_sizes,
                 )
             } else {
                 allocation
