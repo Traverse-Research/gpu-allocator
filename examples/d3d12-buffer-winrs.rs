@@ -15,8 +15,8 @@ use windows::Win32::{
             D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON,
             D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         },
-        Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
         Dxgi::{
+            Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
             CreateDXGIFactory2, IDXGIAdapter4, IDXGIFactory6, DXGI_ADAPTER_FLAG3_SOFTWARE,
             DXGI_ERROR_NOT_FOUND,
         },
