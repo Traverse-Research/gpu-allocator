@@ -98,6 +98,12 @@ pub enum ResourceCategory {
     OtherTexture,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResourceStateOrBarrierLayout {
+    ResourceState(D3D12_RESOURCE_STATES),
+    BarrierLayout(D3D12_BARRIER_LAYOUT),
+}
+
 #[derive(Clone, Copy)]
 pub struct ResourceCreateDesc<'a> {
     pub name: &'a str,
@@ -105,7 +111,7 @@ pub struct ResourceCreateDesc<'a> {
     pub resource_category: ResourceCategory,
     pub resource_desc: &'a D3D12_RESOURCE_DESC,
     pub clear_value: Option<&'a D3D12_CLEAR_VALUE>,
-    pub initial_state: D3D12_RESOURCE_STATES,
+    pub initial_state_or_layout: ResourceStateOrBarrierLayout,
     pub resource_type: &'a ResourceType<'a>,
 }
 
@@ -228,9 +234,31 @@ impl<'a> AllocationCreateDesc<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum ID3D12DeviceVersion {
+    /// Basic device compatible with legacy barriers only, i.e. can only be used in conjunction
+    /// with [`ResourceStateOrBarrierLayout::ResourceState`].
+    Device(ID3D12Device),
+    /// Required for enhanced barrier support, i.e. when using
+    /// [`ResourceStateOrBarrierLayout::BarrierLayout`].
+    Device10(ID3D12Device10),
+}
+
+impl std::ops::Deref for ID3D12DeviceVersion {
+    type Target = ID3D12Device;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Device(device) => device,
+            // Windows-rs hides CanInto, we know that Device10 is a subclass of Device but there's not even a Deref.
+            Self::Device10(device10) => windows::core::CanInto::can_into(device10),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct AllocatorCreateDesc {
-    pub device: ID3D12Device,
+    pub device: ID3D12DeviceVersion,
     pub debug_settings: AllocatorDebugSettings,
     pub allocation_sizes: AllocationSizes,
 }
@@ -391,7 +419,7 @@ struct MemoryType {
 impl MemoryType {
     fn allocate(
         &mut self,
-        device: &ID3D12Device,
+        device: &ID3D12DeviceVersion,
         desc: &AllocationCreateDesc<'_>,
         backtrace: Option<backtrace::Backtrace>,
         allocation_sizes: &AllocationSizes,
@@ -571,14 +599,14 @@ impl MemoryType {
 }
 
 pub struct Allocator {
-    device: ID3D12Device,
+    device: ID3D12DeviceVersion,
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
     allocation_sizes: AllocationSizes,
 }
 
 impl Allocator {
-    pub fn device(&self) -> &ID3D12Device {
+    pub fn device(&self) -> &ID3D12DeviceVersion {
         &self.device
     }
 
@@ -791,54 +819,90 @@ impl Allocator {
                 let clear_value: Option<*const D3D12_CLEAR_VALUE> =
                     desc.clear_value.map(|v| -> *const _ { v });
 
-                if let Err(err) = unsafe {
-                    self.device.CreateCommittedResource(
-                        *heap_properties,
-                        *heap_flags,
-                        desc.resource_desc,
-                        desc.initial_state,
-                        clear_value,
-                        &mut result,
-                    )
+                if let Err(e) = unsafe {
+                    match (&self.device, desc.initial_state_or_layout) {
+                        (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
+                            device.CreateCommittedResource(
+                                *heap_properties,
+                                *heap_flags,
+                                desc.resource_desc,
+                                initial_state,
+                                clear_value,
+                                &mut result,
+                            )
+                        }
+                        (
+                            ID3D12DeviceVersion::Device10(device),
+                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                        ) => {
+                            let resource_desc1 = D3D12_RESOURCE_DESC1 {
+                                Dimension: desc.resource_desc.Dimension,
+                                Alignment: desc.resource_desc.Alignment,
+                                Width: desc.resource_desc.Width,
+                                Height: desc.resource_desc.Height,
+                                DepthOrArraySize: desc.resource_desc.DepthOrArraySize,
+                                MipLevels: desc.resource_desc.MipLevels,
+                                Format: desc.resource_desc.Format,
+                                SampleDesc: desc.resource_desc.SampleDesc,
+                                Layout: desc.resource_desc.Layout,
+                                Flags: desc.resource_desc.Flags,
+                                // TODO: This is the only new field
+                                SamplerFeedbackMipRegion: D3D12_MIP_REGION::default(),
+                            };
+
+                            device.CreateCommittedResource3(
+                                *heap_properties,
+                                *heap_flags,
+                                &resource_desc1,
+                                initial_layout,
+                                clear_value,
+                                None, // TODO
+                                None, // TODO: https://github.com/microsoft/DirectX-Specs/blob/master/d3d/VulkanOn12.md#format-list-casting
+                                &mut result,
+                            )
+                        }
+                        _ => return Err(AllocationError::BarrierLayoutNeedsDevice10),
+                    }
                 } {
-                    Err(AllocationError::Internal(err.message().to_string()))
-                } else {
-                    let resource =
-                        result.expect("Allocation succeeded but no resource was returned?");
-
-                    let allocation_info = unsafe {
-                        self.device
-                            .GetResourceAllocationInfo(0, &[*desc.resource_desc])
-                    };
-
-                    let memory_type = self
-                        .memory_types
-                        .iter_mut()
-                        .find(|memory_type| {
-                            let is_location_compatible = desc.memory_location
-                                == MemoryLocation::Unknown
-                                || desc.memory_location == memory_type.memory_location;
-
-                            let is_category_compatible = memory_type.heap_category
-                                == HeapCategory::All
-                                || memory_type.heap_category == desc.resource_category.into();
-
-                            is_location_compatible && is_category_compatible
-                        })
-                        .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
-
-                    memory_type.committed_allocations.num_allocations += 1;
-                    memory_type.committed_allocations.total_size += allocation_info.SizeInBytes;
-
-                    Ok(Resource {
-                        name: desc.name.into(),
-                        allocation: None,
-                        resource: Some(resource),
-                        size: allocation_info.SizeInBytes,
-                        memory_location: desc.memory_location,
-                        memory_type_index: Some(memory_type.memory_type_index),
-                    })
+                    return Err(AllocationError::Internal(format!(
+                        "ID3D12Device::CreateCommittedResource failed: {}",
+                        e
+                    )));
                 }
+
+                let resource = result.expect("Allocation succeeded but no resource was returned?");
+
+                let allocation_info = unsafe {
+                    self.device
+                        .GetResourceAllocationInfo(0, &[*desc.resource_desc])
+                };
+
+                let memory_type = self
+                    .memory_types
+                    .iter_mut()
+                    .find(|memory_type| {
+                        let is_location_compatible = desc.memory_location
+                            == MemoryLocation::Unknown
+                            || desc.memory_location == memory_type.memory_location;
+
+                        let is_category_compatible = memory_type.heap_category == HeapCategory::All
+                            || memory_type.heap_category == desc.resource_category.into();
+
+                        is_location_compatible && is_category_compatible
+                    })
+                    .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
+
+                memory_type.committed_allocations.num_allocations += 1;
+                memory_type.committed_allocations.total_size += allocation_info.SizeInBytes;
+
+                Ok(Resource {
+                    name: desc.name.into(),
+                    allocation: None,
+                    resource: Some(resource),
+                    size: allocation_info.SizeInBytes,
+                    memory_location: desc.memory_location,
+                    memory_type_index: Some(memory_type.memory_type_index),
+                })
             }
             ResourceType::Placed => {
                 let allocation_desc = {
@@ -859,30 +923,65 @@ impl Allocator {
                 let allocation = self.allocate(&allocation_desc)?;
 
                 let mut result: Option<ID3D12Resource> = None;
-                if let Err(err) = unsafe {
-                    self.device.CreatePlacedResource(
-                        allocation.heap(),
-                        allocation.offset(),
-                        desc.resource_desc,
-                        desc.initial_state,
-                        None,
-                        &mut result,
-                    )
+                if let Err(e) = unsafe {
+                    match (&self.device, desc.initial_state_or_layout) {
+                        (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
+                            device.CreatePlacedResource(
+                                allocation.heap(),
+                                allocation.offset(),
+                                desc.resource_desc,
+                                initial_state,
+                                None,
+                                &mut result,
+                            )
+                        }
+                        (
+                            ID3D12DeviceVersion::Device10(device),
+                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                        ) => {
+                            let resource_desc1 = D3D12_RESOURCE_DESC1 {
+                                Dimension: desc.resource_desc.Dimension,
+                                Alignment: desc.resource_desc.Alignment,
+                                Width: desc.resource_desc.Width,
+                                Height: desc.resource_desc.Height,
+                                DepthOrArraySize: desc.resource_desc.DepthOrArraySize,
+                                MipLevels: desc.resource_desc.MipLevels,
+                                Format: desc.resource_desc.Format,
+                                SampleDesc: desc.resource_desc.SampleDesc,
+                                Layout: desc.resource_desc.Layout,
+                                Flags: desc.resource_desc.Flags,
+                                // TODO: This is the only new field
+                                SamplerFeedbackMipRegion: D3D12_MIP_REGION::default(),
+                            };
+                            device.CreatePlacedResource2(
+                                allocation.heap(),
+                                allocation.offset(),
+                                &resource_desc1,
+                                initial_layout,
+                                None,
+                                None, // TODO: https://github.com/microsoft/DirectX-Specs/blob/master/d3d/VulkanOn12.md#format-list-casting
+                                &mut result,
+                            )
+                        }
+                        _ => return Err(AllocationError::BarrierLayoutNeedsDevice10),
+                    }
                 } {
-                    Err(AllocationError::Internal(err.message().to_string()))
-                } else {
-                    let resource =
-                        result.expect("Allocation succeeded but no resource was returned?");
-                    let size = allocation.size();
-                    Ok(Resource {
-                        name: desc.name.into(),
-                        allocation: Some(allocation),
-                        resource: Some(resource),
-                        size,
-                        memory_location: desc.memory_location,
-                        memory_type_index: None,
-                    })
+                    return Err(AllocationError::Internal(format!(
+                        "ID3D12Device::CreatePlacedResource failed: {}",
+                        e
+                    )));
                 }
+
+                let resource = result.expect("Allocation succeeded but no resource was returned?");
+                let size = allocation.size();
+                Ok(Resource {
+                    name: desc.name.into(),
+                    allocation: Some(allocation),
+                    resource: Some(resource),
+                    size,
+                    memory_location: desc.memory_location,
+                    memory_type_index: None,
+                })
             }
         }
     }
