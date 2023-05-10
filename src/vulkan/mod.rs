@@ -178,6 +178,9 @@ impl Allocation {
     /// See the note about safety in [the documentation of Allocation][Allocation#safety]
     ///
     /// [`Slab`]: presser::Slab
+    // best to be explicit where the lifetime is coming from since we're doing unsafe things
+    // and relying on an inferred liftime type in the PhantomData below
+    #[allow(clippy::needless_lifetimes)] 
     pub fn try_as_mapped_slab<'a>(&'a mut self) -> Option<MappedAllocationSlab<'a>> {
         let mapped_ptr = self.mapped_ptr()?.cast().as_ptr();
 
