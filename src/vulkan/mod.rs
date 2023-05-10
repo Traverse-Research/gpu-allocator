@@ -8,8 +8,8 @@ pub use visualizer::AllocatorVisualizer;
 use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;
-use log::{debug, Level};
 use core::marker::PhantomData;
+use log::{debug, Level};
 use std::fmt;
 
 use crate::{
