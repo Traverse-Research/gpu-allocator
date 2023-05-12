@@ -8,6 +8,7 @@ pub use visualizer::AllocatorVisualizer;
 use super::allocator;
 use super::allocator::AllocationType;
 use ash::vk;
+use core::marker::PhantomData;
 use log::{debug, Level};
 use std::fmt;
 
@@ -177,7 +178,10 @@ impl Allocation {
     /// See the note about safety in [the documentation of Allocation][Allocation#safety]
     ///
     /// [`Slab`]: presser::Slab
-    pub fn try_as_mapped_slab(&mut self) -> Option<MappedAllocationSlab<'_>> {
+    // best to be explicit where the lifetime is coming from since we're doing unsafe things
+    // and relying on an inferred liftime type in the PhantomData below
+    #[allow(clippy::needless_lifetimes)]
+    pub fn try_as_mapped_slab<'a>(&'a mut self) -> Option<MappedAllocationSlab<'a>> {
         let mapped_ptr = self.mapped_ptr()?.cast().as_ptr();
 
         if self.size > isize::MAX as _ {
@@ -188,7 +192,7 @@ impl Allocation {
         let size = self.size as usize;
 
         Some(MappedAllocationSlab {
-            _borrowed_alloc: self,
+            _borrowed_alloc: PhantomData,
             mapped_ptr,
             size,
         })
@@ -273,7 +277,7 @@ impl Default for Allocation {
 ///
 /// This type should be acquired by calling [`Allocation::try_as_mapped_slab`].
 pub struct MappedAllocationSlab<'a> {
-    _borrowed_alloc: &'a mut Allocation,
+    _borrowed_alloc: PhantomData<&'a mut Allocation>,
     mapped_ptr: *mut u8,
     size: usize,
 }
@@ -298,6 +302,7 @@ unsafe impl presser::Slab for Allocation {
     fn base_ptr(&self) -> *const u8 {
         self.mapped_ptr
             .expect("tried to use a non-mapped Allocation as a Slab")
+            .0
             .as_ptr()
             .cast()
     }
@@ -305,6 +310,7 @@ unsafe impl presser::Slab for Allocation {
     fn base_ptr_mut(&mut self) -> *mut u8 {
         self.mapped_ptr
             .expect("tried to use a non-mapped Allocation as a Slab")
+            .0
             .as_ptr()
             .cast()
     }
