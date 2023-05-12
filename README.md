@@ -35,6 +35,7 @@ let mut allocator = Allocator::new(&AllocatorCreateDesc {
     physical_device,
     debug_settings: Default::default(),
     buffer_device_address: true,  // Ideally, check the BufferDeviceAddressFeatures struct.
+    allocation_sizes: Default::default(),
 });
 ```
 
@@ -78,6 +79,7 @@ use gpu_allocator::d3d12::*;
 let mut allocator = Allocator::new(&AllocatorCreateDesc {
     device,
     debug_settings: Default::default(),
+    allocation_sizes: Default::default(),
 });
 ```
 

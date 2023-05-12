@@ -85,7 +85,8 @@ use super::allocator;
 use super::allocator::AllocationType;
 
 use crate::{
-    allocator::fmt_bytes, AllocationError, AllocatorDebugSettings, MemoryLocation, Result,
+    allocator::fmt_bytes, AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation,
+    Result,
 };
 
 /// [`ResourceCategory`] is used for supporting [`D3D12_RESOURCE_HEAP_TIER_1`].
@@ -231,6 +232,7 @@ impl<'a> AllocationCreateDesc<'a> {
 pub struct AllocatorCreateDesc {
     pub device: ID3D12Device,
     pub debug_settings: AllocatorDebugSettings,
+    pub allocation_sizes: AllocationSizes,
 }
 
 pub enum ResourceType<'a> {
@@ -386,21 +388,20 @@ struct MemoryType {
     active_general_blocks: usize,
 }
 
-const DEFAULT_DEVICE_MEMBLOCK_SIZE: u64 = 256 * 1024 * 1024;
-const DEFAULT_HOST_MEMBLOCK_SIZE: u64 = 64 * 1024 * 1024;
 impl MemoryType {
     fn allocate(
         &mut self,
         device: &ID3D12Device,
         desc: &AllocationCreateDesc<'_>,
         backtrace: Option<backtrace::Backtrace>,
+        allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = AllocationType::Linear;
 
         let memblock_size = if self.heap_properties.Type == D3D12_HEAP_TYPE_DEFAULT {
-            DEFAULT_DEVICE_MEMBLOCK_SIZE
+            allocation_sizes.device_memblock_size
         } else {
-            DEFAULT_HOST_MEMBLOCK_SIZE
+            allocation_sizes.host_memblock_size
         };
 
         let size = desc.size;
@@ -573,6 +574,7 @@ pub struct Allocator {
     device: ID3D12Device,
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
+    allocation_sizes: AllocationSizes,
 }
 
 impl Allocator {
@@ -679,6 +681,7 @@ impl Allocator {
             memory_types,
             device,
             debug_settings: desc.debug_settings,
+            allocation_sizes: desc.allocation_sizes,
         })
     }
 
@@ -722,7 +725,7 @@ impl Allocator {
             })
             .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
 
-        memory_type.allocate(&self.device, desc, backtrace)
+        memory_type.allocate(&self.device, desc, backtrace, &self.allocation_sizes)
     }
 
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {

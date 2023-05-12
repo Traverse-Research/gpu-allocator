@@ -119,6 +119,7 @@ fn main() {
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
         device: device.as_windows().clone(),
         debug_settings: Default::default(),
+        allocation_sizes: Default::default(),
     })
     .unwrap();
 
