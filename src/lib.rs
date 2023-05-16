@@ -89,7 +89,7 @@
 //! # let device = todo!();
 //!
 //! let mut allocator = Allocator::new(&AllocatorCreateDesc {
-//!     device,
+//!     device: ID3D12DeviceVersion::Device(device),
 //!     debug_settings: Default::default(),
 //!     allocation_sizes: Default::default(),
 //! });
@@ -109,7 +109,7 @@
 //! # let device = todo!();
 //!
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
-//! #     device: device,
+//! #     device: ID3D12DeviceVersion::Device(device),
 //! #     debug_settings: Default::default(),
 //! #     allocation_sizes: Default::default(),
 //! # }).unwrap();

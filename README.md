@@ -77,7 +77,7 @@ unsafe { device.destroy_buffer(buffer, None) };
 use gpu_allocator::d3d12::*;
 
 let mut allocator = Allocator::new(&AllocatorCreateDesc {
-    device,
+    device: ID3D12DeviceVersion::Device(device),
     debug_settings: Default::default(),
     allocation_sizes: Default::default(),
 });
