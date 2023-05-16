@@ -10,7 +10,8 @@ mod all_dxgi {
 use log::*;
 
 use gpu_allocator::d3d12::{
-    AllocationCreateDesc, Allocator, AllocatorCreateDesc, ResourceCategory, ToWinapi, ToWindows,
+    AllocationCreateDesc, Allocator, AllocatorCreateDesc, ID3D12DeviceVersion, ResourceCategory,
+    ToWinapi, ToWindows,
 };
 use gpu_allocator::MemoryLocation;
 
@@ -117,7 +118,7 @@ fn main() {
 
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
-        device: device.as_windows().clone(),
+        device: ID3D12DeviceVersion::Device(device.as_windows().clone()),
         debug_settings: Default::default(),
         allocation_sizes: Default::default(),
     })
