@@ -1,6 +1,6 @@
 //! Example showcasing [`gpu-allocator`] with types and functions from the [`windows`] crate.
 use gpu_allocator::d3d12::{
-    AllocationCreateDesc, Allocator, AllocatorCreateDesc, ResourceCategory,
+    AllocationCreateDesc, Allocator, AllocatorCreateDesc, ID3D12DeviceVersion, ResourceCategory,
 };
 use gpu_allocator::MemoryLocation;
 use log::*;
@@ -88,7 +88,7 @@ fn main() -> Result<()> {
 
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
-        device: device.clone(),
+        device: ID3D12DeviceVersion::Device(device.clone()),
         debug_settings: Default::default(),
         allocation_sizes: Default::default(),
     })
