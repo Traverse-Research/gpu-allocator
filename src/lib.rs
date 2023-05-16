@@ -240,18 +240,25 @@ impl AllocationSizes {
 
         let mut device_memblock_size =
             device_memblock_size.clamp(FOUR_MB, TWO_HUNDRED_AND_FIFTY_SIX_MB);
-        let mut host_memblock_size = host_memblock_size.clamp(FOUR_MB, TWO_HUNDRED_AND_FIFTY_SIX_MB);
+        let mut host_memblock_size =
+            host_memblock_size.clamp(FOUR_MB, TWO_HUNDRED_AND_FIFTY_SIX_MB);
 
         if device_memblock_size % FOUR_MB != 0 {
             let val = device_memblock_size / FOUR_MB + 1;
             device_memblock_size = val * FOUR_MB;
-            log::warn!("Device memory block size must be a multiple of 4MB, clamping to {}MB", device_memblock_size / 1024 / 1024)
+            log::warn!(
+                "Device memory block size must be a multiple of 4MB, clamping to {}MB",
+                device_memblock_size / 1024 / 1024
+            )
         }
-        
+
         if host_memblock_size % FOUR_MB != 0 {
             let val = host_memblock_size / FOUR_MB + 1;
             host_memblock_size = val * FOUR_MB;
-            log::warn!("Host memory block size must be a multiple of 4MB, clamping to {}MB", host_memblock_size / 1024 / 1024)
+            log::warn!(
+                "Host memory block size must be a multiple of 4MB, clamping to {}MB",
+                host_memblock_size / 1024 / 1024
+            )
         }
 
         Self {
