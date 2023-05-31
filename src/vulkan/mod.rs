@@ -159,7 +159,7 @@ pub struct Allocation {
     device_memory: vk::DeviceMemory,
     mapped_ptr: Option<SendSyncPtr>,
     dedicated_allocation: bool,
-
+    memory_properties: vk::MemoryPropertyFlags,
     name: Option<Box<str>>,
 }
 
@@ -202,6 +202,11 @@ impl Allocation {
 
     pub fn chunk_id(&self) -> Option<std::num::NonZeroU64> {
         self.chunk_id
+    }
+
+    ///Returns the [`vk::MemoryPropertyFlags`] of this allocation.
+    pub fn memory_properties(&self) -> vk::MemoryPropertyFlags {
+        self.memory_properties
     }
 
     /// Returns the [`vk::DeviceMemory`] object that is backing this allocation.
@@ -269,6 +274,7 @@ impl Default for Allocation {
             memory_type_index: !0,
             device_memory: vk::DeviceMemory::null(),
             mapped_ptr: None,
+            memory_properties: vk::MemoryPropertyFlags::empty(),
             name: None,
             dedicated_allocation: false,
         }
@@ -525,6 +531,7 @@ impl MemoryType {
                 memory_type_index: self.memory_type_index,
                 device_memory: mem_block.device_memory,
                 mapped_ptr: mem_block.mapped_ptr,
+                memory_properties: self.memory_properties,
                 name: Some(desc.name.into()),
                 dedicated_allocation,
             });
@@ -558,6 +565,7 @@ impl MemoryType {
                             memory_block_index: mem_block_i,
                             memory_type_index: self.memory_type_index,
                             device_memory: mem_block.device_memory,
+                            memory_properties: self.memory_properties,
                             mapped_ptr,
                             dedicated_allocation: false,
                             name: Some(desc.name.into()),
@@ -632,6 +640,7 @@ impl MemoryType {
             memory_type_index: self.memory_type_index,
             device_memory: mem_block.device_memory,
             mapped_ptr,
+            memory_properties: self.memory_properties,
             name: Some(desc.name.into()),
             dedicated_allocation: false,
         })
