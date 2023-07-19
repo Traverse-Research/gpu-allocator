@@ -52,7 +52,7 @@
 //! # }).unwrap();
 //!
 //! // Setup vulkan info
-//! let vk_info = vk::BufferCreateInfo::builder()
+//! let vk_info = vk::BufferCreateInfo::default()
 //!     .size(512)
 //!     .usage(vk::BufferUsageFlags::STORAGE_BUFFER);
 //!
