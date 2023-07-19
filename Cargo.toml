@@ -28,7 +28,7 @@ thiserror = "1.0"
 presser = { version = "0.3" }
 # Only needed for Vulkan.  Disable all default features as good practice,
 # such as the ability to link/load a Vulkan library.
-ash = { version = ">=0.34, <=0.37", optional = true, default-features = false, features = ["debug"] }
+ash = { version = "=0.37.0", optional = true, default-features = false, features = ["debug"] }
 # Only needed for visualizer.
 egui = { version = ">=0.24, <=0.26", optional = true, default-features = false }
 egui_extras = { version = ">=0.24, <=0.26", optional = true, default-features = false }
@@ -99,3 +99,4 @@ default = ["d3d12", "vulkan"]
 
 [patch.crates-io]
 metal = { git = "https://github.com/Traverse-Research/metal-rs", rev = "a354c33" }
+ash = { git = "https://github.com/ash-rs/ash", rev = "914c911" }
