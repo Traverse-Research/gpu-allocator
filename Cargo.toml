@@ -34,7 +34,7 @@ imgui = { version = "0.11", features = ["tables-api"], optional = true }
 winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
 
 [target.'cfg(windows)'.dependencies.windows]
-version = "0.48"
+version = "0.51"
 features = [
     "Win32_Foundation",
     "Win32_Graphics",
@@ -57,7 +57,7 @@ env_logger = "0.10"
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
 
 [target.'cfg(windows)'.dev-dependencies.windows]
-version = "0.48"
+version = "0.51"
 features = [
     "Win32_Foundation",
     "Win32_Graphics",
