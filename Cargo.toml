@@ -23,7 +23,7 @@ include = [
 all-features = true
 
 [dependencies]
-log = "0.4"
+log = "0.4.9"
 thiserror = "1.0"
 presser = { version = "0.3" }
 # Only needed for vulkan.  Disable all default features as good practice,
