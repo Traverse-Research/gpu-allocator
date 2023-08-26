@@ -790,7 +790,7 @@ impl ImGuiRenderer {
 
                 D3D12_VERTEX_BUFFER_VIEW {
                     BufferLocation: address,
-                    SizeInBytes: (vertices.len() * stride) as u32,
+                    SizeInBytes: std::mem::size_of_val(vertices) as u32,
                     StrideInBytes: stride as u32,
                 }
             };
@@ -802,7 +802,7 @@ impl ImGuiRenderer {
 
                 D3D12_INDEX_BUFFER_VIEW {
                     BufferLocation: address,
-                    SizeInBytes: (indices.len() * stride) as u32,
+                    SizeInBytes: std::mem::size_of_val(indices) as u32,
                     Format: all_dxgi::DXGI_FORMAT_R16_UINT,
                 }
             };

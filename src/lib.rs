@@ -1,13 +1,13 @@
 //! This crate provides a fully written in Rust memory allocator for Vulkan and DirectX 12.
 //!
-//! ## [Windows-rs] and [winapi]
+//! # [Windows-rs] and [winapi]
 //!
 //! `gpu-allocator` recently migrated from [winapi] to [windows-rs] but still provides convenient helpers to convert to and from [winapi] types, enabled when compiling with the `public-winapi` crate feature.
 //!
 //! [Windows-rs]: https://github.com/microsoft/windows-rs
 //! [winapi]: https://github.com/retep998/winapi-rs
 //!
-//! ## Setting up the Vulkan memory allocator
+//! # Setting up the Vulkan memory allocator
 //!
 //! ```no_run
 //! # #[cfg(feature = "vulkan")]
@@ -31,7 +31,7 @@
 //! # fn main() {}
 //! ```
 //!
-//! ## Simple Vulkan allocation example
+//! # Simple Vulkan allocation example
 //!
 //! ```no_run
 //! # #[cfg(feature = "vulkan")]
@@ -42,7 +42,6 @@
 //! # let device = todo!();
 //! # let instance = todo!();
 //! # let physical_device = todo!();
-//!
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
 //! #     instance,
 //! #     device,
@@ -80,7 +79,7 @@
 //! # fn main() {}
 //! ```
 //!
-//! ## Setting up the D3D12 memory allocator
+//! # Setting up the D3D12 memory allocator
 //!
 //! ```no_run
 //! # #[cfg(feature = "d3d12")]
@@ -98,7 +97,7 @@
 //! # fn main() {}
 //! ```
 //!
-//! ## Simple d3d12 allocation example
+//! # Simple d3d12 allocation example
 //!
 //! ```no_run
 //! # #[cfg(feature = "d3d12")]
