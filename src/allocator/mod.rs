@@ -16,6 +16,16 @@ pub(crate) enum AllocationType {
     NonLinear,
 }
 
+impl AllocationType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Free => "Free",
+            Self::Linear => "Linear",
+            Self::NonLinear => "Non-Linear",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct AllocationReport {
     pub(crate) name: String,
