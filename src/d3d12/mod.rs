@@ -629,7 +629,7 @@ impl Allocator {
 
         let is_heap_tier1 = options.ResourceHeapTier == D3D12_RESOURCE_HEAP_TIER_1;
 
-        let heap_types = vec![
+        let heap_types = [
             (
                 MemoryLocation::GpuOnly,
                 D3D12_HEAP_PROPERTIES {
