@@ -195,7 +195,7 @@ impl AllocatorVisualizer {
             let mut open = true;
 
             egui::Window::new(format!(
-                "Block Visualizer {}.{}",
+                "Block Visualizer {}:{}",
                 window.memory_type_index, window.block_index
             ))
             .default_size([1920.0 * 0.5, 1080.0 * 0.5])
