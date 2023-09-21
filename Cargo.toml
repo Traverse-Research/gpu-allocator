@@ -73,21 +73,12 @@ name = "vulkan-buffer"
 required-features = ["vulkan", "ash/loaded"]
 
 [[example]]
-name = "vulkan-visualization"
-required-features = ["vulkan", "ash/loaded", "visualizer"]
-
-[[example]]
 name = "d3d12-buffer"
 required-features = ["d3d12", "public-winapi"]
 
 [[example]]
 name = "d3d12-buffer-winrs"
 required-features = ["d3d12"]
-
-[[example]]
-name = "d3d12-visualization"
-required-features = ["d3d12", "public-winapi", "visualizer"]
-
 
 [features]
 visualizer = ["egui", "egui_extras"]
