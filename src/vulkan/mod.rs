@@ -338,6 +338,7 @@ pub(crate) struct MemoryBlock {
     pub(crate) size: u64,
     pub(crate) mapped_ptr: Option<SendSyncPtr>,
     pub(crate) sub_allocator: Box<dyn allocator::SubAllocator>,
+    #[allow(dead_code)] // dead_code allowed as this is used in for the visualizer feature
     pub(crate) dedicated_allocation: bool,
 }
 
