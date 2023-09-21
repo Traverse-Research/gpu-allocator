@@ -14,6 +14,8 @@
 gpu-allocator = "0.22.0"
 ```
 
+![Visualizer](visualizer.png)
+
 This crate provides a fully written in Rust memory allocator for Vulkan and DirectX 12.
 
 ## [Windows-rs] and [winapi]
