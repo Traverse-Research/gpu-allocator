@@ -150,18 +150,17 @@ impl AllocatorVisualizer {
 
                                     if block.sub_allocator.supports_visualization()
                                         && ui.button("visualize").clicked()
-                                    {
-                                        if !self.selected_blocks.iter().enumerate().any(|(_, x)| {
+                                        && !self.selected_blocks.iter().enumerate().any(|(_, x)| {
                                             x.memory_type_index == mem_type_idx
                                                 && x.block_index == block_idx
-                                        }) {
-                                            self.selected_blocks.push(
-                                                AllocatorVisualizerBlockWindow::new(
-                                                    mem_type_idx,
-                                                    block_idx,
-                                                ),
-                                            );
-                                        }
+                                        })
+                                    {
+                                        self.selected_blocks.push(
+                                            AllocatorVisualizerBlockWindow::new(
+                                                mem_type_idx,
+                                                block_idx,
+                                            ),
+                                        );
                                     }
                                 });
                             }
