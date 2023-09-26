@@ -11,7 +11,7 @@
 
 ```toml
 [dependencies]
-gpu-allocator = "0.22.0"
+gpu-allocator = "0.23.0"
 ```
 
 ![Visualizer](visualizer.png)
