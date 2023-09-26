@@ -17,7 +17,7 @@ pub(crate) enum AllocationType {
 }
 
 impl AllocationType {
-    #[allow(dead_code)] // dead_code allowed as this is used in for the visualizer feature
+    #[cfg(feature = "visualizer")]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Free => "Free",
@@ -31,7 +31,7 @@ impl AllocationType {
 pub(crate) struct AllocationReport {
     pub(crate) name: String,
     pub(crate) size: u64,
-    #[allow(dead_code)] // dead_code allowed as this is used in for the visualizer feature
+    #[cfg(feature = "visualizer")]
     pub(crate) backtrace: Option<backtrace::Backtrace>,
 }
 

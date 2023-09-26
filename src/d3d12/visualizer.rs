@@ -30,7 +30,6 @@ pub struct AllocatorVisualizer {
     breakdown_settings: AllocationReportVisualizeSettings,
 }
 
-#[allow(dead_code)]
 fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> &'static str {
     let names = [
         "D3D12_HEAP_TYPE_DEFAULT_INVALID",
@@ -43,7 +42,6 @@ fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> &'static str {
     names[heap_type.0 as usize]
 }
 
-#[allow(dead_code)]
 fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> &'static str {
     let names = [
         "D3D12_CPU_PAGE_PROPERTY_UNKNOWN",
@@ -55,7 +53,6 @@ fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> &'static str {
     names[prop.0 as usize]
 }
 
-#[allow(dead_code)]
 fn format_memory_pool(pool: D3D12_MEMORY_POOL) -> &'static str {
     let names = [
         "D3D12_MEMORY_POOL_UNKNOWN",

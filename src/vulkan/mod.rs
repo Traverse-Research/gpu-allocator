@@ -338,7 +338,7 @@ pub(crate) struct MemoryBlock {
     pub(crate) size: u64,
     pub(crate) mapped_ptr: Option<SendSyncPtr>,
     pub(crate) sub_allocator: Box<dyn allocator::SubAllocator>,
-    #[allow(dead_code)] // dead_code allowed as this is used in for the visualizer feature
+    #[cfg(feature = "visualizer")]
     pub(crate) dedicated_allocation: bool,
 }
 
@@ -352,7 +352,6 @@ impl MemoryBlock {
         allocation_scheme: AllocationScheme,
         requires_personal_block: bool,
     ) -> Result<Self> {
-        let dedicated_allocation = allocation_scheme != AllocationScheme::GpuAllocatorManaged;
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::builder()
                 .allocation_size(size)
@@ -426,7 +425,8 @@ impl MemoryBlock {
             size,
             mapped_ptr,
             sub_allocator,
-            dedicated_allocation,
+            #[cfg(feature = "visualizer")]
+            dedicated_allocation: allocation_scheme != AllocationScheme::GpuAllocatorManaged,
         })
     }
 
