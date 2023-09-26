@@ -394,6 +394,7 @@ impl SubAllocator for FreeListAllocator {
                     .clone()
                     .unwrap_or_else(|| "<Unnamed FreeList allocation>".to_owned()),
                 size: chunk.size,
+                #[cfg(feature = "visualizer")]
                 backtrace: chunk.backtrace.clone(),
             })
             .collect::<Vec<_>>()

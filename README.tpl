@@ -14,6 +14,8 @@
 gpu-allocator = "0.22.0"
 ```
 
+![Visualizer](visualizer.png)
+
 {{readme}}
 
 ## License

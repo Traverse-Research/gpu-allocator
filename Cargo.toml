@@ -27,7 +27,8 @@ presser = { version = "0.3" }
 # such as the ability to link/load a Vulkan library.
 ash = { version = ">=0.34, <=0.37", optional = true, default-features = false, features = ["debug"] }
 # Only needed for visualizer.
-imgui = { version = "0.11", features = ["tables-api"], optional = true }
+egui = { version = "0.22", optional = true }
+egui_extras = { version = "0.22", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # Only needed for public-winapi interop helpers
@@ -72,10 +73,6 @@ name = "vulkan-buffer"
 required-features = ["vulkan", "ash/loaded"]
 
 [[example]]
-name = "vulkan-visualization"
-required-features = ["vulkan", "ash/loaded", "visualizer"]
-
-[[example]]
 name = "d3d12-buffer"
 required-features = ["d3d12", "public-winapi"]
 
@@ -83,13 +80,8 @@ required-features = ["d3d12", "public-winapi"]
 name = "d3d12-buffer-winrs"
 required-features = ["d3d12"]
 
-[[example]]
-name = "d3d12-visualization"
-required-features = ["d3d12", "public-winapi", "visualizer"]
-
-
 [features]
-visualizer = ["imgui"]
+visualizer = ["egui", "egui_extras"]
 vulkan = ["ash"]
 d3d12 = ["windows"]
 # Expose helper functionality for winapi types to interface with gpu-allocator, which is primarily windows-rs driven
