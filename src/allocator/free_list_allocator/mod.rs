@@ -26,7 +26,7 @@ pub(crate) struct MemoryChunk {
     pub(crate) offset: u64,
     pub(crate) allocation_type: AllocationType,
     pub(crate) name: Option<String>,
-    pub(crate) backtrace: Option<backtrace::Backtrace>, // Only used if STORE_STACK_TRACES is true
+    pub(crate) backtrace: Option<crate::backtrace::Backtrace>, // Only used if STORE_STACK_TRACES is true
     next: Option<std::num::NonZeroU64>,
     prev: Option<std::num::NonZeroU64>,
 }
@@ -156,7 +156,7 @@ impl SubAllocator for FreeListAllocator {
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Option<backtrace::Backtrace>,
+        backtrace: Option<crate::backtrace::Backtrace>,
     ) -> Result<(u64, std::num::NonZeroU64)> {
         let free_size = self.size - self.allocated;
         if size > free_size {

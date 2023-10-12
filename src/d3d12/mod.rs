@@ -421,7 +421,7 @@ impl MemoryType {
         &mut self,
         device: &ID3D12DeviceVersion,
         desc: &AllocationCreateDesc<'_>,
-        backtrace: Option<backtrace::Backtrace>,
+        backtrace: Option<crate::backtrace::Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = AllocationType::Linear;
@@ -718,7 +718,7 @@ impl Allocator {
         let alignment = desc.alignment;
 
         let backtrace = if self.debug_settings.store_stack_traces {
-            Some(backtrace::Backtrace::new_unresolved())
+            Some(crate::backtrace::Backtrace::new_unresolved())
         } else {
             None
         };
@@ -729,7 +729,7 @@ impl Allocator {
                 &desc.name, size, alignment
             );
             if self.debug_settings.log_stack_traces {
-                let backtrace = backtrace::Backtrace::new();
+                let backtrace = crate::backtrace::Backtrace::new();
                 debug!("Allocation stack trace: {:?}", &backtrace);
             }
         }
@@ -761,7 +761,7 @@ impl Allocator {
             let name = allocation.name.as_deref().unwrap_or("<null>");
             debug!("Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
-                let backtrace = backtrace::Backtrace::new();
+                let backtrace = crate::backtrace::Backtrace::new();
                 debug!("Free stack trace: {:?}", backtrace);
             }
         }

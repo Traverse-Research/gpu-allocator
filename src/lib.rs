@@ -156,6 +156,7 @@
 //! # fn main() {}
 //! ```
 
+mod backtrace;
 mod result;
 pub use result::*;
 
@@ -192,6 +193,8 @@ pub struct AllocatorDebugSettings {
     /// Stores a copy of the full backtrace for every allocation made, this makes it easier to debug leaks
     /// or other memory allocations, but storing stack traces has a RAM overhead so should be disabled
     /// in shipping applications.
+    ///
+    /// Only works if the `backtrace` feature is enabled.
     pub store_stack_traces: bool,
     /// Log out every allocation as it's being made with log level Debug, rather spammy so off by default
     pub log_allocations: bool,

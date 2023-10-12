@@ -19,7 +19,7 @@ include = [
 ]
 
 [dependencies]
-backtrace = "0.3"
+backtrace = { version = "0.3", optional = true }
 log = "0.4"
 thiserror = "1.0"
 presser = { version = "0.3" }
@@ -78,10 +78,11 @@ name = "d3d12-buffer-winrs"
 required-features = ["d3d12"]
 
 [features]
-visualizer = ["egui", "egui_extras"]
+visualizer = ["egui", "egui_extras", "backtrace"]
 vulkan = ["ash"]
 d3d12 = ["windows"]
 # Expose helper functionality for winapi types to interface with gpu-allocator, which is primarily windows-rs driven
 public-winapi = ["dep:winapi"]
+backtrace = ["dep:backtrace"]
 
 default = ["d3d12", "vulkan"]

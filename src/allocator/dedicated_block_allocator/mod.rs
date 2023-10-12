@@ -12,7 +12,7 @@ pub(crate) struct DedicatedBlockAllocator {
     size: u64,
     allocated: u64,
     name: Option<String>,
-    backtrace: Option<backtrace::Backtrace>,
+    backtrace: Option<crate::backtrace::Backtrace>,
 }
 
 impl DedicatedBlockAllocator {
@@ -35,7 +35,7 @@ impl SubAllocator for DedicatedBlockAllocator {
         _allocation_type: AllocationType,
         _granularity: u64,
         name: &str,
-        backtrace: Option<backtrace::Backtrace>,
+        backtrace: Option<crate::backtrace::Backtrace>,
     ) -> Result<(u64, std::num::NonZeroU64)> {
         if self.allocated != 0 {
             return Err(AllocationError::OutOfMemory);
