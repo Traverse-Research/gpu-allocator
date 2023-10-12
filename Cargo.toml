@@ -85,4 +85,4 @@ d3d12 = ["windows"]
 public-winapi = ["dep:winapi"]
 backtrace = ["dep:backtrace"]
 
-default = ["d3d12", "vulkan"]
+default = ["d3d12", "vulkan", "backtrace"]

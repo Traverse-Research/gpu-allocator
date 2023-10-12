@@ -1,5 +1,5 @@
 #[cfg(feature = "backtrace")]
-type Backtrace = backtrace::Backtrace;
+pub type Backtrace = backtrace::Backtrace;
 
 #[cfg(not(feature = "backtrace"))]
 #[derive(Clone)]
@@ -16,6 +16,7 @@ impl Backtrace {
     pub fn resolve(&mut self) {}
 }
 
+#[cfg(not(feature = "backtrace"))]
 impl core::fmt::Debug for Backtrace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Backtrace(enable the gpu-allocator backtrace feature to get backtraces)")
