@@ -1,6 +1,6 @@
 use egui::{Color32, DragValue, Rect, ScrollArea, Sense, Ui, Vec2};
 
-use crate::allocator::{free_list_allocator::MemoryChunk, resolve_backtrace};
+use crate::allocator::free_list_allocator::MemoryChunk;
 
 use super::ColorScheme;
 
@@ -113,11 +113,10 @@ pub(crate) fn render_memory_chunks_ui<'a>(
                             if let Some(name) = &chunk.name {
                                 ui.label(format!("name: {}", name));
                             }
-                            if settings.show_backtraces && chunk.backtrace.is_some() {
-                                ui.label(format!(
-                                    "backtrace: {}",
-                                    resolve_backtrace(&chunk.backtrace)
-                                ));
+                            if settings.show_backtraces {
+                                if let Some(ref backtrace) = chunk.backtrace {
+                                    ui.label(format!("backtrace: {}", backtrace));
+                                }
                             }
                         });
                     }

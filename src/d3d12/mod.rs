@@ -1,9 +1,9 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use log::{debug, warn, Level};
-
+use std::backtrace::Backtrace;
 use windows::Win32::{Foundation::E_OUTOFMEMORY, Graphics::Direct3D12::*};
 
 #[cfg(feature = "public-winapi")]
@@ -421,7 +421,7 @@ impl MemoryType {
         &mut self,
         device: &ID3D12DeviceVersion,
         desc: &AllocationCreateDesc<'_>,
-        backtrace: Option<backtrace::Backtrace>,
+        backtrace: Option<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = AllocationType::Linear;
@@ -431,6 +431,8 @@ impl MemoryType {
         } else {
             allocation_sizes.host_memblock_size
         };
+
+        let backtrace = backtrace.map(Arc::new);
 
         let size = desc.size;
         let alignment = desc.alignment;
@@ -718,7 +720,7 @@ impl Allocator {
         let alignment = desc.alignment;
 
         let backtrace = if self.debug_settings.store_stack_traces {
-            Some(backtrace::Backtrace::new_unresolved())
+            Some(Backtrace::force_capture())
         } else {
             None
         };
@@ -729,8 +731,10 @@ impl Allocator {
                 &desc.name, size, alignment
             );
             if self.debug_settings.log_stack_traces {
-                let backtrace = backtrace::Backtrace::new();
-                debug!("Allocation stack trace: {:?}", &backtrace);
+                match &backtrace {
+                    Some(backtrace) => debug!("Allocation stack trace: {}", backtrace),
+                    None => debug!("Allocation stack trace: {}", Backtrace::force_capture()),
+                }
             }
         }
 
@@ -761,8 +765,8 @@ impl Allocator {
             let name = allocation.name.as_deref().unwrap_or("<null>");
             debug!("Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
-                let backtrace = backtrace::Backtrace::new();
-                debug!("Free stack trace: {:?}", backtrace);
+                let backtrace = Backtrace::force_capture();
+                debug!("Free stack trace: {}", backtrace);
             }
         }
 

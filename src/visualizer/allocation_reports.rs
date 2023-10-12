@@ -1,7 +1,7 @@
 use egui::{Label, Response, Sense, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 
-use crate::allocator::{fmt_bytes, resolve_backtrace, AllocationReport};
+use crate::allocator::{fmt_bytes, AllocationReport};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum AllocationReportVisualizeSorting {
@@ -123,7 +123,9 @@ pub(crate) fn render_allocation_reports_ui(
 
                 if backtrace.is_some() {
                     resp.1.on_hover_ui(|ui| {
-                        ui.label(resolve_backtrace(&backtrace));
+                        if let Some(ref backtrace) = backtrace {
+                            ui.label(format!("{}", backtrace));
+                        }
                     });
                 }
 

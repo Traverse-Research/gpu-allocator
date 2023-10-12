@@ -5,8 +5,8 @@ pub(crate) use dedicated_block_allocator::DedicatedBlockAllocator;
 
 pub(crate) mod free_list_allocator;
 pub(crate) use free_list_allocator::FreeListAllocator;
-
 use log::*;
+use std::{backtrace::Backtrace, sync::Arc};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 #[repr(u8)]
@@ -32,18 +32,7 @@ pub(crate) struct AllocationReport {
     pub(crate) name: String,
     pub(crate) size: u64,
     #[cfg(feature = "visualizer")]
-    pub(crate) backtrace: Option<backtrace::Backtrace>,
-}
-
-pub(crate) fn resolve_backtrace(backtrace: &Option<backtrace::Backtrace>) -> String {
-    backtrace.as_ref().map_or_else(
-        || "".to_owned(),
-        |bt| {
-            let mut bt = bt.clone();
-            bt.resolve();
-            format!("{:?}", bt)
-        },
-    )
+    pub(crate) backtrace: Option<Arc<Backtrace>>,
 }
 
 #[cfg(feature = "visualizer")]
@@ -59,7 +48,7 @@ pub(crate) trait SubAllocator: SubAllocatorBase + std::fmt::Debug + Sync + Send 
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Option<backtrace::Backtrace>,
+        backtrace: Option<Arc<Backtrace>>,
     ) -> Result<(u64, std::num::NonZeroU64)>;
 
     fn free(&mut self, chunk_id: Option<std::num::NonZeroU64>) -> Result<()>;

@@ -7,15 +7,16 @@ pub use visualizer::AllocatorVisualizer;
 
 use super::allocator;
 use super::allocator::AllocationType;
-use ash::vk;
-use core::marker::PhantomData;
-use log::{debug, Level};
-use std::fmt;
-
 use crate::{
     allocator::fmt_bytes, AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation,
     Result,
 };
+use ash::vk;
+use core::marker::PhantomData;
+use log::{debug, Level};
+use std::backtrace::Backtrace;
+use std::fmt;
+use std::sync::Arc;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum AllocationScheme {
@@ -456,7 +457,7 @@ impl MemoryType {
         device: &ash::Device,
         desc: &AllocationCreateDesc<'_>,
         granularity: u64,
-        backtrace: Option<backtrace::Backtrace>,
+        backtrace: Option<Arc<Backtrace>>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = if desc.linear {
@@ -813,7 +814,7 @@ impl Allocator {
         let alignment = desc.requirements.alignment;
 
         let backtrace = if self.debug_settings.store_stack_traces {
-            Some(backtrace::Backtrace::new_unresolved())
+            Some(Backtrace::force_capture())
         } else {
             None
         };
@@ -824,10 +825,14 @@ impl Allocator {
                 &desc.name, size, alignment
             );
             if self.debug_settings.log_stack_traces {
-                let backtrace = backtrace::Backtrace::new();
-                debug!("Allocation stack trace: {:?}", backtrace);
+                match &backtrace {
+                    Some(backtrace) => debug!("Allocation stack trace: {}", backtrace),
+                    None => debug!("Allocation stack trace: {}", Backtrace::force_capture()),
+                }
             }
         }
+
+        let backtrace = backtrace.map(Arc::new);
 
         if size == 0 || !alignment.is_power_of_two() {
             return Err(AllocationError::InvalidAllocationCreateDesc);
@@ -915,7 +920,7 @@ impl Allocator {
             let name = allocation.name.as_deref().unwrap_or("<null>");
             debug!("Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
-                let backtrace = format!("{:?}", backtrace::Backtrace::new());
+                let backtrace = Backtrace::force_capture();
                 debug!("Free stack trace: {}", backtrace);
             }
         }

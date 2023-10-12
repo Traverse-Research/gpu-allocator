@@ -2,9 +2,9 @@
 
 #[cfg(feature = "visualizer")]
 pub(crate) mod visualizer;
-
-use super::{resolve_backtrace, AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
+use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
+use std::{backtrace::Backtrace, sync::Arc};
 
 use log::{log, Level};
 use std::collections::{HashMap, HashSet};
@@ -26,7 +26,7 @@ pub(crate) struct MemoryChunk {
     pub(crate) offset: u64,
     pub(crate) allocation_type: AllocationType,
     pub(crate) name: Option<String>,
-    pub(crate) backtrace: Option<backtrace::Backtrace>, // Only used if STORE_STACK_TRACES is true
+    pub(crate) backtrace: Option<Arc<Backtrace>>, // Only used if STORE_STACK_TRACES is true
     next: Option<std::num::NonZeroU64>,
     prev: Option<std::num::NonZeroU64>,
 }
@@ -156,7 +156,7 @@ impl SubAllocator for FreeListAllocator {
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Option<backtrace::Backtrace>,
+        backtrace: Option<Arc<Backtrace>>,
     ) -> Result<(u64, std::num::NonZeroU64)> {
         let free_size = self.size - self.allocated;
         if size > free_size {
@@ -356,7 +356,11 @@ impl SubAllocator for FreeListAllocator {
             }
             let empty = "".to_string();
             let name = chunk.name.as_ref().unwrap_or(&empty);
-            let backtrace = resolve_backtrace(&chunk.backtrace);
+
+            let backtrace_text = match chunk.backtrace {
+                Some(ref backtrace) => backtrace.to_string(),
+                None => "<No backtrace>".to_string(),
+            };
 
             log!(
                 log_level,
@@ -369,7 +373,7 @@ impl SubAllocator for FreeListAllocator {
         offset: 0x{:x},
         allocation_type: {:?},
         name: {},
-        backtrace: {}
+        backtrace: {:?}
     }}
 }}"#,
                 memory_type_index,
@@ -379,7 +383,7 @@ impl SubAllocator for FreeListAllocator {
                 chunk.offset,
                 chunk.allocation_type,
                 name,
-                backtrace
+                backtrace_text
             );
         }
     }
