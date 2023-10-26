@@ -95,7 +95,7 @@ pub(crate) fn render_memory_chunks_ui<'a>(
                     if ui.is_rect_visible(resp.rect) {
                         ui.painter().rect(
                             resp.rect,
-                            egui::Rounding::none(),
+                            egui::Rounding::ZERO,
                             color_scheme
                                 .get_allocation_type_color(data[cursor_idx].allocation_type),
                             egui::Stroke::new(1.0, Color32::BLACK),
