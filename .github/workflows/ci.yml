@@ -15,15 +15,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --workspace --all-targets --features ${{ matrix.features }} --no-default-features
+      - name: Cargo check
+        run: cargo check --workspace --all-targets --features ${{ matrix.features }} --no-default-features
 
   test:
     name: Test Suite
@@ -37,37 +30,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - name: Test all targets
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace --all-targets --features ${{ matrix.features }} --no-default-features
-      - name: Test docs
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace --doc --features ${{ matrix.features }} --no-default-features
+      - name: Cargo test all targets
+        run: cargo test --workspace --all-targets --features ${{ matrix.features }} --no-default-features
+      - name: Cargo test docs
+        run: cargo test --workspace --doc --features ${{ matrix.features }} --no-default-features
 
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - name: Cargo fmt
+        run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
@@ -81,16 +55,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --workspace --all-targets --features ${{ matrix.features }} --no-default-features -- -D warnings
+      - name: Cargo clippy
+        run: cargo clippy --workspace --all-targets --features ${{ matrix.features }} --no-default-features -- -D warnings
 
   doc:
     name: Build documentation
@@ -100,26 +66,13 @@ jobs:
       RUSTDOCFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
       - name: Build documentation
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          args: --no-deps --workspace --all-features --document-private-items
+        run: cargo doc --no-deps --workspace --all-features --document-private-items
 
   readme:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
       - name: Use cached cargo-readme
         uses: actions/cache@v3
         id: cargo-readme-cache
@@ -128,10 +81,7 @@ jobs:
           key: ${{ runner.os }}-cargo-readme
       - name: Install cargo-readme
         if: steps.cargo-readme-cache.outputs.cache-hit != 'true'
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-readme
+        run: cargo install cargo-readme
       - name: Check if README.md is up-to-date
         run: |
           cargo readme > README.md
