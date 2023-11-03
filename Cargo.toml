@@ -2,7 +2,7 @@
 name = "gpu-allocator"
 version = "0.24.0"
 authors = ["Traverse Research <opensource@traverseresearch.nl>"]
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Memory allocator for GPU memory in Vulkan and DirectX 12"
 categories = ["rendering", "rendering::graphics-api"]
