@@ -18,6 +18,21 @@ jobs:
       - name: Cargo check
         run: cargo check --workspace --all-targets --features ${{ matrix.features }} --no-default-features
 
+  check_msrv:
+    name: Check MSRV (1.65.0)
+    strategy:
+      matrix:
+        include:
+        - os: ubuntu-latest
+          features: vulkan
+        - os: windows-latest
+          features: vulkan,d3d12
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.65.0
+      - run: cargo check --workspace --all-targets --features ${{ matrix.features }} --no-default-features
+
   test:
     name: Test Suite
     strategy:
