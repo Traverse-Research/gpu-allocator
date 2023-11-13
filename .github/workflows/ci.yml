@@ -30,7 +30,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.65.0
+      - uses: dtolnay/rust-toolchain@1.80.0
       - run: cargo check --workspace --all-targets --features ${{ matrix.features }} --no-default-features
 
   test:
