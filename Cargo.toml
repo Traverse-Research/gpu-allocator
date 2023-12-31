@@ -19,6 +19,9 @@ include = [
     "/examples",
 ]
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 log = "0.4"
 thiserror = "1.0"
