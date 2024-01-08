@@ -31,7 +31,7 @@ presser = { version = "0.3" }
 ash = { version = ">=0.34, <=0.37", optional = true, default-features = false, features = ["debug"] }
 # Only needed for visualizer.
 egui = { version = "0.24", optional = true, default-features = false }
-egui_extras = { version = "0.24", optional = true, default-features = false }
+egui_extras = { version = "0.25", optional = true, default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 # Only needed for public-winapi interop helpers
