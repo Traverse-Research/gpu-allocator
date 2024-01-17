@@ -47,7 +47,7 @@ objc2-metal = { version = "0.3", default-features = false, features = [
     "std",
 ], optional = true }
 
-[target.'cfg(windows)'.dependencies.windows]
+[dependencies.windows]
 version = ">=0.53, <=0.61"
 features = [
     "Win32_Graphics_Direct3D12",
@@ -60,7 +60,7 @@ optional = true
 ash = { version = "0.38", default-features = false, features = ["debug", "loaded"] }
 env_logger = "0.10"
 
-[target.'cfg(windows)'.dev-dependencies.windows]
+[dev-dependencies.windows]
 # API-breaks since Windows 0.58 only affect our examples
 version = ">=0.58, <=0.61"
 features = [
@@ -93,3 +93,6 @@ d3d12 = ["dep:windows"]
 metal = ["dep:objc2", "dep:objc2-metal", "dep:objc2-foundation"]
 
 default = ["d3d12", "vulkan", "metal"]
+
+[patch.crates-io]
+windows = { git = "https://github.com/MarijnS95/windows-rs", rev = "4fcda3558" }
