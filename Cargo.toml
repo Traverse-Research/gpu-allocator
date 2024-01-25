@@ -33,6 +33,12 @@ ash = { version = ">=0.34, <=0.37", optional = true, default-features = false, f
 egui = { version = ">=0.24, <=0.26", optional = true, default-features = false }
 egui_extras = { version = ">=0.24, <=0.26", optional = true, default-features = false }
 
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+metal = { version = "0.27.0", default-features = false, features = [
+    "link",
+    "dispatch",
+] }
+
 [target.'cfg(windows)'.dependencies]
 # Only needed for public-winapi interop helpers
 winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
@@ -88,3 +94,6 @@ d3d12 = ["windows"]
 public-winapi = ["dep:winapi"]
 
 default = ["d3d12", "vulkan"]
+
+[patch.crates-io]
+metal = { git = "https://github.com/Traverse-Research/metal-rs", rev = "d40f71a" }
