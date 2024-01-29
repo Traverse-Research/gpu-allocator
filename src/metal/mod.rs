@@ -344,6 +344,7 @@ impl Allocator {
     pub fn device(&self) -> &metal::Device {
         todo!()
     }
+
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
         let heap_types = vec![
             (MemoryLocation::GpuOnly, {
@@ -392,6 +393,7 @@ impl Allocator {
             allocation_sizes: desc.allocation_sizes,
         })
     }
+
     pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
         // todo(lily): debug logs, captures and traces
         let size = desc.size;
@@ -432,6 +434,7 @@ impl Allocator {
 
         memory_type.allocate(self.device.clone(), desc, backtrace, &self.allocation_sizes)
     }
+
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
@@ -448,6 +451,20 @@ impl Allocator {
         self.memory_types[allocation.memory_type_index].free(allocation)?;
         Ok(())
     }
+
+    pub fn get_heaps(&self) -> Vec<&metal::HeapRef> {
+        // Get all memory blocks
+        let mut heaps: Vec<&metal::HeapRef> = Vec::new();
+        for memory_type in &self.memory_types {
+            for memory_block in &memory_type.memory_blocks {
+                if let Some(block) = memory_block {
+                    heaps.push(block.heap.as_ref());
+                }
+            }
+        }
+        heaps
+    }
+
     pub fn rename_allocation(&mut self, _allocation: &mut Allocation, _name: &str) -> Result<()> {
         todo!()
     }
