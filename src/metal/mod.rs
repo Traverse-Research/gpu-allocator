@@ -24,7 +24,6 @@ pub struct Allocation {
     memory_block_index: usize,
     memory_type_index: usize,
     heap: Arc<metal::Heap>,
-
     name: Option<Box<str>>,
 }
 
@@ -34,17 +33,46 @@ impl Allocation {
     }
 
     pub fn make_buffer(&self) -> Option<metal::Buffer> {
-        self.heap
-            .new_buffer_with_offset(self.size, self.heap.resource_options(), self.offset)
+        let resource =
+            self.heap
+                .new_buffer_with_offset(self.size, self.heap.resource_options(), self.offset);
+        resource.map_or_else(
+            || None,
+            |resource| {
+                if let Some(name) = &self.name {
+                    resource.set_label(name);
+                }
+                Some(resource)
+            },
+        )
     }
 
     pub fn make_texture(&self, desc: &metal::TextureDescriptor) -> Option<metal::Texture> {
-        self.heap.new_texture_with_offset(&desc, self.offset)
+        let resource = self.heap.new_texture_with_offset(desc, self.offset);
+        resource.map_or_else(
+            || None,
+            |resource| {
+                if let Some(name) = &self.name {
+                    resource.set_label(name);
+                }
+                Some(resource)
+            },
+        )
     }
 
     pub fn make_acceleration_structure(&self) -> Option<metal::AccelerationStructure> {
-        self.heap
-            .new_acceleration_structure_with_size_offset(self.size, self.offset)
+        let resource = self
+            .heap
+            .new_acceleration_structure_with_size_offset(self.size, self.offset);
+        resource.map_or_else(
+            || None,
+            |resource| {
+                if let Some(name) = &self.name {
+                    resource.set_label(name);
+                }
+                Some(resource)
+            },
+        )
     }
 
     fn is_null(&self) -> bool {
@@ -83,14 +111,14 @@ impl<'a> AllocationCreateDesc<'a> {
         name: &'a str,
         desc: &metal::TextureDescriptor,
     ) -> AllocationCreateDesc<'a> {
-        let size_and_align = device.heap_texture_size_and_align(&desc);
+        let size_and_align = device.heap_texture_size_and_align(desc);
         Self {
             name,
             location: match desc.storage_mode() {
-                MTLStorageMode::Shared => MemoryLocation::Unknown,
-                MTLStorageMode::Managed => MemoryLocation::Unknown,
+                MTLStorageMode::Shared | MTLStorageMode::Managed | MTLStorageMode::Memoryless => {
+                    MemoryLocation::Unknown
+                }
                 MTLStorageMode::Private => MemoryLocation::GpuOnly,
-                MTLStorageMode::Memoryless => MemoryLocation::Unknown,
             },
             size: size_and_align.size,
             alignment: size_and_align.align,
@@ -135,14 +163,14 @@ struct MemoryBlock {
 
 impl MemoryBlock {
     fn new(
-        device: Arc<metal::Device>,
+        device: &Arc<metal::Device>,
         size: u64,
         heap_descriptor: &metal::HeapDescriptor,
         dedicated: bool,
     ) -> Result<Self> {
         heap_descriptor.set_size(size);
 
-        let heap = Arc::new(device.new_heap(&heap_descriptor));
+        let heap = Arc::new(device.new_heap(heap_descriptor));
 
         let sub_allocator: Box<dyn allocator::SubAllocator> = if dedicated {
             Box::new(allocator::DedicatedBlockAllocator::new(size))
@@ -170,7 +198,7 @@ struct MemoryType {
 impl MemoryType {
     fn allocate(
         &mut self,
-        device: Arc<metal::Device>,
+        device: &Arc<metal::Device>,
         desc: &AllocationCreateDesc<'_>,
         backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
@@ -188,7 +216,7 @@ impl MemoryType {
 
         // Create a dedicated block for large memory allocations
         if size > memblock_size {
-            let mem_block = MemoryBlock::new(device.clone(), size, &self.heap_properties, true)?;
+            let mem_block = MemoryBlock::new(device, size, &self.heap_properties, true)?;
 
             let block_index = self.memory_blocks.iter().position(|block| block.is_none());
             let block_index = match block_index {
@@ -300,7 +328,7 @@ impl MemoryType {
         })
     }
 
-    fn free(&mut self, allocation: Allocation) -> Result<()> {
+    fn free(&mut self, allocation: &Allocation) -> Result<()> {
         let block_idx = allocation.memory_block_index;
 
         let mem_block = self.memory_blocks[block_idx]
@@ -395,7 +423,6 @@ impl Allocator {
     }
 
     pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
-        // todo(lily): debug logs, captures and traces
         let size = desc.size;
         let alignment = desc.alignment;
 
@@ -425,17 +452,16 @@ impl Allocator {
             .memory_types
             .iter_mut()
             .find(|memory_type| {
-                let is_location_compatible = desc.location == MemoryLocation::Unknown
-                    || desc.location == memory_type.memory_location;
-
-                is_location_compatible
+                // Is location compatible
+                desc.location == MemoryLocation::Unknown
+                    || desc.location == memory_type.memory_location
             })
             .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
 
-        memory_type.allocate(self.device.clone(), desc, backtrace, &self.allocation_sizes)
+        memory_type.allocate(&self.device, desc, backtrace, &self.allocation_sizes)
     }
 
-    pub fn free(&mut self, allocation: Allocation) -> Result<()> {
+    pub fn free(&mut self, allocation: &Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
             debug!("Freeing `{}`.", name);
@@ -456,10 +482,8 @@ impl Allocator {
         // Get all memory blocks
         let mut heaps: Vec<&metal::HeapRef> = Vec::new();
         for memory_type in &self.memory_types {
-            for memory_block in &memory_type.memory_blocks {
-                if let Some(block) = memory_block {
-                    heaps.push(block.heap.as_ref());
-                }
+            for block in memory_type.memory_blocks.iter().flatten() {
+                heaps.push(block.heap.as_ref());
             }
         }
         heaps

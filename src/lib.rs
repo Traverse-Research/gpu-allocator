@@ -171,7 +171,7 @@ pub mod vulkan;
 pub mod d3d12;
 
 // todo(lily): add a feature toggle for metal?
-#[cfg(all(any(target_os = "macos", target_os = "ios")))]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub mod metal;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

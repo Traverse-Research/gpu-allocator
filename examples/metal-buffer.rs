@@ -26,7 +26,7 @@ fn main() {
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _buffer = allocation.make_buffer().unwrap();
-        allocator.free(allocation).unwrap();
+        allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of GpuOnly memory was successful.");
     }
 
@@ -40,7 +40,7 @@ fn main() {
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _buffer = allocation.make_buffer().unwrap();
-        allocator.free(allocation).unwrap();
+        allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
 
@@ -54,7 +54,7 @@ fn main() {
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _buffer = allocation.make_buffer().unwrap();
-        allocator.free(allocation).unwrap();
+        allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of GpuToCpu memory was successful.");
     }
 
@@ -69,7 +69,7 @@ fn main() {
             AllocationCreateDesc::texture(&device, "Test allocation (Texture)", &texture_desc);
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _texture = allocation.make_texture(&texture_desc).unwrap();
-        allocator.free(allocation).unwrap();
+        allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of Texture was successful.");
     }
 
@@ -87,7 +87,7 @@ fn main() {
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _acc_structure = allocation.make_acceleration_structure();
-        allocator.free(allocation).unwrap();
+        allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of Acceleration structure was successful.");
     }
 }
