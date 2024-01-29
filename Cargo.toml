@@ -12,12 +12,7 @@ keywords = ["vulkan", "memory", "allocator"]
 documentation = "https://docs.rs/gpu-allocator/"
 rust-version = "1.65"
 
-include = [
-    "/README.md",
-    "/LICENSE-*",
-    "/src",
-    "/examples",
-]
+include = ["/README.md", "/LICENSE-*", "/src", "/examples"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -96,4 +91,4 @@ public-winapi = ["dep:winapi"]
 default = ["d3d12", "vulkan"]
 
 [patch.crates-io]
-metal = { git = "https://github.com/Traverse-Research/metal-rs", rev = "d40f71a" }
+metal = { git = "https://github.com/Traverse-Research/metal-rs", rev = "f018979" }
