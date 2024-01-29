@@ -8,6 +8,15 @@ use crate::{
 use log::{debug, Level};
 use metal::MTLStorageMode;
 
+fn memory_location_to_metal(location: MemoryLocation) -> metal::MTLResourceOptions {
+    match location {
+        MemoryLocation::GpuOnly => metal::MTLResourceOptions::StorageModePrivate,
+        MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu | MemoryLocation::Unknown => {
+            metal::MTLResourceOptions::StorageModeShared
+        }
+    }
+}
+
 pub struct Allocation {
     chunk_id: Option<std::num::NonZeroU64>,
     offset: u64,
@@ -48,6 +57,22 @@ pub struct AllocationCreateDesc<'a> {
 }
 
 impl<'a> AllocationCreateDesc<'a> {
+    pub fn buffer(
+        device: &metal::Device,
+        name: &'a str,
+        length: u64,
+        location: MemoryLocation,
+    ) -> AllocationCreateDesc<'a> {
+        let size_and_align =
+            device.heap_buffer_size_and_align(length, memory_location_to_metal(location));
+        Self {
+            name,
+            location,
+            size: size_and_align.size,
+            alignment: size_and_align.align,
+        }
+    }
+
     pub fn from_texture_descriptor(
         device: &metal::Device,
         name: &'a str,

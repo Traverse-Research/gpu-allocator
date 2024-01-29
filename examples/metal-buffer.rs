@@ -18,12 +18,12 @@ fn main() {
 
     // Test allocating Gpu Only memory
     {
-        let allocation_desc = AllocationCreateDesc {
-            name: "Test allocation (Gpu Only)",
-            location: gpu_allocator::MemoryLocation::GpuOnly,
-            size: 512,
-            alignment: 256,
-        };
+        let allocation_desc = AllocationCreateDesc::buffer(
+            &device,
+            "Test allocation (Gpu Only)",
+            512,
+            gpu_allocator::MemoryLocation::GpuOnly,
+        );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _buffer = allocation.make_buffer(512).unwrap();
         allocator.free(allocation).unwrap();
@@ -32,12 +32,12 @@ fn main() {
 
     // Test allocating Cpu to Gpu memory
     {
-        let allocation_desc = AllocationCreateDesc {
-            name: "Test allocation (Cpu to Gpu)",
-            location: gpu_allocator::MemoryLocation::CpuToGpu,
-            size: 512,
-            alignment: 256,
-        };
+        let allocation_desc = AllocationCreateDesc::buffer(
+            &device,
+            "Test allocation (Cpu to Gpu)",
+            512,
+            gpu_allocator::MemoryLocation::CpuToGpu,
+        );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _buffer = allocation.make_buffer(512).unwrap();
         allocator.free(allocation).unwrap();
@@ -46,12 +46,12 @@ fn main() {
 
     // Test allocating Gpu to Cpu memory
     {
-        let allocation_desc = AllocationCreateDesc {
-            name: "Test allocation (Gpu to Cpu)",
-            location: gpu_allocator::MemoryLocation::GpuToCpu,
-            size: 512,
-            alignment: 256,
-        };
+        let allocation_desc = AllocationCreateDesc::buffer(
+            &device,
+            "Test allocation (Gpu to Cpu)",
+            512,
+            gpu_allocator::MemoryLocation::GpuToCpu,
+        );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _buffer = allocation.make_buffer(512).unwrap();
         allocator.free(allocation).unwrap();
