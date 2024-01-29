@@ -25,7 +25,7 @@ fn main() {
             gpu_allocator::MemoryLocation::GpuOnly,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
-        let _buffer = allocation.make_buffer(512).unwrap();
+        let _buffer = allocation.make_buffer().unwrap();
         allocator.free(allocation).unwrap();
         info!("Allocation and deallocation of GpuOnly memory was successful.");
     }
@@ -39,7 +39,7 @@ fn main() {
             gpu_allocator::MemoryLocation::CpuToGpu,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
-        let _buffer = allocation.make_buffer(512).unwrap();
+        let _buffer = allocation.make_buffer().unwrap();
         allocator.free(allocation).unwrap();
         info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
@@ -53,7 +53,7 @@ fn main() {
             gpu_allocator::MemoryLocation::GpuToCpu,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
-        let _buffer = allocation.make_buffer(512).unwrap();
+        let _buffer = allocation.make_buffer().unwrap();
         allocator.free(allocation).unwrap();
         info!("Allocation and deallocation of GpuToCpu memory was successful.");
     }
@@ -65,14 +65,29 @@ fn main() {
         texture_desc.set_width(64);
         texture_desc.set_height(64);
         texture_desc.set_storage_mode(metal::MTLStorageMode::Private);
-        let allocation_desc = AllocationCreateDesc::from_texture_descriptor(
-            &device,
-            "Test allocation (Texture)",
-            &texture_desc,
-        );
+        let allocation_desc =
+            AllocationCreateDesc::texture(&device, "Test allocation (Texture)", &texture_desc);
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _texture = allocation.make_texture(&texture_desc).unwrap();
         allocator.free(allocation).unwrap();
         info!("Allocation and deallocation of Texture was successful.");
+    }
+
+    // Test allocating acceleration structure
+    {
+        let empty_array = metal::Array::from_slice(&[]);
+        let acc_desc = metal::PrimitiveAccelerationStructureDescriptor::descriptor();
+        acc_desc.set_geometry_descriptors(&empty_array);
+        let sizes = device.acceleration_structure_sizes_with_descriptor(&acc_desc);
+        let allocation_desc = AllocationCreateDesc::acceleration_structure_with_size(
+            &device,
+            "Test allocation (Acceleration structure)",
+            sizes.acceleration_structure_size,
+            gpu_allocator::MemoryLocation::GpuOnly,
+        );
+        let allocation = allocator.allocate(&allocation_desc).unwrap();
+        let _acc_structure = allocation.make_acceleration_structure();
+        allocator.free(allocation).unwrap();
+        info!("Allocation and deallocation of Acceleration structure was successful.");
     }
 }

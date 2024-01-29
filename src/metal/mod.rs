@@ -20,7 +20,7 @@ fn memory_location_to_metal(location: MemoryLocation) -> metal::MTLResourceOptio
 pub struct Allocation {
     chunk_id: Option<std::num::NonZeroU64>,
     offset: u64,
-    _size: u64,
+    size: u64,
     memory_block_index: usize,
     memory_type_index: usize,
     heap: Arc<metal::Heap>,
@@ -33,13 +33,18 @@ impl Allocation {
         self.heap.as_ref()
     }
 
-    pub fn make_buffer(&self, length: u64) -> Option<metal::Buffer> {
+    pub fn make_buffer(&self) -> Option<metal::Buffer> {
         self.heap
-            .new_buffer_with_offset(length, self.heap.resource_options(), self.offset)
+            .new_buffer_with_offset(self.size, self.heap.resource_options(), self.offset)
     }
 
     pub fn make_texture(&self, desc: &metal::TextureDescriptor) -> Option<metal::Texture> {
         self.heap.new_texture_with_offset(&desc, self.offset)
+    }
+
+    pub fn make_acceleration_structure(&self) -> Option<metal::AccelerationStructure> {
+        self.heap
+            .new_acceleration_structure_with_size_offset(self.size, self.offset)
     }
 
     fn is_null(&self) -> bool {
@@ -73,7 +78,7 @@ impl<'a> AllocationCreateDesc<'a> {
         }
     }
 
-    pub fn from_texture_descriptor(
+    pub fn texture(
         device: &metal::Device,
         name: &'a str,
         desc: &metal::TextureDescriptor,
@@ -87,6 +92,21 @@ impl<'a> AllocationCreateDesc<'a> {
                 MTLStorageMode::Private => MemoryLocation::GpuOnly,
                 MTLStorageMode::Memoryless => MemoryLocation::Unknown,
             },
+            size: size_and_align.size,
+            alignment: size_and_align.align,
+        }
+    }
+
+    pub fn acceleration_structure_with_size(
+        device: &metal::Device,
+        name: &'a str,
+        size: u64,
+        location: MemoryLocation,
+    ) -> AllocationCreateDesc<'a> {
+        let size_and_align = device.heap_acceleration_structure_size_and_align_with_size(size);
+        Self {
+            name,
+            location,
             size: size_and_align.size,
             alignment: size_and_align.align,
         }
@@ -197,7 +217,7 @@ impl MemoryType {
 
             return Ok(Allocation {
                 chunk_id: Some(chunk_id),
-                _size: size,
+                size,
                 offset,
                 memory_block_index: block_index,
                 memory_type_index: self.memory_type_index,
@@ -223,7 +243,7 @@ impl MemoryType {
                         return Ok(Allocation {
                             chunk_id: Some(chunk_id),
                             offset,
-                            _size: size,
+                            size,
                             memory_block_index: mem_block_i,
                             memory_type_index: self.memory_type_index,
                             heap: mem_block.heap.clone(),
@@ -272,7 +292,7 @@ impl MemoryType {
         Ok(Allocation {
             chunk_id: Some(chunk_id),
             offset,
-            _size: size,
+            size,
             memory_block_index: new_block_index,
             memory_type_index: self.memory_type_index,
             heap: mem_block.heap.clone(),
