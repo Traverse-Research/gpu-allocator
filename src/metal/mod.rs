@@ -85,6 +85,8 @@ pub struct AllocationCreateDesc<'a> {
     pub name: &'a str,
     /// Location where the memory allocation should be stored
     pub location: MemoryLocation,
+    /// If the resource is linear (buffer / linear texture) or a regular (tiled) texture.
+    pub linear: bool,
     pub size: u64,
     pub alignment: u64,
 }
@@ -94,6 +96,7 @@ impl<'a> AllocationCreateDesc<'a> {
         device: &metal::Device,
         name: &'a str,
         length: u64,
+        linear: bool,
         location: MemoryLocation,
     ) -> AllocationCreateDesc<'a> {
         let size_and_align =
@@ -103,12 +106,14 @@ impl<'a> AllocationCreateDesc<'a> {
             location,
             size: size_and_align.size,
             alignment: size_and_align.align,
+            linear,
         }
     }
 
     pub fn texture(
         device: &metal::Device,
         name: &'a str,
+        linear: bool,
         desc: &metal::TextureDescriptor,
     ) -> AllocationCreateDesc<'a> {
         let size_and_align = device.heap_texture_size_and_align(desc);
@@ -122,6 +127,7 @@ impl<'a> AllocationCreateDesc<'a> {
             },
             size: size_and_align.size,
             alignment: size_and_align.align,
+            linear,
         }
     }
 
@@ -129,6 +135,7 @@ impl<'a> AllocationCreateDesc<'a> {
         device: &metal::Device,
         name: &'a str,
         size: u64,
+        linear: bool,
         location: MemoryLocation,
     ) -> AllocationCreateDesc<'a> {
         let size_and_align = device.heap_acceleration_structure_size_and_align_with_size(size);
@@ -137,6 +144,7 @@ impl<'a> AllocationCreateDesc<'a> {
             location,
             size: size_and_align.size,
             alignment: size_and_align.align,
+            linear,
         }
     }
 }
@@ -203,7 +211,11 @@ impl MemoryType {
         backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
-        let allocation_type = AllocationType::Linear;
+        let allocation_type = if desc.linear {
+            AllocationType::Linear
+        } else {
+            AllocationType::NonLinear
+        };
 
         let memblock_size = if self.heap_properties.storage_mode() == MTLStorageMode::Private {
             allocation_sizes.device_memblock_size

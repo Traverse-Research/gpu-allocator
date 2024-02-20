@@ -22,6 +22,7 @@ fn main() {
             &device,
             "Test allocation (Gpu Only)",
             512,
+            true,
             gpu_allocator::MemoryLocation::GpuOnly,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
@@ -36,6 +37,7 @@ fn main() {
             &device,
             "Test allocation (Cpu to Gpu)",
             512,
+            true,
             gpu_allocator::MemoryLocation::CpuToGpu,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
@@ -50,6 +52,7 @@ fn main() {
             &device,
             "Test allocation (Gpu to Cpu)",
             512,
+            true,
             gpu_allocator::MemoryLocation::GpuToCpu,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
@@ -65,8 +68,12 @@ fn main() {
         texture_desc.set_width(64);
         texture_desc.set_height(64);
         texture_desc.set_storage_mode(metal::MTLStorageMode::Private);
-        let allocation_desc =
-            AllocationCreateDesc::texture(&device, "Test allocation (Texture)", &texture_desc);
+        let allocation_desc = AllocationCreateDesc::texture(
+            &device,
+            "Test allocation (Texture)",
+            true,
+            &texture_desc,
+        );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
         let _texture = allocation.make_texture(&texture_desc).unwrap();
         allocator.free(&allocation).unwrap();
@@ -83,6 +90,7 @@ fn main() {
             &device,
             "Test allocation (Acceleration structure)",
             sizes.acceleration_structure_size,
+            true,
             gpu_allocator::MemoryLocation::GpuOnly,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
