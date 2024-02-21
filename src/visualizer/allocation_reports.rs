@@ -37,9 +37,13 @@ pub(crate) fn render_allocation_reports_ui(
         .enumerate()
         .filter(|(_, report)| report.name.to_lowercase().contains(&breakdown_filter))
         .collect::<Vec<_>>();
+    let total_size_under_filter: u64 = allocations.iter().map(|a| a.1.size).sum();
+
+    ui.horizontal(|ui| {
+        ui.label(format!("Total: {}", fmt_bytes(total_size_under_filter)));
+    });
 
     let row_height = ui.text_style_height(&egui::TextStyle::Body);
-
     let table = TableBuilder::new(ui)
         .striped(true)
         .resizable(true)
