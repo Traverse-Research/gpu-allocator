@@ -170,6 +170,9 @@ pub mod vulkan;
 #[cfg(all(windows, feature = "d3d12"))]
 pub mod d3d12;
 
+#[cfg(all(any(target_os = "macos", target_os = "ios"), feature = "metal"))]
+pub mod metal;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MemoryLocation {
     /// The allocated resource is stored at an unknown memory location; let the driver decide what's the best location
