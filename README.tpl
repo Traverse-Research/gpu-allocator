@@ -21,7 +21,7 @@ gpu-allocator = "0.25.0"
 
 ## Minimum Supported Rust Version
 
-The MSRV for this crate and the `vulkan` and `d3d12` features is Rust 1.65.  Any other features such as the `visualizer` (with all the `egui` dependencies) may have a higher requirement and are not tested in our CI.
+The MSRV for this crate and the `vulkan`, `d3d12` and `metal` features is Rust 1.65.  Any other features such as the `visualizer` (with all the `egui` dependencies) may have a higher requirement and are not tested in our CI.
 
 ## License
 
