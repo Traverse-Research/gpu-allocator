@@ -143,7 +143,7 @@ let mut allocator = Allocator::new(&AllocatorCreateDesc {
 ```
 
 ## Simple Metal allocation example
-```
+```rust
 use gpu_allocator::metal::*;
 use gpu_allocator::MemoryLocation;
 
