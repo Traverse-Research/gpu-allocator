@@ -17,7 +17,7 @@ gpu-allocator = "0.25.0"
 
 ![Visualizer](visualizer.png)
 
-This crate provides a fully written in Rust memory allocator for Vulkan and DirectX 12.
+This crate provides a fully written in Rust memory allocator for Vulkan, DirectX 12 and Metal.
 
 ## [Windows-rs] and [winapi]
 
@@ -163,7 +163,7 @@ allocator.free(&allocation).unwrap();
 
 ## Minimum Supported Rust Version
 
-The MSRV for this crate and the `vulkan` and `d3d12` features is Rust 1.65.  Any other features such as the `visualizer` (with all the `egui` dependencies) may have a higher requirement and are not tested in our CI.
+The MSRV for this crate and the `vulkan`, `d3d12` and `metal` features is Rust 1.65.  Any other features such as the `visualizer` (with all the `egui` dependencies) may have a higher requirement and are not tested in our CI.
 
 ## License
 
