@@ -256,9 +256,8 @@ impl std::ops::Deref for ID3D12DeviceVersion {
     fn deref(&self) -> &Self::Target {
         match self {
             Self::Device(device) => device,
-            // Windows-rs hides CanInto, we know that Device10/Device12 is a subclass of Device but there's not even a Deref.
-            Self::Device10(device10) => windows::core::CanInto::can_into(device10),
-            Self::Device12(device12) => windows::core::CanInto::can_into(device12),
+            Self::Device10(device10) => device10.into(),
+            Self::Device12(device12) => device12.into(),
         }
     }
 }
