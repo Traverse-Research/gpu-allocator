@@ -8,10 +8,12 @@ jobs:
     strategy:
       matrix:
         include:
-        - os: ubuntu-latest
-          features: vulkan
-        - os: windows-latest
-          features: vulkan,d3d12
+          - os: ubuntu-latest
+            features: vulkan
+          - os: windows-latest
+            features: vulkan,d3d12
+          - os: macos-latest
+            features: vulkan,metal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -23,10 +25,12 @@ jobs:
     strategy:
       matrix:
         include:
-        - os: ubuntu-latest
-          features: vulkan,visualizer
-        - os: windows-latest
-          features: vulkan,visualizer,d3d12,public-winapi
+          - os: ubuntu-latest
+            features: vulkan,visualizer
+          - os: windows-latest
+            features: vulkan,visualizer,d3d12,public-winapi
+          - os: macos-latest
+            features: vulkan,visualizer,metal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -48,10 +52,12 @@ jobs:
     strategy:
       matrix:
         include:
-        - os: ubuntu-latest
-          features: vulkan,visualizer
-        - os: windows-latest
-          features: vulkan,visualizer,d3d12,public-winapi
+          - os: ubuntu-latest
+            features: vulkan,visualizer
+          - os: windows-latest
+            features: vulkan,visualizer,d3d12,public-winapi
+          - os: macos-latest
+            features: vulkan,visualizer,metal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -67,8 +73,11 @@ jobs:
 
   doc:
     name: Build documentation
-    # Windows supports the entire feature surface
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        # Rely on Windows and Mac to also compile the Vulkan portion (via --all-features)
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     env:
       RUSTDOCFLAGS: -Dwarnings
     steps:
