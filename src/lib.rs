@@ -161,6 +161,7 @@
 //! ```no_run
 //! # #[cfg(feature = "metal")]
 //! # fn main() {
+//! # use std::sync::Arc;
 //! use gpu_allocator::metal::*;
 //!
 //! # let device = Arc::new(metal::Device::system_default().unwrap());
@@ -178,6 +179,7 @@
 //! ```no_run
 //! # #[cfg(feature = "metal")]
 //! # fn main() {
+//! # use std::sync::Arc;
 //! use gpu_allocator::metal::*;
 //! use gpu_allocator::MemoryLocation;
 //! # let device = Arc::new(metal::Device::system_default().unwrap());
