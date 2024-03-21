@@ -26,7 +26,7 @@ all-features = true
 log = "0.4"
 thiserror = "1.0"
 presser = { version = "0.3" }
-# Only needed for vulkan.  Disable all default features as good practice,
+# Only needed for Vulkan.  Disable all default features as good practice,
 # such as the ability to link/load a Vulkan library.
 ash = { version = ">=0.34, <=0.37", optional = true, default-features = false, features = ["debug"] }
 # Only needed for visualizer.
@@ -34,7 +34,7 @@ egui = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 egui_extras = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-metal = { version = "0.27.0", default-features = false, features = ["link", "dispatch",] }
+metal = { version = "0.27.0", default-features = false, features = ["link", "dispatch"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # Only needed for public-winapi interop helpers
@@ -88,10 +88,10 @@ name = "metal-buffer"
 required-features = ["metal"]
 
 [features]
-visualizer = ["egui", "egui_extras"]
-vulkan = ["ash"]
-d3d12 = ["windows"]
-metal = []
+visualizer = ["dep:egui", "dep:egui_extras"]
+vulkan = ["dep:ash"]
+d3d12 = ["dep:windows"]
+metal = ["dep:metal"]
 # Expose helper functionality for winapi types to interface with gpu-allocator, which is primarily windows-rs driven
 public-winapi = ["dep:winapi"]
 
