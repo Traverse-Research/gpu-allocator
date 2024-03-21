@@ -77,7 +77,7 @@ fn main() {
     {
         let empty_array = metal::Array::from_slice(&[]);
         let acc_desc = metal::PrimitiveAccelerationStructureDescriptor::descriptor();
-        acc_desc.set_geometry_descriptors(&empty_array);
+        acc_desc.set_geometry_descriptors(empty_array);
         let sizes = device.acceleration_structure_sizes_with_descriptor(&acc_desc);
         let allocation_desc = AllocationCreateDesc::acceleration_structure_with_size(
             &device,
