@@ -2,8 +2,7 @@
 use std::{backtrace::Backtrace, sync::Arc};
 
 use crate::{
-    allocator::{self, AllocationType},
-    AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
+    allocator, AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
 use log::{debug, Level};
 use metal::MTLStorageMode;
@@ -36,43 +35,34 @@ impl Allocation {
         let resource =
             self.heap
                 .new_buffer_with_offset(self.size, self.heap.resource_options(), self.offset);
-        resource.map_or_else(
-            || None,
-            |resource| {
-                if let Some(name) = &self.name {
-                    resource.set_label(name);
-                }
-                Some(resource)
-            },
-        )
+        resource.map_or(None, |resource| {
+            if let Some(name) = &self.name {
+                resource.set_label(name);
+            }
+            Some(resource)
+        })
     }
 
     pub fn make_texture(&self, desc: &metal::TextureDescriptor) -> Option<metal::Texture> {
         let resource = self.heap.new_texture_with_offset(desc, self.offset);
-        resource.map_or_else(
-            || None,
-            |resource| {
-                if let Some(name) = &self.name {
-                    resource.set_label(name);
-                }
-                Some(resource)
-            },
-        )
+        resource.map_or(None, |resource| {
+            if let Some(name) = &self.name {
+                resource.set_label(name);
+            }
+            Some(resource)
+        })
     }
 
     pub fn make_acceleration_structure(&self) -> Option<metal::AccelerationStructure> {
         let resource = self
             .heap
             .new_acceleration_structure_with_size_offset(self.size, self.offset);
-        resource.map_or_else(
-            || None,
-            |resource| {
-                if let Some(name) = &self.name {
-                    resource.set_label(name);
-                }
-                Some(resource)
-            },
-        )
+        resource.map_or(None, |resource| {
+            if let Some(name) = &self.name {
+                resource.set_label(name);
+            }
+            Some(resource)
+        })
     }
 
     fn is_null(&self) -> bool {
@@ -203,7 +193,7 @@ impl MemoryType {
         backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
-        let allocation_type = AllocationType::Linear;
+        let allocation_type = allocator::AllocationType::Linear;
 
         let memblock_size = if self.heap_properties.storage_mode() == MTLStorageMode::Private {
             allocation_sizes.device_memblock_size
