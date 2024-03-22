@@ -36,6 +36,10 @@ egui_extras = { version = ">=0.24, <=0.26", optional = true, default-features = 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 metal = { version = "0.27.0", default-features = false, features = ["link", "dispatch",] }
 
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.build-dependencies]
+# Force 0.1.2, as older versions use the `gcc` crate which no longer builds (in a -Zminimal-versions build)
+objc_exception = "0.1.2"
+
 [target.'cfg(windows)'.dependencies]
 # Only needed for public-winapi interop helpers
 winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
