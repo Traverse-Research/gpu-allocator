@@ -35,6 +35,9 @@ egui_extras = { version = ">=0.24, <=0.26", optional = true, default-features = 
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 metal = { version = "0.27.0", default-features = false, features = ["link", "dispatch",] }
+# Force at least libc 0.1.12, as older versions via `-Zminimal-versions` no longer compile
+# libc = { version = ">=0.1.12,<0.3", default-features = false }
+libc = { version = "0.1.12", default-features = false }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.build-dependencies]
 # Force 0.1.2, as older versions use the `gcc` crate which no longer builds (in a -Zminimal-versions build)
