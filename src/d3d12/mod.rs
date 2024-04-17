@@ -4,7 +4,7 @@ use std::{backtrace::Backtrace, fmt, sync::Arc};
 
 use log::{debug, warn, Level};
 
-use windows::Win32::{Foundation::E_OUTOFMEMORY, Graphics::Direct3D12::*};
+use windows::Win32::{Foundation::E_OUTOFMEMORY, Graphics::{Direct3D12::*, Dxgi::Common::DXGI_FORMAT}};
 
 #[cfg(feature = "public-winapi")]
 mod public_winapi {
@@ -110,6 +110,7 @@ pub struct ResourceCreateDesc<'a> {
     pub memory_location: MemoryLocation,
     pub resource_category: ResourceCategory,
     pub resource_desc: &'a D3D12_RESOURCE_DESC,
+    pub castable_formats: &'a [DXGI_FORMAT],
     pub clear_value: Option<&'a D3D12_CLEAR_VALUE>,
     pub initial_state_or_layout: ResourceStateOrBarrierLayout,
     pub resource_type: &'a ResourceType<'a>,
@@ -822,6 +823,10 @@ impl Allocator {
                 if let Err(e) = unsafe {
                     match (&self.device, desc.initial_state_or_layout) {
                         (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
+                            if !desc.castable_formats.is_empty() {
+                                warn!("Requesting castable formats, but this feature requires ID3D12Device10");
+                            }
+
                             device.CreateCommittedResource(
                                 *heap_properties,
                                 *heap_flags,
@@ -857,7 +862,7 @@ impl Allocator {
                                 initial_layout,
                                 clear_value,
                                 None, // TODO
-                                None, // TODO: https://github.com/microsoft/DirectX-Specs/blob/master/d3d/VulkanOn12.md#format-list-casting
+                                Some(desc.castable_formats),
                                 &mut result,
                             )
                         }
@@ -926,6 +931,10 @@ impl Allocator {
                 if let Err(e) = unsafe {
                     match (&self.device, desc.initial_state_or_layout) {
                         (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
+                            if !desc.castable_formats.is_empty() {
+                                warn!("Requesting castable formats, but this feature requires ID3D12Device10");
+                            }
+                            
                             device.CreatePlacedResource(
                                 allocation.heap(),
                                 allocation.offset(),
@@ -959,7 +968,7 @@ impl Allocator {
                                 &resource_desc1,
                                 initial_layout,
                                 None,
-                                None, // TODO: https://github.com/microsoft/DirectX-Specs/blob/master/d3d/VulkanOn12.md#format-list-casting
+                                Some(desc.castable_formats),
                                 &mut result,
                             )
                         }
