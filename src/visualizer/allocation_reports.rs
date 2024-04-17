@@ -51,7 +51,7 @@ pub(crate) fn render_allocation_reports_ui(
 
     fn header_button(ui: &mut Ui, label: &str) -> Response {
         let label = WidgetText::from(label).strong();
-        let label = Label::new(label.strong()).sense(Sense::click());
+        let label = Label::new(label).sense(Sense::click());
         ui.add(label)
     }
 
