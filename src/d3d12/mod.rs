@@ -4,7 +4,10 @@ use std::{backtrace::Backtrace, fmt, sync::Arc};
 
 use log::{debug, warn, Level};
 
-use windows::Win32::{Foundation::E_OUTOFMEMORY, Graphics::{Direct3D12::*, Dxgi::Common::DXGI_FORMAT}};
+use windows::Win32::{
+    Foundation::E_OUTOFMEMORY,
+    Graphics::{Direct3D12::*, Dxgi::Common::DXGI_FORMAT},
+};
 
 #[cfg(feature = "public-winapi")]
 mod public_winapi {
@@ -934,7 +937,7 @@ impl Allocator {
                             if !desc.castable_formats.is_empty() {
                                 warn!("Requesting castable formats, but this feature requires ID3D12Device10");
                             }
-                            
+
                             device.CreatePlacedResource(
                                 allocation.heap(),
                                 allocation.offset(),
