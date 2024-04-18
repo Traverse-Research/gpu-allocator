@@ -14,7 +14,7 @@ pub enum AllocationError {
     InvalidAllocatorCreateDesc(String),
     #[error("Internal error: {0}")]
     Internal(String),
-    #[error("Initial `BARRIER_LAYOUT` needs `Device10`")]
+    #[error("Initial `BARRIER_LAYOUT` needs at least `Device10`")]
     BarrierLayoutNeedsDevice10,
 }
 
