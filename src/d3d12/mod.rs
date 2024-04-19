@@ -1058,20 +1058,10 @@ impl Allocator {
                             ID3D12DeviceVersion::Device10(device),
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                         ) => {
-                            let resource_desc1 = D3D12_RESOURCE_DESC1 {
-                                Dimension: desc.resource_desc.Dimension,
-                                Alignment: desc.resource_desc.Alignment,
-                                Width: desc.resource_desc.Width,
-                                Height: desc.resource_desc.Height,
-                                DepthOrArraySize: desc.resource_desc.DepthOrArraySize,
-                                MipLevels: desc.resource_desc.MipLevels,
-                                Format: desc.resource_desc.Format,
-                                SampleDesc: desc.resource_desc.SampleDesc,
-                                Layout: desc.resource_desc.Layout,
-                                Flags: desc.resource_desc.Flags,
-                                // TODO: This is the only new field
-                                SamplerFeedbackMipRegion: D3D12_MIP_REGION::default(),
-                            };
+                            let resource_desc1 = Self::d3d12_resource_desc_1(
+                                desc.resource_desc,
+                                D3D12_MIP_REGION::default(),
+                            );
                             device.CreatePlacedResource2(
                                 allocation.heap(),
                                 allocation.offset(),
@@ -1086,20 +1076,10 @@ impl Allocator {
                             ID3D12DeviceVersion::Device12(device),
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                         ) => {
-                            let resource_desc1 = D3D12_RESOURCE_DESC1 {
-                                Dimension: desc.resource_desc.Dimension,
-                                Alignment: desc.resource_desc.Alignment,
-                                Width: desc.resource_desc.Width,
-                                Height: desc.resource_desc.Height,
-                                DepthOrArraySize: desc.resource_desc.DepthOrArraySize,
-                                MipLevels: desc.resource_desc.MipLevels,
-                                Format: desc.resource_desc.Format,
-                                SampleDesc: desc.resource_desc.SampleDesc,
-                                Layout: desc.resource_desc.Layout,
-                                Flags: desc.resource_desc.Flags,
-                                // TODO: This is the only new field
-                                SamplerFeedbackMipRegion: D3D12_MIP_REGION::default(),
-                            };
+                            let resource_desc1 = Self::d3d12_resource_desc_1(
+                                desc.resource_desc,
+                                D3D12_MIP_REGION::default(),
+                            );
                             device.CreatePlacedResource2(
                                 allocation.heap(),
                                 allocation.offset(),
