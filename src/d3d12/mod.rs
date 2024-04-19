@@ -246,7 +246,7 @@ pub enum ID3D12DeviceVersion {
     /// Required for enhanced barrier support, i.e. when using
     /// [`ResourceStateOrBarrierLayout::BarrierLayout`].
     Device10(ID3D12Device10),
-    /// Required for castable formats support
+    /// Required for castable formats support, requires the use of enhanced barrier
     Device12(ID3D12Device12),
 }
 
@@ -891,8 +891,8 @@ impl Allocator {
                     desc.clear_value.map(|v| -> *const _ { v });
 
                 if let Err(e) = unsafe {
-                    match (&self.device, desc.initial_state_or_layout) {
-                        (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
+                    match (desc.initial_state_or_layout, &self.device) {
+                        (ResourceStateOrBarrierLayout::ResourceState(initial_state), device) => {
                             if !desc.castable_formats.is_empty() {
                                 warn!("Requesting castable formats, but this feature requires ID3D12Device12");
                             }
@@ -907,8 +907,8 @@ impl Allocator {
                             )
                         }
                         (
-                            ID3D12DeviceVersion::Device10(device),
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                            ID3D12DeviceVersion::Device10(device),
                         ) => {
                             let resource_desc1 = Self::d3d12_resource_desc_1(
                                 desc.resource_desc,
@@ -927,8 +927,8 @@ impl Allocator {
                             )
                         }
                         (
-                            ID3D12DeviceVersion::Device12(device),
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                            ID3D12DeviceVersion::Device12(device),
                         ) => {
                             let resource_desc1 = Self::d3d12_resource_desc_1(
                                 desc.resource_desc,
@@ -1003,8 +1003,8 @@ impl Allocator {
 
                 let mut result: Option<ID3D12Resource> = None;
                 if let Err(e) = unsafe {
-                    match (&self.device, desc.initial_state_or_layout) {
-                        (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
+                    match (desc.initial_state_or_layout, &self.device) {
+                        (ResourceStateOrBarrierLayout::ResourceState(initial_state), device) => {
                             if !desc.castable_formats.is_empty() {
                                 warn!("Requesting castable formats, but this feature requires ID3D12Device12");
                             }
@@ -1019,8 +1019,8 @@ impl Allocator {
                             )
                         }
                         (
-                            ID3D12DeviceVersion::Device10(device),
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                            ID3D12DeviceVersion::Device10(device),
                         ) => {
                             let resource_desc1 = Self::d3d12_resource_desc_1(
                                 desc.resource_desc,
@@ -1037,8 +1037,8 @@ impl Allocator {
                             )
                         }
                         (
-                            ID3D12DeviceVersion::Device12(device),
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                            ID3D12DeviceVersion::Device12(device),
                         ) => {
                             let resource_desc1 = Self::d3d12_resource_desc_1(
                                 desc.resource_desc,
