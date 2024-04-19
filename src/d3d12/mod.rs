@@ -833,6 +833,50 @@ impl Allocator {
         }
     }
 
+    fn resource_allocation_info(
+        device: &ID3D12DeviceVersion,
+        desc: &ResourceCreateDesc<'_>,
+    ) -> D3D12_RESOURCE_ALLOCATION_INFO {
+        match device {
+            ID3D12DeviceVersion::Device(device) => unsafe {
+                device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
+            },
+            ID3D12DeviceVersion::Device10(device) => unsafe {
+                device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
+            },
+            ID3D12DeviceVersion::Device12(device) => unsafe {
+                let resource_desc1 =
+                    Self::d3d12_resource_desc_1(desc.resource_desc, D3D12_MIP_REGION::default());
+
+                let resource_descs = &[resource_desc1];
+
+                // We always have one resource desc, hence we only have one mapping castable format array
+                let num_castable_formats = desc.castable_formats.len() as u32;
+                let num_castable_formats_array = &[num_castable_formats];
+
+                let castable_formats_array = &[desc.castable_formats.as_ptr()];
+
+                let (num_castable_formats_opt, castable_formats_opt) = if num_castable_formats > 0 {
+                    (
+                        Some(num_castable_formats_array.as_ptr()),
+                        Some(castable_formats_array.as_ptr()),
+                    )
+                } else {
+                    (None, None)
+                };
+
+                device.GetResourceAllocationInfo3(
+                    0,
+                    resource_descs.len() as u32,
+                    resource_descs.as_ptr(),
+                    num_castable_formats_opt,
+                    castable_formats_opt,
+                    None,
+                )
+            },
+        }
+    }
+
     /// Create a resource according to the provided parameters.
     /// Created resources should be freed at the end of their lifetime by calling [`Self::free_resource()`].
     pub fn create_resource(&mut self, desc: &ResourceCreateDesc<'_>) -> Result<Resource> {
@@ -913,47 +957,7 @@ impl Allocator {
 
                 let resource = result.expect("Allocation succeeded but no resource was returned?");
 
-                let allocation_info = match &self.device {
-                    ID3D12DeviceVersion::Device(device) => unsafe {
-                        device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
-                    },
-                    ID3D12DeviceVersion::Device10(device) => unsafe {
-                        device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
-                    },
-                    ID3D12DeviceVersion::Device12(device) => unsafe {
-                        let resource_desc1 = Self::d3d12_resource_desc_1(
-                            desc.resource_desc,
-                            D3D12_MIP_REGION::default(),
-                        );
-
-                        let resource_descs = &[resource_desc1];
-
-                        // We always have one resource desc, hence we only have one mapping castable format array
-                        let num_castable_formats = desc.castable_formats.len() as u32;
-                        let num_castable_formats_array = &[num_castable_formats];
-
-                        let castable_formats_array = &[desc.castable_formats.as_ptr()];
-
-                        let (num_castable_formats_opt, castable_formats_opt) =
-                            if num_castable_formats > 0 {
-                                (
-                                    Some(num_castable_formats_array.as_ptr()),
-                                    Some(castable_formats_array.as_ptr()),
-                                )
-                            } else {
-                                (None, None)
-                            };
-
-                        device.GetResourceAllocationInfo3(
-                            0,
-                            resource_descs.len() as u32,
-                            resource_descs.as_ptr(),
-                            num_castable_formats_opt,
-                            castable_formats_opt,
-                            None,
-                        )
-                    },
-                };
+                let allocation_info = Self::resource_allocation_info(&self.device, desc);
 
                 let memory_type = self
                     .memory_types
@@ -984,47 +988,7 @@ impl Allocator {
             }
             ResourceType::Placed => {
                 let allocation_desc = {
-                    let allocation_info = match &self.device {
-                        ID3D12DeviceVersion::Device(device) => unsafe {
-                            device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
-                        },
-                        ID3D12DeviceVersion::Device10(device) => unsafe {
-                            device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
-                        },
-                        ID3D12DeviceVersion::Device12(device) => unsafe {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(
-                                desc.resource_desc,
-                                D3D12_MIP_REGION::default(),
-                            );
-
-                            let resource_descs = &[resource_desc1];
-
-                            // We always have one resource desc, hence we only have one mapping castable format array
-                            let num_castable_formats = desc.castable_formats.len() as u32;
-                            let num_castable_formats_array = &[num_castable_formats];
-
-                            let castable_formats_array = &[desc.castable_formats.as_ptr()];
-
-                            let (num_castable_formats_opt, castable_formats_opt) =
-                                if num_castable_formats > 0 {
-                                    (
-                                        Some(num_castable_formats_array.as_ptr()),
-                                        Some(castable_formats_array.as_ptr()),
-                                    )
-                                } else {
-                                    (None, None)
-                                };
-
-                            device.GetResourceAllocationInfo3(
-                                0,
-                                resource_descs.len() as u32,
-                                resource_descs.as_ptr(),
-                                num_castable_formats_opt,
-                                castable_formats_opt,
-                                None,
-                            )
-                        },
-                    };
+                    let allocation_info = Self::resource_allocation_info(&self.device, desc);
 
                     AllocationCreateDesc {
                         name: desc.name,
