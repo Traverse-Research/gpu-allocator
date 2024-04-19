@@ -245,7 +245,8 @@ pub enum ID3D12DeviceVersion {
     Device(ID3D12Device),
     /// Required for enhanced barrier support, i.e. when using
     /// [`ResourceStateOrBarrierLayout::BarrierLayout`].
-    /// As well as for castable formats support.
+    Device10(ID3D12Device10),
+    /// Required for castable formats support
     Device12(ID3D12Device12),
 }
 
@@ -255,7 +256,8 @@ impl std::ops::Deref for ID3D12DeviceVersion {
     fn deref(&self) -> &Self::Target {
         match self {
             Self::Device(device) => device,
-            // Windows-rs hides CanInto, we know that Device12 is a subclass of Device but there's not even a Deref.
+            // Windows-rs hides CanInto, we know that Device10/Device12 is a subclass of Device but there's not even a Deref.
+            Self::Device10(device10) => windows::core::CanInto::can_into(device10),
             Self::Device12(device12) => windows::core::CanInto::can_into(device12),
         }
     }
@@ -811,6 +813,26 @@ impl Allocator {
         }
     }
 
+    fn d3d12_resource_desc_1(
+        desc: &D3D12_RESOURCE_DESC,
+        sampler_feedback_mip_region: D3D12_MIP_REGION,
+    ) -> D3D12_RESOURCE_DESC1 {
+        D3D12_RESOURCE_DESC1 {
+            Dimension: desc.Dimension,
+            Alignment: desc.Alignment,
+            Width: desc.Width,
+            Height: desc.Height,
+            DepthOrArraySize: desc.DepthOrArraySize,
+            MipLevels: desc.MipLevels,
+            Format: desc.Format,
+            SampleDesc: desc.SampleDesc,
+            Layout: desc.Layout,
+            Flags: desc.Flags,
+            // TODO: This is the only new field
+            SamplerFeedbackMipRegion: sampler_feedback_mip_region,
+        }
+    }
+
     /// Create a resource according to the provided parameters.
     /// Created resources should be freed at the end of their lifetime by calling [`Self::free_resource()`].
     pub fn create_resource(&mut self, desc: &ResourceCreateDesc<'_>) -> Result<Resource> {
@@ -841,23 +863,33 @@ impl Allocator {
                             )
                         }
                         (
+                            ID3D12DeviceVersion::Device10(device),
+                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                        ) => {
+                            let resource_desc1 = Self::d3d12_resource_desc_1(
+                                desc.resource_desc,
+                                D3D12_MIP_REGION::default(),
+                            );
+
+                            device.CreateCommittedResource3(
+                                *heap_properties,
+                                *heap_flags,
+                                &resource_desc1,
+                                initial_layout,
+                                clear_value,
+                                None, // TODO
+                                None,
+                                &mut result,
+                            )
+                        }
+                        (
                             ID3D12DeviceVersion::Device12(device),
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                         ) => {
-                            let resource_desc1 = D3D12_RESOURCE_DESC1 {
-                                Dimension: desc.resource_desc.Dimension,
-                                Alignment: desc.resource_desc.Alignment,
-                                Width: desc.resource_desc.Width,
-                                Height: desc.resource_desc.Height,
-                                DepthOrArraySize: desc.resource_desc.DepthOrArraySize,
-                                MipLevels: desc.resource_desc.MipLevels,
-                                Format: desc.resource_desc.Format,
-                                SampleDesc: desc.resource_desc.SampleDesc,
-                                Layout: desc.resource_desc.Layout,
-                                Flags: desc.resource_desc.Flags,
-                                // TODO: This is the only new field
-                                SamplerFeedbackMipRegion: D3D12_MIP_REGION::default(),
-                            };
+                            let resource_desc1 = Self::d3d12_resource_desc_1(
+                                desc.resource_desc,
+                                D3D12_MIP_REGION::default(),
+                            );
 
                             device.CreateCommittedResource3(
                                 *heap_properties,
@@ -885,21 +917,14 @@ impl Allocator {
                     ID3D12DeviceVersion::Device(device) => unsafe {
                         device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
                     },
+                    ID3D12DeviceVersion::Device10(device) => unsafe {
+                        device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
+                    },
                     ID3D12DeviceVersion::Device12(device) => unsafe {
-                        let resource_desc1 = D3D12_RESOURCE_DESC1 {
-                            Dimension: desc.resource_desc.Dimension,
-                            Alignment: desc.resource_desc.Alignment,
-                            Width: desc.resource_desc.Width,
-                            Height: desc.resource_desc.Height,
-                            DepthOrArraySize: desc.resource_desc.DepthOrArraySize,
-                            MipLevels: desc.resource_desc.MipLevels,
-                            Format: desc.resource_desc.Format,
-                            SampleDesc: desc.resource_desc.SampleDesc,
-                            Layout: desc.resource_desc.Layout,
-                            Flags: desc.resource_desc.Flags,
-                            // TODO: This is the only new field
-                            SamplerFeedbackMipRegion: D3D12_MIP_REGION::default(),
-                        };
+                        let resource_desc1 = Self::d3d12_resource_desc_1(
+                            desc.resource_desc,
+                            D3D12_MIP_REGION::default(),
+                        );
 
                         let resource_descs = &[resource_desc1];
 
@@ -963,21 +988,14 @@ impl Allocator {
                         ID3D12DeviceVersion::Device(device) => unsafe {
                             device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
                         },
+                        ID3D12DeviceVersion::Device10(device) => unsafe {
+                            device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
+                        },
                         ID3D12DeviceVersion::Device12(device) => unsafe {
-                            let resource_desc1 = D3D12_RESOURCE_DESC1 {
-                                Dimension: desc.resource_desc.Dimension,
-                                Alignment: desc.resource_desc.Alignment,
-                                Width: desc.resource_desc.Width,
-                                Height: desc.resource_desc.Height,
-                                DepthOrArraySize: desc.resource_desc.DepthOrArraySize,
-                                MipLevels: desc.resource_desc.MipLevels,
-                                Format: desc.resource_desc.Format,
-                                SampleDesc: desc.resource_desc.SampleDesc,
-                                Layout: desc.resource_desc.Layout,
-                                Flags: desc.resource_desc.Flags,
-                                // TODO: This is the only new field
-                                SamplerFeedbackMipRegion: D3D12_MIP_REGION::default(),
-                            };
+                            let resource_desc1 = Self::d3d12_resource_desc_1(
+                                desc.resource_desc,
+                                D3D12_MIP_REGION::default(),
+                            );
 
                             let resource_descs = &[resource_desc1];
 
@@ -1032,6 +1050,34 @@ impl Allocator {
                                 allocation.offset(),
                                 desc.resource_desc,
                                 initial_state,
+                                None,
+                                &mut result,
+                            )
+                        }
+                        (
+                            ID3D12DeviceVersion::Device10(device),
+                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                        ) => {
+                            let resource_desc1 = D3D12_RESOURCE_DESC1 {
+                                Dimension: desc.resource_desc.Dimension,
+                                Alignment: desc.resource_desc.Alignment,
+                                Width: desc.resource_desc.Width,
+                                Height: desc.resource_desc.Height,
+                                DepthOrArraySize: desc.resource_desc.DepthOrArraySize,
+                                MipLevels: desc.resource_desc.MipLevels,
+                                Format: desc.resource_desc.Format,
+                                SampleDesc: desc.resource_desc.SampleDesc,
+                                Layout: desc.resource_desc.Layout,
+                                Flags: desc.resource_desc.Flags,
+                                // TODO: This is the only new field
+                                SamplerFeedbackMipRegion: D3D12_MIP_REGION::default(),
+                            };
+                            device.CreatePlacedResource2(
+                                allocation.heap(),
+                                allocation.offset(),
+                                &resource_desc1,
+                                initial_layout,
+                                None,
                                 None,
                                 &mut result,
                             )
