@@ -887,24 +887,36 @@ impl Allocator {
                     desc.clear_value.map(|v| -> *const _ { v });
 
                 if let Err(e) = unsafe {
-                    match (desc.initial_state_or_layout, &self.device) {
-                        (ResourceStateOrBarrierLayout::ResourceState(initial_state), device) => {
-                            if !desc.castable_formats.is_empty() {
-                                warn!("Requesting castable formats, but this feature requires ID3D12Device12");
-                            }
-
-                            device.CreateCommittedResource(
+                    match (&self.device, desc.initial_state_or_layout) {
+                        (_, ResourceStateOrBarrierLayout::ResourceState(_))
+                            if !desc.castable_formats.is_empty() =>
+                        {
+                            return Err(AllocationError::CastableFormatsRequiresEnhancedBarriers)
+                        }
+                        (
+                            ID3D12DeviceVersion::Device12(device),
+                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                        ) => {
+                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
+                            device.CreateCommittedResource3(
                                 *heap_properties,
                                 *heap_flags,
-                                desc.resource_desc,
-                                initial_state,
+                                &resource_desc1,
+                                initial_layout,
                                 clear_value,
+                                None, // TODO
+                                Some(desc.castable_formats),
                                 &mut result,
                             )
                         }
+                        (_, ResourceStateOrBarrierLayout::BarrierLayout(_))
+                            if !desc.castable_formats.is_empty() =>
+                        {
+                            return Err(AllocationError::CastableFormatsRequiresAtLeastDevice12)
+                        }
                         (
-                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                             ID3D12DeviceVersion::Device10(device),
+                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                         ) => {
                             let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
 
@@ -919,24 +931,19 @@ impl Allocator {
                                 &mut result,
                             )
                         }
-                        (
-                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
-                            ID3D12DeviceVersion::Device12(device),
-                        ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
-
-                            device.CreateCommittedResource3(
+                        (_, ResourceStateOrBarrierLayout::BarrierLayout(_)) => {
+                            return Err(AllocationError::BarrierLayoutNeedsDevice10)
+                        }
+                        (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
+                            device.CreateCommittedResource(
                                 *heap_properties,
                                 *heap_flags,
-                                &resource_desc1,
-                                initial_layout,
+                                desc.resource_desc,
+                                initial_state,
                                 clear_value,
-                                None, // TODO
-                                Some(desc.castable_formats),
                                 &mut result,
                             )
                         }
-                        _ => return Err(AllocationError::BarrierLayoutNeedsDevice10),
                     }
                 } {
                     return Err(AllocationError::Internal(format!(
@@ -993,39 +1000,15 @@ impl Allocator {
 
                 let mut result: Option<ID3D12Resource> = None;
                 if let Err(e) = unsafe {
-                    match (desc.initial_state_or_layout, &self.device) {
-                        (ResourceStateOrBarrierLayout::ResourceState(initial_state), device) => {
-                            if !desc.castable_formats.is_empty() {
-                                warn!("Requesting castable formats, but this feature requires ID3D12Device12");
-                            }
-
-                            device.CreatePlacedResource(
-                                allocation.heap(),
-                                allocation.offset(),
-                                desc.resource_desc,
-                                initial_state,
-                                None,
-                                &mut result,
-                            )
+                    match (&self.device, desc.initial_state_or_layout) {
+                        (_, ResourceStateOrBarrierLayout::ResourceState(_))
+                            if !desc.castable_formats.is_empty() =>
+                        {
+                            return Err(AllocationError::CastableFormatsRequiresEnhancedBarriers)
                         }
                         (
-                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
-                            ID3D12DeviceVersion::Device10(device),
-                        ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
-                            device.CreatePlacedResource2(
-                                allocation.heap(),
-                                allocation.offset(),
-                                &resource_desc1,
-                                initial_layout,
-                                None,
-                                None,
-                                &mut result,
-                            )
-                        }
-                        (
-                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                             ID3D12DeviceVersion::Device12(device),
+                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                         ) => {
                             let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
                             device.CreatePlacedResource2(
@@ -1038,7 +1021,39 @@ impl Allocator {
                                 &mut result,
                             )
                         }
-                        _ => return Err(AllocationError::BarrierLayoutNeedsDevice10),
+                        (_, ResourceStateOrBarrierLayout::BarrierLayout(_))
+                            if !desc.castable_formats.is_empty() =>
+                        {
+                            return Err(AllocationError::CastableFormatsRequiresAtLeastDevice12)
+                        }
+                        (
+                            ID3D12DeviceVersion::Device10(device),
+                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                        ) => {
+                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
+                            device.CreatePlacedResource2(
+                                allocation.heap(),
+                                allocation.offset(),
+                                &resource_desc1,
+                                initial_layout,
+                                None,
+                                None,
+                                &mut result,
+                            )
+                        }
+                        (_, ResourceStateOrBarrierLayout::BarrierLayout(_)) => {
+                            return Err(AllocationError::BarrierLayoutNeedsDevice10)
+                        }
+                        (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
+                            device.CreatePlacedResource(
+                                allocation.heap(),
+                                allocation.offset(),
+                                desc.resource_desc,
+                                initial_state,
+                                None,
+                                &mut result,
+                            )
+                        }
                     }
                 } {
                     return Err(AllocationError::Internal(format!(

@@ -16,6 +16,10 @@ pub enum AllocationError {
     Internal(String),
     #[error("Initial `BARRIER_LAYOUT` needs at least `Device10`")]
     BarrierLayoutNeedsDevice10,
+    #[error("Castable formats require enhanced barriers")]
+    CastableFormatsRequiresEnhancedBarriers,
+    #[error("Castable formats require at least `Device12`")]
+    CastableFormatsRequiresAtLeastDevice12,
 }
 
 pub type Result<V, E = AllocationError> = ::std::result::Result<V, E>;
