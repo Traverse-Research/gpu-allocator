@@ -813,10 +813,7 @@ impl Allocator {
         }
     }
 
-    fn d3d12_resource_desc_1(
-        desc: &D3D12_RESOURCE_DESC,
-        sampler_feedback_mip_region: D3D12_MIP_REGION,
-    ) -> D3D12_RESOURCE_DESC1 {
+    fn d3d12_resource_desc_1(desc: &D3D12_RESOURCE_DESC) -> D3D12_RESOURCE_DESC1 {
         D3D12_RESOURCE_DESC1 {
             Dimension: desc.Dimension,
             Alignment: desc.Alignment,
@@ -829,7 +826,7 @@ impl Allocator {
             Layout: desc.Layout,
             Flags: desc.Flags,
             // TODO: This is the only new field
-            SamplerFeedbackMipRegion: sampler_feedback_mip_region,
+            SamplerFeedbackMipRegion: D3D12_MIP_REGION::default(),
         }
     }
 
@@ -845,8 +842,7 @@ impl Allocator {
                 device.GetResourceAllocationInfo(0, &[*desc.resource_desc])
             },
             ID3D12DeviceVersion::Device12(device) => unsafe {
-                let resource_desc1 =
-                    Self::d3d12_resource_desc_1(desc.resource_desc, D3D12_MIP_REGION::default());
+                let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
 
                 let resource_descs = &[resource_desc1];
 
@@ -910,10 +906,7 @@ impl Allocator {
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                             ID3D12DeviceVersion::Device10(device),
                         ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(
-                                desc.resource_desc,
-                                D3D12_MIP_REGION::default(),
-                            );
+                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
 
                             device.CreateCommittedResource3(
                                 *heap_properties,
@@ -930,10 +923,7 @@ impl Allocator {
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                             ID3D12DeviceVersion::Device12(device),
                         ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(
-                                desc.resource_desc,
-                                D3D12_MIP_REGION::default(),
-                            );
+                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
 
                             device.CreateCommittedResource3(
                                 *heap_properties,
@@ -1022,10 +1012,7 @@ impl Allocator {
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                             ID3D12DeviceVersion::Device10(device),
                         ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(
-                                desc.resource_desc,
-                                D3D12_MIP_REGION::default(),
-                            );
+                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
                             device.CreatePlacedResource2(
                                 allocation.heap(),
                                 allocation.offset(),
@@ -1040,10 +1027,7 @@ impl Allocator {
                             ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
                             ID3D12DeviceVersion::Device12(device),
                         ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(
-                                desc.resource_desc,
-                                D3D12_MIP_REGION::default(),
-                            );
+                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
                             device.CreatePlacedResource2(
                                 allocation.heap(),
                                 allocation.offset(),
