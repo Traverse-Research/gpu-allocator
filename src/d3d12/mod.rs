@@ -246,7 +246,7 @@ pub enum ID3D12DeviceVersion {
     /// Required for enhanced barrier support, i.e. when using
     /// [`ResourceStateOrBarrierLayout::BarrierLayout`].
     Device10(ID3D12Device10),
-    /// Required for castable formats support, requires the use of enhanced barrier
+    /// Required for castable formats support, implies use of enhanced barriers
     Device12(ID3D12Device12),
 }
 
