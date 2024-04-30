@@ -5,7 +5,6 @@ use crate::{
     allocator, AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
 use log::{debug, Level};
-use metal::MTLStorageMode;
 
 fn memory_location_to_metal(location: MemoryLocation) -> metal::MTLResourceOptions {
     match location {
@@ -105,10 +104,10 @@ impl<'a> AllocationCreateDesc<'a> {
         Self {
             name,
             location: match desc.storage_mode() {
-                MTLStorageMode::Shared | MTLStorageMode::Managed | MTLStorageMode::Memoryless => {
-                    MemoryLocation::Unknown
-                }
-                MTLStorageMode::Private => MemoryLocation::GpuOnly,
+                metal::MTLStorageMode::Shared
+                | metal::MTLStorageMode::Managed
+                | metal::MTLStorageMode::Memoryless => MemoryLocation::Unknown,
+                metal::MTLStorageMode::Private => MemoryLocation::GpuOnly,
             },
             size: size_and_align.size,
             alignment: size_and_align.align,
@@ -195,7 +194,8 @@ impl MemoryType {
     ) -> Result<Allocation> {
         let allocation_type = allocator::AllocationType::Linear;
 
-        let memblock_size = if self.heap_properties.storage_mode() == MTLStorageMode::Private {
+        let memblock_size = if self.heap_properties.storage_mode() == metal::MTLStorageMode::Private
+        {
             allocation_sizes.device_memblock_size
         } else {
             allocation_sizes.host_memblock_size
