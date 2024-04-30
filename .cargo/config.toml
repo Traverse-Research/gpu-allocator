@@ -1,3 +1,6 @@
+[registries.traverse-pub]
+index = "sparse+https://cargo.cloudsmith.io/traverse-research/public-foked-releases/"
+
 [target.'cfg(all())']
 rustflags = [
     # BEGIN - Embark standard lints v6 for Rust 1.55+

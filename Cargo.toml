@@ -1,6 +1,6 @@
 [package]
 name = "gpu-allocator"
-version = "0.26.0"
+version = "0.26.4"
 authors = ["Traverse Research <opensource@traverseresearch.nl>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -8,9 +8,10 @@ description = "Memory allocator for GPU memory in Vulkan and DirectX 12"
 categories = ["rendering", "rendering::graphics-api"]
 homepage = "https://github.com/Traverse-Research/gpu-allocator"
 repository = "https://github.com/Traverse-Research/gpu-allocator"
-keywords = ["vulkan", "memory", "allocator"]
+keywords = ["vulkan", "directx", "d3d12", "metal", "memory", "allocator"]
 documentation = "https://docs.rs/gpu-allocator/"
 rust-version = "1.69"
+publish = ["traverse-pub"]
 
 include = [
     "/README.md",
@@ -34,7 +35,7 @@ egui = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 egui_extras = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-metal = { version = "0.28.0", git = "https://github.com/gfx-rs/metal-rs", rev = "0d6214f", default-features = false, features = ["link", "dispatch"], optional = true }
+metal = { version = "0.28.0", default-features = false, features = ["link", "dispatch"], optional = true, registry = "traverse-pub" }
 
 [target.'cfg(windows)'.dependencies]
 # Only needed for public-winapi interop helpers
