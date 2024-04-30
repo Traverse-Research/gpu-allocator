@@ -2,6 +2,7 @@
 
 [![Actions Status](https://img.shields.io/github/actions/workflow/status/Traverse-Research/gpu-allocator/ci.yml?branch=main&logo=github)](https://github.com/Traverse-Research/gpu-allocator/actions)
 [![Latest version](https://img.shields.io/crates/v/gpu-allocator.svg?logo=rust)](https://crates.io/crates/gpu-allocator)
+[![Latest version of 'gpu-allocator' @ Cloudsmith](https://api-prd.cloudsmith.io/v1/badges/version/traverse-research/public-foked-releases/cargo/gpu-allocator/latest/x/?render=true&show_latest=true)](https://cloudsmith.io/~traverse-research/repos/public-foked-releases/packages/detail/cargo/gpu-allocator/latest/)
 [![Docs](https://img.shields.io/docsrs/gpu-allocator?logo=docs.rs)](https://docs.rs/gpu-allocator/)
 [![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![LICENSE](https://img.shields.io/badge/license-apache-blue.svg?logo=apache)](LICENSE-APACHE)
