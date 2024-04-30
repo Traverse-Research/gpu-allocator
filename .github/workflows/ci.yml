@@ -8,10 +8,12 @@ jobs:
     strategy:
       matrix:
         include:
-        - os: ubuntu-latest
-          features: vulkan
-        - os: windows-latest
-          features: vulkan,d3d12
+          - os: ubuntu-latest
+            features: vulkan
+          - os: windows-latest
+            features: vulkan,d3d12
+          - os: macos-latest
+            features: vulkan,metal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -23,10 +25,12 @@ jobs:
     strategy:
       matrix:
         include:
-        - os: ubuntu-latest
-          features: vulkan,visualizer
-        - os: windows-latest
-          features: vulkan,visualizer,d3d12,public-winapi
+          - os: ubuntu-latest
+            features: vulkan,visualizer
+          - os: windows-latest
+            features: vulkan,visualizer,d3d12,public-winapi
+          - os: macos-latest
+            features: vulkan,visualizer,metal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -48,10 +52,12 @@ jobs:
     strategy:
       matrix:
         include:
-        - os: ubuntu-latest
-          features: vulkan,visualizer
-        - os: windows-latest
-          features: vulkan,visualizer,d3d12,public-winapi
+          - os: ubuntu-latest
+            features: vulkan,visualizer
+          - os: windows-latest
+            features: vulkan,visualizer,d3d12,public-winapi
+          - os: macos-latest
+            features: vulkan,visualizer,metal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -62,13 +68,27 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
       - name: Generate lockfile with minimal dependency versions
         run: cargo +nightly generate-lockfile -Zminimal-versions
+      - name: Bump `libc 0.1` version to `0.2` via `malloc_buf 0.0.6`
+        if: ${{ runner.os == 'macOS' }}
+        run: |
+          # The 7-year-unmaintained malloc_buf (depended on via metal-rs->objc)
+          # only allows using libc 0.2 since the 0.0.6 release, which is necessary
+          # since the libc 0.1 range no longer compiles.  Fortunately objc which
+          # is also unmaintained for 4 years depends on malloc_buf >=0.0,<0.1.0,
+          # allowing the 0.0.6 release to be used (but not the 1.0.0 release).
+          cargo update -p malloc_buf --precise 0.0.6
+          # Force 0.1.2, as older versions use the broken `gcc` crate
+          cargo update -p objc_exception --precise 0.1.2
       - name: Cargo clippy with minimal-versions
         run: cargo +stable clippy --workspace --all-targets --features ${{ matrix.features }} --no-default-features -- -D warnings
 
   doc:
     name: Build documentation
-    # Windows supports the entire feature surface
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        # Rely on Windows and Mac to also compile the Vulkan portion (via --all-features)
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     env:
       RUSTDOCFLAGS: -Dwarnings
     steps:

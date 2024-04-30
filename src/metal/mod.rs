@@ -374,7 +374,7 @@ impl Allocator {
     }
 
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
-        let heap_types = vec![
+        let heap_types = [
             (MemoryLocation::GpuOnly, {
                 let heap_desc = metal::HeapDescriptor::new();
                 heap_desc.set_cpu_cache_mode(metal::MTLCPUCacheMode::DefaultCache);
