@@ -35,34 +35,34 @@ impl Allocation {
         let resource =
             self.heap
                 .new_buffer_with_offset(self.size, self.heap.resource_options(), self.offset);
-        resource.map_or(None, |resource| {
+        if let Some(resource) = &resource {
             if let Some(name) = &self.name {
                 resource.set_label(name);
             }
-            Some(resource)
-        })
+        }
+        resource
     }
 
     pub fn make_texture(&self, desc: &metal::TextureDescriptor) -> Option<metal::Texture> {
         let resource = self.heap.new_texture_with_offset(desc, self.offset);
-        resource.map_or(None, |resource| {
+        if let Some(resource) = &resource {
             if let Some(name) = &self.name {
                 resource.set_label(name);
             }
-            Some(resource)
-        })
+        }
+        resource
     }
 
     pub fn make_acceleration_structure(&self) -> Option<metal::AccelerationStructure> {
         let resource = self
             .heap
             .new_acceleration_structure_with_size_offset(self.size, self.offset);
-        resource.map_or(None, |resource| {
+        if let Some(resource) = &resource {
             if let Some(name) = &self.name {
                 resource.set_label(name);
             }
-            Some(resource)
-        })
+        }
+        resource
     }
 
     fn is_null(&self) -> bool {
