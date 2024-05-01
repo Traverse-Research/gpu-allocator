@@ -161,10 +161,11 @@
 //! ```no_run
 //! # #[cfg(feature = "metal")]
 //! # fn main() {
-//! # use std::sync::Arc;
 //! use gpu_allocator::metal::*;
-//!
-//! # let device = Arc::new(metal::Device::system_default().unwrap());
+//! # use objc2::rc::Id;
+//! use objc2_metal as metal;
+//! # let device = unsafe { metal::MTLCreateSystemDefaultDevice() };
+//! # let device = unsafe { Id::from_raw(device) }.expect("No MTLDevice found");
 //! let mut allocator = Allocator::new(&AllocatorCreateDesc {
 //!     device: device.clone(),
 //!     debug_settings: Default::default(),
@@ -179,22 +180,23 @@
 //! ```no_run
 //! # #[cfg(feature = "metal")]
 //! # fn main() {
-//! # use std::sync::Arc;
 //! use gpu_allocator::metal::*;
 //! use gpu_allocator::MemoryLocation;
-//! # let device = Arc::new(metal::Device::system_default().unwrap());
+//! # use objc2::rc::Id;
+//! use objc2_metal as metal;
+//! # let device = unsafe { metal::MTLCreateSystemDefaultDevice() };
+//! # let device = unsafe { Id::from_raw(device) }.expect("No MTLDevice found");
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
 //! #     device: device.clone(),
 //! #     debug_settings: Default::default(),
 //! #     allocation_sizes: Default::default(),
 //! # })
 //! # .unwrap();
-//!
 //! let allocation_desc = AllocationCreateDesc::buffer(
 //!     &device,
 //!     "Example allocation",
 //!     512, // size in bytes
-//!     gpu_allocator::MemoryLocation::GpuOnly,
+//!     MemoryLocation::GpuOnly,
 //! );
 //! let allocation = allocator.allocate(&allocation_desc).unwrap();
 //! let resource = allocation.make_buffer().unwrap();
@@ -206,6 +208,7 @@
 //! # #[cfg(not(feature = "metal"))]
 //! # fn main() {}
 //! ```
+#![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 
 mod result;
 pub use result::*;
