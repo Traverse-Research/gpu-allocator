@@ -1,16 +1,20 @@
-#![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 use std::{backtrace::Backtrace, sync::Arc};
+
+use log::debug;
+use metal::{MTLDevice as _, MTLHeap as _, MTLResource as _};
+use objc2::{rc::Retained, runtime::ProtocolObject};
+use objc2_foundation::NSString;
+use objc2_metal as metal;
 
 use crate::{
     allocator, AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
-use log::{debug, Level};
 
 fn memory_location_to_metal(location: MemoryLocation) -> metal::MTLResourceOptions {
     match location {
-        MemoryLocation::GpuOnly => metal::MTLResourceOptions::StorageModePrivate,
+        MemoryLocation::GpuOnly => metal::MTLResourceOptions::MTLResourceStorageModePrivate,
         MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu | MemoryLocation::Unknown => {
-            metal::MTLResourceOptions::StorageModeShared
+            metal::MTLResourceOptions::MTLResourceStorageModeShared
         }
     }
 }
@@ -21,44 +25,57 @@ pub struct Allocation {
     size: u64,
     memory_block_index: usize,
     memory_type_index: usize,
-    heap: Arc<metal::Heap>,
+    heap: Retained<ProtocolObject<dyn metal::MTLHeap>>,
     name: Option<Box<str>>,
 }
 
 impl Allocation {
-    pub fn heap(&self) -> &metal::Heap {
-        self.heap.as_ref()
+    pub fn heap(&self) -> &ProtocolObject<dyn metal::MTLHeap> {
+        &self.heap
     }
 
-    pub fn make_buffer(&self) -> Option<metal::Buffer> {
-        let resource =
+    pub fn make_buffer(&self) -> Option<Retained<ProtocolObject<dyn metal::MTLBuffer>>> {
+        let resource = unsafe {
+            self.heap.newBufferWithLength_options_offset(
+                self.size as usize,
+                self.heap.resourceOptions(),
+                self.offset as usize,
+            )
+        };
+        if let Some(resource) = &resource {
+            if let Some(name) = &self.name {
+                resource.setLabel(Some(&NSString::from_str(name)));
+            }
+        }
+        resource
+    }
+
+    pub fn make_texture(
+        &self,
+        desc: &metal::MTLTextureDescriptor,
+    ) -> Option<Retained<ProtocolObject<dyn metal::MTLTexture>>> {
+        let resource = unsafe {
             self.heap
-                .new_buffer_with_offset(self.size, self.heap.resource_options(), self.offset);
+                .newTextureWithDescriptor_offset(desc, self.offset as usize)
+        };
         if let Some(resource) = &resource {
             if let Some(name) = &self.name {
-                resource.set_label(name);
+                resource.setLabel(Some(&NSString::from_str(name)));
             }
         }
         resource
     }
 
-    pub fn make_texture(&self, desc: &metal::TextureDescriptor) -> Option<metal::Texture> {
-        let resource = self.heap.new_texture_with_offset(desc, self.offset);
+    pub fn make_acceleration_structure(
+        &self,
+    ) -> Option<Retained<ProtocolObject<dyn metal::MTLAccelerationStructure>>> {
+        let resource = unsafe {
+            self.heap
+                .newAccelerationStructureWithSize_offset(self.size as usize, self.offset as usize)
+        };
         if let Some(resource) = &resource {
             if let Some(name) = &self.name {
-                resource.set_label(name);
-            }
-        }
-        resource
-    }
-
-    pub fn make_acceleration_structure(&self) -> Option<metal::AccelerationStructure> {
-        let resource = self
-            .heap
-            .new_acceleration_structure_with_size_offset(self.size, self.offset);
-        if let Some(resource) = &resource {
-            if let Some(name) = &self.name {
-                resource.set_label(name);
+                resource.setLabel(Some(&NSString::from_str(name)));
             }
         }
         resource
@@ -80,63 +97,69 @@ pub struct AllocationCreateDesc<'a> {
 
 impl<'a> AllocationCreateDesc<'a> {
     pub fn buffer(
-        device: &metal::Device,
+        device: &ProtocolObject<dyn metal::MTLDevice>,
         name: &'a str,
         length: u64,
         location: MemoryLocation,
     ) -> AllocationCreateDesc<'a> {
-        let size_and_align =
-            device.heap_buffer_size_and_align(length, memory_location_to_metal(location));
+        let size_and_align = device.heapBufferSizeAndAlignWithLength_options(
+            length as usize,
+            memory_location_to_metal(location),
+        );
         Self {
             name,
             location,
-            size: size_and_align.size,
-            alignment: size_and_align.align,
+            size: size_and_align.size as u64,
+            alignment: size_and_align.align as u64,
         }
     }
 
     pub fn texture(
-        device: &metal::Device,
+        device: &ProtocolObject<dyn metal::MTLDevice>,
         name: &'a str,
-        desc: &metal::TextureDescriptor,
+        desc: &metal::MTLTextureDescriptor,
     ) -> AllocationCreateDesc<'a> {
-        let size_and_align = device.heap_texture_size_and_align(desc);
+        let size_and_align = device.heapTextureSizeAndAlignWithDescriptor(desc);
         Self {
             name,
-            location: match desc.storage_mode() {
+            location: match desc.storageMode() {
                 metal::MTLStorageMode::Shared
                 | metal::MTLStorageMode::Managed
                 | metal::MTLStorageMode::Memoryless => MemoryLocation::Unknown,
                 metal::MTLStorageMode::Private => MemoryLocation::GpuOnly,
+                metal::MTLStorageMode(mode @ 4..) => todo!("Unknown storage mode {mode}"),
             },
-            size: size_and_align.size,
-            alignment: size_and_align.align,
+            size: size_and_align.size as u64,
+            alignment: size_and_align.align as u64,
         }
     }
 
     pub fn acceleration_structure_with_size(
-        device: &metal::Device,
+        device: &ProtocolObject<dyn metal::MTLDevice>,
         name: &'a str,
-        size: u64,
+        size: u64, // TODO: usize
         location: MemoryLocation,
     ) -> AllocationCreateDesc<'a> {
-        let size_and_align = device.heap_acceleration_structure_size_and_align_with_size(size);
+        // TODO: See if we can mark this function as safe, after checking what happens if size is too large?
+        // What other preconditions need to be upheld?
+        let size_and_align =
+            unsafe { device.heapAccelerationStructureSizeAndAlignWithSize(size as usize) };
         Self {
             name,
             location,
-            size: size_and_align.size,
-            alignment: size_and_align.align,
+            size: size_and_align.size as u64,
+            alignment: size_and_align.align as u64,
         }
     }
 }
 pub struct Allocator {
-    device: Arc<metal::Device>,
+    device: Retained<ProtocolObject<dyn metal::MTLDevice>>,
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
     allocation_sizes: AllocationSizes,
 }
 pub struct AllocatorCreateDesc {
-    pub device: Arc<metal::Device>,
+    pub device: Retained<ProtocolObject<dyn metal::MTLDevice>>,
     pub debug_settings: AllocatorDebugSettings,
     pub allocation_sizes: AllocationSizes,
 }
@@ -145,21 +168,26 @@ pub struct CommittedAllocationStatistics {
     pub total_size: u64,
 }
 struct MemoryBlock {
-    heap: Arc<metal::Heap>,
-    _size: u64,
+    heap: Retained<ProtocolObject<dyn metal::MTLHeap>>,
     sub_allocator: Box<dyn allocator::SubAllocator>,
 }
 
 impl MemoryBlock {
     fn new(
-        device: &Arc<metal::Device>,
+        device: &ProtocolObject<dyn metal::MTLDevice>,
         size: u64,
-        heap_descriptor: &metal::HeapDescriptor,
+        heap_descriptor: &metal::MTLHeapDescriptor,
         dedicated: bool,
     ) -> Result<Self> {
-        heap_descriptor.set_size(size);
+        heap_descriptor.setSize(size as usize);
 
-        let heap = Arc::new(device.new_heap(heap_descriptor));
+        let heap = device
+            .newHeapWithDescriptor(heap_descriptor)
+            .ok_or_else(|| AllocationError::Internal("No MTLHeap was returned".to_string()))?;
+
+        heap.setLabel(Some(&NSString::from_str(&format!(
+            "MemoryBlock for {heap_descriptor:?}"
+        ))));
 
         let sub_allocator: Box<dyn allocator::SubAllocator> = if dedicated {
             Box::new(allocator::DedicatedBlockAllocator::new(size))
@@ -169,7 +197,6 @@ impl MemoryBlock {
 
         Ok(Self {
             heap,
-            _size: size,
             sub_allocator,
         })
     }
@@ -179,7 +206,7 @@ struct MemoryType {
     memory_blocks: Vec<Option<MemoryBlock>>,
     _committed_allocations: CommittedAllocationStatistics,
     memory_location: MemoryLocation,
-    heap_properties: metal::HeapDescriptor,
+    heap_properties: Retained<metal::MTLHeapDescriptor>,
     memory_type_index: usize,
     active_general_blocks: usize,
 }
@@ -187,14 +214,14 @@ struct MemoryType {
 impl MemoryType {
     fn allocate(
         &mut self,
-        device: &Arc<metal::Device>,
+        device: &ProtocolObject<dyn metal::MTLDevice>,
         desc: &AllocationCreateDesc<'_>,
         backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = allocator::AllocationType::Linear;
 
-        let memblock_size = if self.heap_properties.storage_mode() == metal::MTLStorageMode::Private
+        let memblock_size = if self.heap_properties.storageMode() == metal::MTLStorageMode::Private
         {
             allocation_sizes.device_memblock_size
         } else {
@@ -359,37 +386,33 @@ pub struct ResourceCreateDesc {}
 pub struct Resource {}
 
 impl Allocator {
-    pub fn device(&self) -> &metal::Device {
-        todo!()
-    }
-
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
         let heap_types = [
             (MemoryLocation::GpuOnly, {
-                let heap_desc = metal::HeapDescriptor::new();
-                heap_desc.set_cpu_cache_mode(metal::MTLCPUCacheMode::DefaultCache);
-                heap_desc.set_storage_mode(metal::MTLStorageMode::Private);
-                heap_desc.set_heap_type(metal::MTLHeapType::Placement);
+                let heap_desc = unsafe { metal::MTLHeapDescriptor::new() };
+                heap_desc.setCpuCacheMode(metal::MTLCPUCacheMode::DefaultCache);
+                heap_desc.setStorageMode(metal::MTLStorageMode::Private);
+                heap_desc.setType(metal::MTLHeapType::Placement);
                 heap_desc
             }),
             (MemoryLocation::CpuToGpu, {
-                let heap_desc = metal::HeapDescriptor::new();
-                heap_desc.set_cpu_cache_mode(metal::MTLCPUCacheMode::WriteCombined);
-                heap_desc.set_storage_mode(metal::MTLStorageMode::Shared);
-                heap_desc.set_heap_type(metal::MTLHeapType::Placement);
+                let heap_desc = unsafe { metal::MTLHeapDescriptor::new() };
+                heap_desc.setCpuCacheMode(metal::MTLCPUCacheMode::WriteCombined);
+                heap_desc.setStorageMode(metal::MTLStorageMode::Shared);
+                heap_desc.setType(metal::MTLHeapType::Placement);
                 heap_desc
             }),
             (MemoryLocation::GpuToCpu, {
-                let heap_desc = metal::HeapDescriptor::new();
-                heap_desc.set_cpu_cache_mode(metal::MTLCPUCacheMode::DefaultCache);
-                heap_desc.set_storage_mode(metal::MTLStorageMode::Shared);
-                heap_desc.set_heap_type(metal::MTLHeapType::Placement);
+                let heap_desc = unsafe { metal::MTLHeapDescriptor::new() };
+                heap_desc.setCpuCacheMode(metal::MTLCPUCacheMode::DefaultCache);
+                heap_desc.setStorageMode(metal::MTLStorageMode::Shared);
+                heap_desc.setType(metal::MTLHeapType::Placement);
                 heap_desc
             }),
         ];
 
         let memory_types = heap_types
-            .iter()
+            .into_iter()
             .enumerate()
             .map(|(i, (memory_location, heap_descriptor))| MemoryType {
                 memory_blocks: vec![],
@@ -397,8 +420,8 @@ impl Allocator {
                     num_allocations: 0,
                     total_size: 0,
                 },
-                memory_location: *memory_location,
-                heap_properties: heap_descriptor.clone(),
+                memory_location,
+                heap_properties: heap_descriptor,
                 memory_type_index: i,
                 active_general_blocks: 0,
             })
@@ -468,21 +491,17 @@ impl Allocator {
         Ok(())
     }
 
-    pub fn get_heaps(&self) -> Vec<&metal::HeapRef> {
-        // Get all memory blocks
-        let mut heaps: Vec<&metal::HeapRef> = Vec::new();
-        for memory_type in &self.memory_types {
-            for block in memory_type.memory_blocks.iter().flatten() {
-                heaps.push(block.heap.as_ref());
-            }
-        }
-        heaps
-    }
-
-    pub fn rename_allocation(&mut self, _allocation: &mut Allocation, _name: &str) -> Result<()> {
-        todo!()
-    }
-    pub fn report_memory_leaks(&self, _log_level: Level) {
-        todo!()
+    /// Returns heaps for all memory blocks
+    pub fn heaps(&self) -> Vec<&ProtocolObject<dyn metal::MTLHeap>> {
+        self.memory_types
+            .iter()
+            .flat_map(|memory_type| {
+                memory_type
+                    .memory_blocks
+                    .iter()
+                    .flatten()
+                    .map(|block| block.heap.as_ref())
+            })
+            .collect()
     }
 }

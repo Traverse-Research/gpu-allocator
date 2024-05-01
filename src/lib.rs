@@ -206,6 +206,7 @@
 //! # #[cfg(not(feature = "metal"))]
 //! # fn main() {}
 //! ```
+#![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 
 mod result;
 pub use result::*;
