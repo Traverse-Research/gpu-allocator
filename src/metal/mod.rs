@@ -2,7 +2,8 @@
 use std::{backtrace::Backtrace, sync::Arc};
 
 use crate::{
-    allocator, AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
+    allocator::{self, AllocatorReport, MemoryBlockReport},
+    AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
 use log::{debug, Level};
 
@@ -146,7 +147,7 @@ pub struct CommittedAllocationStatistics {
 }
 struct MemoryBlock {
     heap: Arc<metal::Heap>,
-    _size: u64,
+    size: u64,
     sub_allocator: Box<dyn allocator::SubAllocator>,
 }
 
@@ -169,7 +170,7 @@ impl MemoryBlock {
 
         Ok(Self {
             heap,
-            _size: size,
+            size,
             sub_allocator,
         })
     }
@@ -484,5 +485,32 @@ impl Allocator {
     }
     pub fn report_memory_leaks(&self, _log_level: Level) {
         todo!()
+    }
+
+    pub fn generate_report(&self) -> AllocatorReport {
+        let mut allocations = vec![];
+        let mut blocks = vec![];
+        let mut total_reserved_bytes = 0;
+
+        for memory_type in &self.memory_types {
+            for block in memory_type.memory_blocks.iter().flatten() {
+                total_reserved_bytes += block.size;
+                let first_allocation = allocations.len();
+                allocations.extend(block.sub_allocator.report_allocations());
+                blocks.push(MemoryBlockReport {
+                    size: block.size,
+                    allocations: first_allocation..allocations.len(),
+                });
+            }
+        }
+
+        let total_allocated_bytes = allocations.iter().map(|report| report.size).sum();
+
+        AllocatorReport {
+            allocations,
+            blocks,
+            total_allocated_bytes,
+            total_reserved_bytes,
+        }
     }
 }

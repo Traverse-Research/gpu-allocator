@@ -116,6 +116,7 @@ impl SubAllocator for DedicatedBlockAllocator {
                 .name
                 .clone()
                 .unwrap_or_else(|| "<Unnamed Dedicated allocation>".to_owned()),
+            offset: 0,
             size: self.size,
             #[cfg(feature = "visualizer")]
             backtrace: self.backtrace.clone(),
