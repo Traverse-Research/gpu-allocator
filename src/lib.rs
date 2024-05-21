@@ -226,7 +226,7 @@ pub mod vulkan;
 #[cfg(all(windows, feature = "d3d12"))]
 pub mod d3d12;
 
-#[cfg(all(any(target_os = "macos", target_os = "ios"), feature = "metal"))]
+#[cfg(all(target_vendor = "apple", feature = "metal"))]
 pub mod metal;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

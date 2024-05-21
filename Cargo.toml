@@ -33,7 +33,7 @@ ash = { version = "0.38", optional = true, default-features = false, features = 
 egui = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 egui_extras = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+[target.'cfg(target_vendor = "apple")'.dependencies]
 objc2 = { version = "0.5.2", default-features = false, optional = true }
 objc2-foundation = { version = "0.2", default-features = false, optional = true }
 objc2-metal = { version = "0.2.1", default-features = false, features = [
@@ -75,7 +75,7 @@ features = [
     "Win32_Graphics_Dxgi_Common",
 ]
 
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dev-dependencies]
+[target.'cfg(target_vendor = "apple")'.dev-dependencies]
 objc2-metal = { version = "0.2.1", default-features = false, features = [
     "MTLPixelFormat",
 ] }
