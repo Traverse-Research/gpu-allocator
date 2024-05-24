@@ -58,7 +58,7 @@ unsafe impl Sync for SendSyncPtr {}
 pub struct AllocatorCreateDesc {
     pub instance: ash::Instance,
     pub device: ash::Device,
-    pub physical_device: ash::vk::PhysicalDevice,
+    pub physical_device: vk::PhysicalDevice,
     pub debug_settings: AllocatorDebugSettings,
     pub buffer_device_address: bool,
     pub allocation_sizes: AllocationSizes,
@@ -737,7 +737,7 @@ impl fmt::Debug for Allocator {
 
 impl Allocator {
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
-        if desc.physical_device == ash::vk::PhysicalDevice::null() {
+        if desc.physical_device == vk::PhysicalDevice::null() {
             return Err(AllocationError::InvalidAllocatorCreateDesc(
                 "AllocatorCreateDesc field `physical_device` is null.".into(),
             ));

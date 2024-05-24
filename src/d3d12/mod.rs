@@ -271,12 +271,16 @@ pub struct AllocatorCreateDesc {
 }
 
 pub enum ResourceType<'a> {
-    /// Allocation equivalent to Dx12's CommittedResource.
+    /// Create a D3D12 [`CommittedResource`].
+    ///
+    /// [`CommittedResource`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createcommittedresource
     Committed {
         heap_properties: &'a D3D12_HEAP_PROPERTIES,
         heap_flags: D3D12_HEAP_FLAGS,
     },
-    /// Allocation equivalent to Dx12's PlacedResource.
+    /// Create a D3D12 [`PlacedResource`].
+    ///
+    /// [`PlacedResource`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createplacedresource
     Placed,
 }
 

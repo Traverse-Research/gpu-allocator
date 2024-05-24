@@ -92,7 +92,7 @@ impl AllocatorVisualizer {
                             let mut total_allocated = 0;
 
                             for block in mem_type.memory_blocks.iter().flatten() {
-                                total_block_size += block.sub_allocator.size();
+                                total_block_size += block.size;
                                 total_allocated += block.sub_allocator.allocated();
                             }
 
@@ -134,10 +134,7 @@ impl AllocatorVisualizer {
                                 let Some(block) = block else { continue };
 
                                 ui.collapsing(format!("Block: {}", block_idx), |ui| {
-                                    ui.label(format!(
-                                        "size: {} KiB",
-                                        block.sub_allocator.size() / 1024
-                                    ));
+                                    ui.label(format!("size: {} KiB", block.size / 1024));
                                     ui.label(format!(
                                         "allocated: {} KiB",
                                         block.sub_allocator.allocated() / 1024
@@ -205,7 +202,7 @@ impl AllocatorVisualizer {
                         "Memory type {}, Memory block {}, Block size: {} KiB",
                         window.memory_type_index,
                         window.block_index,
-                        memblock.sub_allocator.size() / 1024
+                        memblock.size / 1024
                     ));
 
                     window
