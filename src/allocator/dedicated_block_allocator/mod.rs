@@ -122,10 +122,6 @@ impl SubAllocator for DedicatedBlockAllocator {
         }]
     }
 
-    fn size(&self) -> u64 {
-        self.size
-    }
-
     fn allocated(&self) -> u64 {
         self.allocated
     }

@@ -68,11 +68,11 @@ fn create_d3d12_device(
                         )
                     };
                     match hr {
-                        winapi::shared::winerror::S_OK => {
+                        winerror::S_OK => {
                             info!("Using D3D12 feature level: {}.", feature_level_name);
                             Some(device)
                         }
-                        winapi::shared::winerror::E_NOINTERFACE => {
+                        winerror::E_NOINTERFACE => {
                             error!("ID3D12Device interface not supported.");
                             None
                         }
@@ -106,11 +106,7 @@ fn main() {
             )
         };
 
-        assert_eq!(
-            hr,
-            winapi::shared::winerror::S_OK,
-            "Failed to create DXGI factory",
-        );
+        assert_eq!(hr, winerror::S_OK, "Failed to create DXGI factory",);
         dxgi_factory
     };
 

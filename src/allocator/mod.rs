@@ -73,15 +73,7 @@ pub(crate) trait SubAllocator: SubAllocatorBase + std::fmt::Debug + Sync + Send 
     #[must_use]
     fn supports_general_allocations(&self) -> bool;
     #[must_use]
-    fn size(&self) -> u64;
-    #[must_use]
     fn allocated(&self) -> u64;
-
-    /// Helper function: reports how much memory is available in this suballocator
-    #[must_use]
-    fn available_memory(&self) -> u64 {
-        self.size() - self.allocated()
-    }
 
     /// Helper function: reports if the suballocator is empty (meaning, having no allocations).
     #[must_use]

@@ -405,10 +405,6 @@ impl SubAllocator for FreeListAllocator {
             .collect::<Vec<_>>()
     }
 
-    fn size(&self) -> u64 {
-        self.size
-    }
-
     fn allocated(&self) -> u64 {
         self.allocated
     }
