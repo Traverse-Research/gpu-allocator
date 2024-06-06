@@ -77,8 +77,6 @@ jobs:
           # is also unmaintained for 4 years depends on malloc_buf >=0.0,<0.1.0,
           # allowing the 0.0.6 release to be used (but not the 1.0.0 release).
           cargo update -p malloc_buf --precise 0.0.6
-          # Force 0.1.2, as older versions use the broken `gcc` crate
-          cargo update -p objc_exception --precise 0.1.2
       - name: Cargo clippy with minimal-versions
         run: cargo +stable clippy --workspace --all-targets --features ${{ matrix.features }} --no-default-features -- -D warnings
 

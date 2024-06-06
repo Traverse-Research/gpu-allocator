@@ -106,7 +106,7 @@ fn main() {
             )
         };
 
-        assert_eq!(hr, winerror::S_OK, "Failed to create DXGI factory",);
+        assert_eq!(hr, winerror::S_OK, "Failed to create DXGI factory");
         dxgi_factory
     };
 

@@ -105,7 +105,7 @@ pub struct AllocatorCreateDesc {
 /// let my_gpu_data: Vec<MyGpuData> = make_vertex_data();
 /// ```
 ///
-/// Depending on how the data we're copying will be used, the vulkan device may have a minimum
+/// Depending on how the data we're copying will be used, the Vulkan device may have a minimum
 /// alignment requirement for that data:
 ///
 /// ```ignore
@@ -180,7 +180,7 @@ impl Allocation {
     ///
     /// [`Slab`]: presser::Slab
     // best to be explicit where the lifetime is coming from since we're doing unsafe things
-    // and relying on an inferred liftime type in the PhantomData below
+    // and relying on an inferred lifetime type in the PhantomData below
     #[allow(clippy::needless_lifetimes)]
     pub fn try_as_mapped_slab<'a>(&'a mut self) -> Option<MappedAllocationSlab<'a>> {
         let mapped_ptr = self.mapped_ptr()?.cast().as_ptr();
