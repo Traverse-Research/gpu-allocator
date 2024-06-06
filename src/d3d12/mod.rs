@@ -1,5 +1,3 @@
-#![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
-
 use std::{backtrace::Backtrace, fmt, sync::Arc};
 
 use log::{debug, warn, Level};
