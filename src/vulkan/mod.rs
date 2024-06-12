@@ -352,12 +352,12 @@ impl MemoryBlock {
         requires_personal_block: bool,
     ) -> Result<Self> {
         let device_memory = {
-            let alloc_info = vk::MemoryAllocateInfo::builder()
+            let alloc_info = vk::MemoryAllocateInfo::default()
                 .allocation_size(size)
                 .memory_type_index(mem_type_index as u32);
 
             let allocation_flags = vk::MemoryAllocateFlags::DEVICE_ADDRESS;
-            let mut flags_info = vk::MemoryAllocateFlagsInfo::builder().flags(allocation_flags);
+            let mut flags_info = vk::MemoryAllocateFlagsInfo::default().flags(allocation_flags);
             // TODO(manon): Test this based on if the device has this feature enabled or not
             let alloc_info = if buffer_device_address {
                 alloc_info.push_next(&mut flags_info)
@@ -366,7 +366,7 @@ impl MemoryBlock {
             };
 
             // Flag the memory as dedicated if required.
-            let mut dedicated_memory_info = vk::MemoryDedicatedAllocateInfo::builder();
+            let mut dedicated_memory_info = vk::MemoryDedicatedAllocateInfo::default();
             let alloc_info = match allocation_scheme {
                 AllocationScheme::DedicatedBuffer(buffer) => {
                     dedicated_memory_info = dedicated_memory_info.buffer(buffer);
@@ -748,8 +748,8 @@ impl Allocator {
                 .get_physical_device_memory_properties(desc.physical_device)
         };
 
-        let memory_types = &mem_props.memory_types[..mem_props.memory_type_count as _];
-        let memory_heaps = mem_props.memory_heaps[..mem_props.memory_heap_count as _].to_vec();
+        let memory_types = &mem_props.memory_types_as_slice();
+        let memory_heaps = mem_props.memory_heaps_as_slice().to_vec();
 
         if desc.debug_settings.log_memory_information {
             debug!("memory type count: {}", mem_props.memory_type_count);

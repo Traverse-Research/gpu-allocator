@@ -4,7 +4,7 @@ name: CI
 
 jobs:
   check_msrv:
-    name: Check MSRV (1.65.0)
+    name: Check MSRV (1.69.0)
     strategy:
       matrix:
         include:
@@ -17,8 +17,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.65.0
-      - run: cargo check --workspace --all-targets --features ${{ matrix.features }} --no-default-features
+      - uses: dtolnay/rust-toolchain@1.69.0
+      # Note that examples are extempt from the MSRV check, so that they can use newer Rust features
+      - run: cargo check --workspace --features ${{ matrix.features }} --no-default-features
 
   test:
     name: Test Suite
