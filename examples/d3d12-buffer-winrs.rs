@@ -4,7 +4,7 @@ use gpu_allocator::d3d12::{
 };
 use gpu_allocator::MemoryLocation;
 use log::*;
-use windows::core::{ComInterface, Result};
+use windows::core::{Interface, Result};
 use windows::Win32::{
     Foundation::E_NOINTERFACE,
     Graphics::{
