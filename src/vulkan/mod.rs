@@ -12,8 +12,8 @@ use log::{debug, Level};
 
 use super::allocator;
 use crate::{
-    allocator::fmt_bytes, AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation,
-    Result,
+    allocator::{AllocatorReport, MemoryBlockReport},
+    AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -691,47 +691,7 @@ pub struct Allocator {
 
 impl fmt::Debug for Allocator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut allocation_report = vec![];
-        let mut total_reserved_size_in_bytes = 0;
-
-        for memory_type in &self.memory_types {
-            for block in memory_type.memory_blocks.iter().flatten() {
-                total_reserved_size_in_bytes += block.size;
-                allocation_report.extend(block.sub_allocator.report_allocations())
-            }
-        }
-
-        let total_used_size_in_bytes = allocation_report.iter().map(|report| report.size).sum();
-
-        allocation_report.sort_by_key(|alloc| std::cmp::Reverse(alloc.size));
-
-        writeln!(
-            f,
-            "================================================================",
-        )?;
-        writeln!(
-            f,
-            "ALLOCATION BREAKDOWN ({} / {})",
-            fmt_bytes(total_used_size_in_bytes),
-            fmt_bytes(total_reserved_size_in_bytes),
-        )?;
-
-        let max_num_allocations_to_print = f.precision().map_or(usize::MAX, |n| n);
-        for (idx, alloc) in allocation_report.iter().enumerate() {
-            if idx >= max_num_allocations_to_print {
-                break;
-            }
-
-            writeln!(
-                f,
-                "{:max_len$.max_len$}\t- {}",
-                alloc.name,
-                fmt_bytes(alloc.size),
-                max_len = allocator::VISUALIZER_TABLE_MAX_ENTRY_NAME_LEN,
-            )?;
-        }
-
-        Ok(())
+        self.generate_report().fmt(f)
     }
 }
 
@@ -971,6 +931,33 @@ impl Allocator {
                     && memory_type.memory_properties.contains(flags)
             })
             .map(|memory_type| memory_type.memory_type_index as _)
+    }
+
+    pub fn generate_report(&self) -> AllocatorReport {
+        let mut allocations = vec![];
+        let mut blocks = vec![];
+        let mut total_reserved_bytes = 0;
+
+        for memory_type in &self.memory_types {
+            for block in memory_type.memory_blocks.iter().flatten() {
+                total_reserved_bytes += block.size;
+                let first_allocation = allocations.len();
+                allocations.extend(block.sub_allocator.report_allocations());
+                blocks.push(MemoryBlockReport {
+                    size: block.size,
+                    allocations: first_allocation..allocations.len(),
+                });
+            }
+        }
+
+        let total_allocated_bytes = allocations.iter().map(|report| report.size).sum();
+
+        AllocatorReport {
+            allocations,
+            blocks,
+            total_allocated_bytes,
+            total_reserved_bytes,
+        }
     }
 }
 

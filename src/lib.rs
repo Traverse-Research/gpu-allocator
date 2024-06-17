@@ -212,6 +212,8 @@ pub use result::*;
 
 pub(crate) mod allocator;
 
+pub use allocator::{AllocationReport, AllocatorReport, MemoryBlockReport};
+
 #[cfg(feature = "visualizer")]
 pub mod visualizer;
 
