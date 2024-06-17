@@ -67,7 +67,11 @@ pub struct AllocatorReport {
 
 impl fmt::Debug for AllocationReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = if !self.name.is_empty() { self.name.as_str() } else { "--" };
+        let name = if !self.name.is_empty() {
+            self.name.as_str()
+        } else {
+            "--"
+        };
         write!(f, "{name:?}: {}", fmt_bytes(self.size))
     }
 }
@@ -81,14 +85,20 @@ impl fmt::Debug for AllocatorReport {
         allocations.truncate(max_num_allocations_to_print);
 
         f.debug_struct("AllocatorReport")
-            .field("summary", &std::format_args!("{} / {}", fmt_bytes(self.total_allocated_bytes), fmt_bytes(self.total_reserved_bytes)))
+            .field(
+                "summary",
+                &std::format_args!(
+                    "{} / {}",
+                    fmt_bytes(self.total_allocated_bytes),
+                    fmt_bytes(self.total_reserved_bytes)
+                ),
+            )
             .field("blocks", &self.blocks.len())
             .field("allocations", &self.allocations.len())
             .field("largest", &allocations.as_slice())
             .finish()
     }
 }
-
 
 #[cfg(feature = "visualizer")]
 pub(crate) trait SubAllocatorBase: crate::visualizer::SubAllocatorVisualizer {}
