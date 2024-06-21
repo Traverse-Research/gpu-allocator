@@ -87,7 +87,7 @@ impl<'a> AllocationCreateDesc<'a> {
         name: &'a str,
         length: u64,
         location: MemoryLocation,
-    ) -> AllocationCreateDesc<'a> {
+    ) -> Self {
         let size_and_align =
             device.heap_buffer_size_and_align(length, memory_location_to_metal(location));
         Self {
@@ -98,11 +98,7 @@ impl<'a> AllocationCreateDesc<'a> {
         }
     }
 
-    pub fn texture(
-        device: &metal::Device,
-        name: &'a str,
-        desc: &metal::TextureDescriptor,
-    ) -> AllocationCreateDesc<'a> {
+    pub fn texture(device: &metal::Device, name: &'a str, desc: &metal::TextureDescriptor) -> Self {
         let size_and_align = device.heap_texture_size_and_align(desc);
         Self {
             name,
@@ -122,7 +118,7 @@ impl<'a> AllocationCreateDesc<'a> {
         name: &'a str,
         size: u64,
         location: MemoryLocation,
-    ) -> AllocationCreateDesc<'a> {
+    ) -> Self {
         let size_and_align = device.heap_acceleration_structure_size_and_align_with_size(size);
         Self {
             name,
