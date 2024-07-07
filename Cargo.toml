@@ -12,49 +12,65 @@ keywords = ["vulkan", "memory", "allocator"]
 documentation = "https://docs.rs/gpu-allocator/"
 rust-version = "1.69"
 
-include = [
-    "/README.md",
-    "/LICENSE-*",
-    "/src",
-    "/examples",
-]
+include = ["/README.md", "/LICENSE-*", "/src", "/examples"]
 
 [package.metadata.docs.rs]
 all-features = true
 
 [dependencies]
+arc-swap = "1.7"
 log = "0.4"
 thiserror = "1.0"
 presser = { version = "0.3" }
 # Only needed for Vulkan.  Disable all default features as good practice,
 # such as the ability to link/load a Vulkan library.
-ash = { version = "0.38", optional = true, default-features = false, features = ["debug"] }
+ash = { version = "0.38", optional = true, default-features = false, features = [
+    "debug",
+] }
 # Only needed for visualizer.
 egui = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 egui_extras = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-metal = { version = "0.28.0", git = "https://github.com/gfx-rs/metal-rs", rev = "0d6214f", default-features = false, features = ["link", "dispatch"], optional = true }
+metal = { version = "0.28.0", git = "https://github.com/gfx-rs/metal-rs", rev = "0d6214f", default-features = false, features = [
+    "link",
+    "dispatch",
+], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # Only needed for public-winapi interop helpers
-winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
+winapi = { version = "0.3.9", features = [
+    "d3d12",
+    "winerror",
+    "impl-default",
+    "impl-debug",
+], optional = true }
 
 [target.'cfg(windows)'.dependencies.windows]
 version = ">=0.53,<=0.56"
-features = [
-    "Win32_Graphics_Direct3D12",
-    "Win32_Graphics_Dxgi_Common",
-]
+features = ["Win32_Graphics_Direct3D12", "Win32_Graphics_Dxgi_Common"]
 optional = true
 
 [dev-dependencies]
 # Enable the "loaded" feature to be able to access the Vulkan entrypoint.
-ash = { version = "0.38", default-features = false, features = ["debug", "loaded"] }
+ash = { version = "0.38", default-features = false, features = [
+    "debug",
+    "loaded",
+] }
 env_logger = "0.10"
 
 [target.'cfg(windows)'.dev-dependencies]
-winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
+winapi = { version = "0.3.9", features = [
+    "d3d12",
+    "d3d12sdklayers",
+    "dxgi1_6",
+    "winerror",
+    "impl-default",
+    "impl-debug",
+    "winuser",
+    "windowsx",
+    "libloaderapi",
+] }
 
 [target.'cfg(windows)'.dev-dependencies.windows]
 version = ">=0.53,<=0.56"

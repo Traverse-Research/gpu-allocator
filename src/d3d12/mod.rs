@@ -1,5 +1,6 @@
 use std::{backtrace::Backtrace, fmt, sync::Arc};
 
+use arc_swap::ArcSwapOption;
 use log::{debug, warn, Level};
 use windows::Win32::{
     Foundation::E_OUTOFMEMORY,
@@ -320,7 +321,7 @@ pub struct Allocation {
     memory_type_index: usize,
     heap: ID3D12Heap,
 
-    name: Option<Box<str>>,
+    name: ArcSwapOption<String>,
 }
 
 impl Allocation {
@@ -485,7 +486,7 @@ impl MemoryType {
                 memory_block_index: block_index,
                 memory_type_index: self.memory_type_index,
                 heap: mem_block.heap.clone(),
-                name: Some(desc.name.into()),
+                name: ArcSwapOption::from_pointee(desc.name.to_owned()),
             });
         }
 
@@ -510,7 +511,7 @@ impl MemoryType {
                             memory_block_index: mem_block_i,
                             memory_type_index: self.memory_type_index,
                             heap: mem_block.heap.clone(),
-                            name: Some(desc.name.into()),
+                            name: ArcSwapOption::from_pointee(desc.name.to_owned()),
                         });
                     }
                     Err(AllocationError::OutOfMemory) => {} // Block is full, continue search.
@@ -564,7 +565,7 @@ impl MemoryType {
             memory_block_index: new_block_index,
             memory_type_index: self.memory_type_index,
             heap: mem_block.heap.clone(),
-            name: Some(desc.name.into()),
+            name: ArcSwapOption::from_pointee(desc.name.to_owned()),
         })
     }
 
@@ -766,7 +767,8 @@ impl Allocator {
 
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
-            let name = allocation.name.as_deref().unwrap_or("<null>");
+            let name = allocation.name.load();
+            let name = name.as_deref().map_or("<null>", |name| name);
             debug!("Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
@@ -783,16 +785,16 @@ impl Allocator {
         Ok(())
     }
 
-    pub fn rename_allocation(&mut self, allocation: &mut Allocation, name: &str) -> Result<()> {
-        allocation.name = Some(name.into());
+    pub fn rename_allocation(&self, allocation: &Allocation, name: &str) -> Result<()> {
+        allocation.name.swap(Some(Arc::new(name.into())));
 
         if allocation.is_null() {
             return Ok(());
         }
 
-        let mem_type = &mut self.memory_types[allocation.memory_type_index];
+        let mem_type = &self.memory_types[allocation.memory_type_index];
         let mem_block = mem_type.memory_blocks[allocation.memory_block_index]
-            .as_mut()
+            .as_ref()
             .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
 
         mem_block

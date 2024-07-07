@@ -111,7 +111,7 @@ pub(crate) fn render_memory_chunks_ui<'a>(
                                 "allocation_type: {}",
                                 chunk.allocation_type.as_str()
                             ));
-                            if let Some(name) = &chunk.name {
+                            if let Some(name) = &*chunk.name.load() {
                                 ui.label(format!("name: {}", name));
                             }
                             if settings.show_backtraces

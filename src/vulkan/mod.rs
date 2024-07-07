@@ -4,6 +4,7 @@
 mod visualizer;
 use std::{backtrace::Backtrace, fmt, marker::PhantomData, sync::Arc};
 
+use arc_swap::ArcSwapOption;
 use ash::vk;
 use log::{debug, Level};
 #[cfg(feature = "visualizer")]
@@ -158,7 +159,7 @@ pub struct Allocation {
     mapped_ptr: Option<SendSyncPtr>,
     dedicated_allocation: bool,
     memory_properties: vk::MemoryPropertyFlags,
-    name: Option<Box<str>>,
+    name: ArcSwapOption<String>,
 }
 
 impl Allocation {
@@ -273,7 +274,7 @@ impl Default for Allocation {
             device_memory: vk::DeviceMemory::null(),
             mapped_ptr: None,
             memory_properties: vk::MemoryPropertyFlags::empty(),
-            name: None,
+            name: ArcSwapOption::empty(),
             dedicated_allocation: false,
         }
     }
@@ -531,7 +532,7 @@ impl MemoryType {
                 device_memory: mem_block.device_memory,
                 mapped_ptr: mem_block.mapped_ptr,
                 memory_properties: self.memory_properties,
-                name: Some(desc.name.into()),
+                name: ArcSwapOption::from_pointee(desc.name.to_owned()),
                 dedicated_allocation,
             });
         }
@@ -567,7 +568,7 @@ impl MemoryType {
                             memory_properties: self.memory_properties,
                             mapped_ptr,
                             dedicated_allocation: false,
-                            name: Some(desc.name.into()),
+                            name: ArcSwapOption::from_pointee(desc.name.to_owned()),
                         });
                     }
                     Err(err) => match err {
@@ -640,7 +641,7 @@ impl MemoryType {
             device_memory: mem_block.device_memory,
             mapped_ptr,
             memory_properties: self.memory_properties,
-            name: Some(desc.name.into()),
+            name: ArcSwapOption::from_pointee(desc.name.to_owned()),
             dedicated_allocation: false,
         })
     }
@@ -870,7 +871,8 @@ impl Allocator {
 
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
-            let name = allocation.name.as_deref().unwrap_or("<null>");
+            let name = allocation.name.load();
+            let name = name.as_deref().map_or("<null>", |name| name);
             debug!("Freeing `{}`.", name);
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
@@ -887,16 +889,16 @@ impl Allocator {
         Ok(())
     }
 
-    pub fn rename_allocation(&mut self, allocation: &mut Allocation, name: &str) -> Result<()> {
-        allocation.name = Some(name.into());
+    pub fn rename_allocation(&self, allocation: &Allocation, name: &str) -> Result<()> {
+        allocation.name.swap(Some(Arc::new(name.into())));
 
         if allocation.is_null() {
             return Ok(());
         }
 
-        let mem_type = &mut self.memory_types[allocation.memory_type_index];
+        let mem_type = &self.memory_types[allocation.memory_type_index];
         let mem_block = mem_type.memory_blocks[allocation.memory_block_index]
-            .as_mut()
+            .as_ref()
             .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
 
         mem_block

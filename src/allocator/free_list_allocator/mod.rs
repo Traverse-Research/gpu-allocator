@@ -9,6 +9,7 @@ use std::{
     sync::Arc,
 };
 
+use arc_swap::ArcSwapOption;
 use log::{log, Level};
 
 use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
@@ -30,7 +31,7 @@ pub(crate) struct MemoryChunk {
     pub(crate) size: u64,
     pub(crate) offset: u64,
     pub(crate) allocation_type: AllocationType,
-    pub(crate) name: Option<String>,
+    pub(crate) name: ArcSwapOption<String>,
     /// Only used if [`crate::AllocatorDebugSettings::store_stack_traces`] is [`true`]
     pub(crate) backtrace: Arc<Backtrace>,
     next: Option<std::num::NonZeroU64>,
@@ -78,7 +79,7 @@ impl FreeListAllocator {
                 size,
                 offset: 0,
                 allocation_type: AllocationType::Free,
-                name: None,
+                name: ArcSwapOption::empty(),
                 backtrace: Arc::new(Backtrace::disabled()),
                 prev: None,
                 next: None,
@@ -248,7 +249,7 @@ impl SubAllocator for FreeListAllocator {
                     size: best_aligned_size,
                     offset: free_chunk.offset,
                     allocation_type,
-                    name: Some(name.to_string()),
+                    name: ArcSwapOption::from_pointee(name.to_string()),
                     backtrace,
                     prev: free_chunk.prev,
                     next: Some(first_fit_id),
@@ -277,7 +278,7 @@ impl SubAllocator for FreeListAllocator {
                 .ok_or_else(|| AllocationError::Internal("Invalid chunk reference.".into()))?;
 
             chunk.allocation_type = allocation_type;
-            chunk.name = Some(name.to_string());
+            chunk.name.swap(Some(Arc::new(name.to_string())));
             chunk.backtrace = backtrace;
 
             self.remove_id_from_free_list(first_fit_id);
@@ -301,7 +302,7 @@ impl SubAllocator for FreeListAllocator {
                 )
             })?;
             chunk.allocation_type = AllocationType::Free;
-            chunk.name = None;
+            chunk.name.swap(None);
             chunk.backtrace = Arc::new(Backtrace::disabled());
 
             self.allocated -= chunk.size;
@@ -325,15 +326,11 @@ impl SubAllocator for FreeListAllocator {
         Ok(())
     }
 
-    fn rename_allocation(
-        &mut self,
-        chunk_id: Option<std::num::NonZeroU64>,
-        name: &str,
-    ) -> Result<()> {
+    fn rename_allocation(&self, chunk_id: Option<std::num::NonZeroU64>, name: &str) -> Result<()> {
         let chunk_id = chunk_id
             .ok_or_else(|| AllocationError::Internal("Chunk ID must be a valid value.".into()))?;
 
-        let chunk = self.chunks.get_mut(&chunk_id).ok_or_else(|| {
+        let chunk = self.chunks.get(&chunk_id).ok_or_else(|| {
             AllocationError::Internal(
                 "Attempting to rename chunk that is not in chunk list.".into(),
             )
@@ -345,7 +342,7 @@ impl SubAllocator for FreeListAllocator {
             ));
         }
 
-        chunk.name = Some(name.into());
+        chunk.name.swap(Some(Arc::new(name.into())));
 
         Ok(())
     }
@@ -360,8 +357,9 @@ impl SubAllocator for FreeListAllocator {
             if chunk.allocation_type == AllocationType::Free {
                 continue;
             }
-            let empty = "".to_string();
-            let name = chunk.name.as_ref().unwrap_or(&empty);
+
+            let name = chunk.name.load();
+            let name = (*name).as_ref().map_or("", |name| name);
 
             log!(
                 log_level,
@@ -394,10 +392,10 @@ impl SubAllocator for FreeListAllocator {
             .iter()
             .filter(|(_key, chunk)| chunk.allocation_type != AllocationType::Free)
             .map(|(_key, chunk)| AllocationReport {
-                name: chunk
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| "<Unnamed FreeList allocation>".to_owned()),
+                name: chunk.name.load().as_ref().map_or_else(
+                    || "<Unnamed FreeList allocation>".to_owned(),
+                    |s: &Arc<String>| (**s).clone(),
+                ),
                 offset: chunk.offset,
                 size: chunk.size,
                 #[cfg(feature = "visualizer")]

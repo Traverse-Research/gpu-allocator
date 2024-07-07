@@ -5,6 +5,7 @@ pub(crate) mod visualizer;
 
 use std::{backtrace::Backtrace, sync::Arc};
 
+use arc_swap::ArcSwapOption;
 use log::{log, Level};
 
 use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
@@ -15,7 +16,7 @@ pub(crate) struct DedicatedBlockAllocator {
     size: u64,
     allocated: u64,
     /// Only used if [`crate::AllocatorDebugSettings::store_stack_traces`] is [`true`]
-    name: Option<String>,
+    name: ArcSwapOption<String>,
     backtrace: Arc<Backtrace>,
 }
 
@@ -24,7 +25,7 @@ impl DedicatedBlockAllocator {
         Self {
             size,
             allocated: 0,
-            name: None,
+            name: ArcSwapOption::empty(),
             backtrace: Arc::new(Backtrace::disabled()),
         }
     }
@@ -52,7 +53,7 @@ impl SubAllocator for DedicatedBlockAllocator {
         }
 
         self.allocated = size;
-        self.name = Some(name.to_string());
+        self.name.swap(Some(Arc::new(name.to_string())));
         self.backtrace = backtrace;
 
         #[allow(clippy::unwrap_used)]
@@ -69,15 +70,11 @@ impl SubAllocator for DedicatedBlockAllocator {
         }
     }
 
-    fn rename_allocation(
-        &mut self,
-        chunk_id: Option<std::num::NonZeroU64>,
-        name: &str,
-    ) -> Result<()> {
+    fn rename_allocation(&self, chunk_id: Option<std::num::NonZeroU64>, name: &str) -> Result<()> {
         if chunk_id != std::num::NonZeroU64::new(1) {
             Err(AllocationError::Internal("Chunk ID must be 1.".into()))
         } else {
-            self.name = Some(name.into());
+            self.name.swap(Some(Arc::new(name.into())));
             Ok(())
         }
     }
@@ -88,8 +85,8 @@ impl SubAllocator for DedicatedBlockAllocator {
         memory_type_index: usize,
         memory_block_index: usize,
     ) {
-        let empty = "".to_string();
-        let name = self.name.as_ref().unwrap_or(&empty);
+        let name = self.name.load();
+        let name = (*name).as_ref().map_or("", |name| name);
 
         log!(
             log_level,
@@ -112,10 +109,10 @@ impl SubAllocator for DedicatedBlockAllocator {
 
     fn report_allocations(&self) -> Vec<AllocationReport> {
         vec![AllocationReport {
-            name: self
-                .name
-                .clone()
-                .unwrap_or_else(|| "<Unnamed Dedicated allocation>".to_owned()),
+            name: self.name.load().as_ref().map_or_else(
+                || "<Unnamed Dedicated allocation>".to_owned(),
+                |s: &Arc<String>| (**s).clone(),
+            ),
             offset: 0,
             size: self.size,
             #[cfg(feature = "visualizer")]
