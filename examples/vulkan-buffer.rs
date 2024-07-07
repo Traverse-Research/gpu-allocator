@@ -1,12 +1,11 @@
 use std::default::Default;
 
 use ash::vk;
-use log::info;
-
-use gpu_allocator::vulkan::{
-    AllocationCreateDesc, AllocationScheme, Allocator, AllocatorCreateDesc,
+use gpu_allocator::{
+    vulkan::{AllocationCreateDesc, AllocationScheme, Allocator, AllocatorCreateDesc},
+    MemoryLocation,
 };
-use gpu_allocator::MemoryLocation;
+use log::info;
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();

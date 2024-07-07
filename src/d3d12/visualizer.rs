@@ -1,12 +1,12 @@
 #![allow(clippy::new_without_default)]
 
+use windows::Win32::Graphics::Direct3D12::*;
+
 use super::Allocator;
 use crate::visualizer::{
     render_allocation_reports_ui, AllocationReportVisualizeSettings, ColorScheme,
     MemoryChunksVisualizationSettings,
 };
-
-use windows::Win32::Graphics::Direct3D12::*;
 
 struct AllocatorVisualizerBlockWindow {
     memory_type_index: usize,
