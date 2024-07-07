@@ -2,13 +2,12 @@
 
 #[cfg(feature = "visualizer")]
 mod visualizer;
-#[cfg(feature = "visualizer")]
-pub use visualizer::AllocatorVisualizer;
-
 use std::{backtrace::Backtrace, fmt, marker::PhantomData, sync::Arc};
 
 use ash::vk;
 use log::{debug, Level};
+#[cfg(feature = "visualizer")]
+pub use visualizer::AllocatorVisualizer;
 
 use super::allocator;
 use crate::{

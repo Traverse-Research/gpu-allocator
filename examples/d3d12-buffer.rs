@@ -1,19 +1,22 @@
 //! Example showcasing [`winapi`] interop with [`gpu-allocator`] which is driven by the [`windows`] crate.
-use winapi::shared::{dxgiformat, winerror};
-use winapi::um::{d3d12, d3dcommon};
-use winapi::Interface;
+use winapi::{
+    shared::{dxgiformat, winerror},
+    um::{d3d12, d3dcommon},
+    Interface,
+};
 
 mod all_dxgi {
     pub use winapi::shared::{dxgi1_3::*, dxgi1_6::*, dxgitype::*};
 }
 
-use log::*;
-
-use gpu_allocator::d3d12::{
-    AllocationCreateDesc, Allocator, AllocatorCreateDesc, ID3D12DeviceVersion, ResourceCategory,
-    ToWinapi, ToWindows,
+use gpu_allocator::{
+    d3d12::{
+        AllocationCreateDesc, Allocator, AllocatorCreateDesc, ID3D12DeviceVersion,
+        ResourceCategory, ToWinapi, ToWindows,
+    },
+    MemoryLocation,
 };
-use gpu_allocator::MemoryLocation;
+use log::*;
 
 fn create_d3d12_device(
     dxgi_factory: *mut all_dxgi::IDXGIFactory6,

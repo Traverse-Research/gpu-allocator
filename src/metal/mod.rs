@@ -1,11 +1,12 @@
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
 use std::{backtrace::Backtrace, sync::Arc};
 
+use log::debug;
+
 use crate::{
     allocator::{self, AllocatorReport, MemoryBlockReport},
     AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
-use log::debug;
 
 fn memory_location_to_metal(location: MemoryLocation) -> metal::MTLResourceOptions {
     match location {

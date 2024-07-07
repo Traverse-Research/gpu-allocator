@@ -1,9 +1,6 @@
-#![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
-
 use std::{backtrace::Backtrace, fmt, sync::Arc};
 
 use log::{debug, warn, Level};
-
 use windows::Win32::{
     Foundation::E_OUTOFMEMORY,
     Graphics::{Direct3D12::*, Dxgi::Common::DXGI_FORMAT},
@@ -11,8 +8,9 @@ use windows::Win32::{
 
 #[cfg(feature = "public-winapi")]
 mod public_winapi {
-    use super::*;
     pub use winapi::um::d3d12 as winapi_d3d12;
+
+    use super::*;
 
     /// Trait similar to [`AsRef`]/[`AsMut`],
     pub trait ToWinapi<T> {
@@ -84,9 +82,7 @@ mod visualizer;
 #[cfg(feature = "visualizer")]
 pub use visualizer::AllocatorVisualizer;
 
-use super::allocator;
-use super::allocator::AllocationType;
-
+use super::{allocator, allocator::AllocationType};
 use crate::{
     allocator::{AllocatorReport, MemoryBlockReport},
     AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
@@ -197,10 +193,12 @@ impl<'a> AllocationCreateDesc<'a> {
         desc: &winapi_d3d12::D3D12_RESOURCE_DESC,
         name: &'a str,
         location: MemoryLocation,
-    ) -> AllocationCreateDesc<'a> {
+    ) -> Self {
         let device = device.as_windows();
         // Raw structs are binary-compatible
-        let desc = unsafe { std::mem::transmute(desc) };
+        let desc = unsafe {
+            std::mem::transmute::<&winapi_d3d12::D3D12_RESOURCE_DESC, &D3D12_RESOURCE_DESC>(desc)
+        };
         let allocation_info =
             unsafe { device.GetResourceAllocationInfo(0, std::slice::from_ref(desc)) };
         let resource_category: ResourceCategory = desc.into();
@@ -223,7 +221,7 @@ impl<'a> AllocationCreateDesc<'a> {
         desc: &D3D12_RESOURCE_DESC,
         name: &'a str,
         location: MemoryLocation,
-    ) -> AllocationCreateDesc<'a> {
+    ) -> Self {
         let allocation_info =
             unsafe { device.GetResourceAllocationInfo(0, std::slice::from_ref(desc)) };
         let resource_category: ResourceCategory = desc.into();
