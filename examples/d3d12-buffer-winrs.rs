@@ -37,8 +37,7 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
         };
         let adapter4: IDXGIAdapter4 = adapter1.cast().unwrap();
 
-        let mut desc = Default::default();
-        unsafe { adapter4.GetDesc3(&mut desc) }.unwrap();
+        let desc = unsafe { adapter4.GetDesc3() }.unwrap();
         // Skip software adapters
         // Vote for https://github.com/microsoft/windows-rs/issues/793!
         if (desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE) == DXGI_ADAPTER_FLAG3_SOFTWARE {
@@ -86,7 +85,9 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
 fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
 
-    let dxgi_factory = unsafe { CreateDXGIFactory2(0) }?;
+    let dxgi_factory = unsafe {
+        CreateDXGIFactory2(windows::Win32::Graphics::Dxgi::DXGI_CREATE_FACTORY_FLAGS::default())
+    }?;
 
     let device = create_d3d12_device(&dxgi_factory).expect("Failed to create D3D12 device.");
 

@@ -57,7 +57,8 @@ env_logger = "0.10"
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
 
 [target.'cfg(windows)'.dev-dependencies.windows]
-version = ">=0.53,<=0.58"
+# API-breaks since Windows 0.58 only affect our examples
+version = "0.58"
 features = [
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D12",
