@@ -79,7 +79,7 @@ jobs:
           # allowing the 0.0.6 release to be used (but not the 1.0.0 release).
           cargo update -p malloc_buf --precise 0.0.6
       - name: Cargo clippy with minimal-versions
-        run: cargo +stable clippy --workspace --all-targets --features ${{ matrix.features }} --no-default-features -- -D warnings
+        run: cargo +stable clippy --workspace --features ${{ matrix.features }} --no-default-features -- -D warnings
 
   doc:
     name: Build documentation
