@@ -1,6 +1,6 @@
 [package]
 name = "gpu-allocator"
-version = "0.26.0"
+version = "0.27.0"
 authors = ["Traverse Research <opensource@traverseresearch.nl>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -34,14 +34,14 @@ egui = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 egui_extras = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-metal = { version = "0.28.0", git = "https://github.com/gfx-rs/metal-rs", rev = "0d6214f", default-features = false, features = ["link", "dispatch"], optional = true }
+metal = { version = "0.29.0", default-features = false, features = ["link", "dispatch"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # Only needed for public-winapi interop helpers
 winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
 
 [target.'cfg(windows)'.dependencies.windows]
-version = ">=0.53,<=0.57"
+version = ">=0.53,<=0.58"
 features = [
     "Win32_Graphics_Direct3D12",
     "Win32_Graphics_Dxgi_Common",
@@ -57,7 +57,8 @@ env_logger = "0.10"
 winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
 
 [target.'cfg(windows)'.dev-dependencies.windows]
-version = ">=0.53,<=0.57"
+# API-breaks since Windows 0.58 only affect our examples
+version = "0.58"
 features = [
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D12",
