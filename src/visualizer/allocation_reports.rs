@@ -3,7 +3,7 @@ use std::backtrace::BacktraceStatus;
 use egui::{Label, Response, Sense, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 
-use crate::allocator::{fmt_bytes, AllocationReport};
+use crate::allocator::{AllocationReport, FmtBytes};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum AllocationReportVisualizeSorting {
@@ -39,7 +39,7 @@ pub(crate) fn render_allocation_reports_ui(
         .collect::<Vec<_>>();
     let total_size_under_filter: u64 = allocations.iter().map(|a| a.1.size).sum();
 
-    ui.label(format!("Total: {}", fmt_bytes(total_size_under_filter)));
+    ui.label(format!("Total: {}", FmtBytes(total_size_under_filter)));
 
     let row_height = ui.text_style_height(&egui::TextStyle::Body);
     let table = TableBuilder::new(ui)
@@ -133,7 +133,7 @@ pub(crate) fn render_allocation_reports_ui(
                 }
 
                 row.col(|ui| {
-                    ui.label(fmt_bytes(size));
+                    ui.label(format!("{}", FmtBytes(size)));
                 });
             });
         }

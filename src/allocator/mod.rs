@@ -72,7 +72,7 @@ impl fmt::Debug for AllocationReport {
         } else {
             "--"
         };
-        write!(f, "{name:?}: {}", fmt_bytes(self.size))
+        write!(f, "{name:?}: {}", FmtBytes(self.size))
     }
 }
 
@@ -89,8 +89,8 @@ impl fmt::Debug for AllocatorReport {
                 "summary",
                 &std::format_args!(
                     "{} / {}",
-                    fmt_bytes(self.total_allocated_bytes),
-                    fmt_bytes(self.total_reserved_bytes)
+                    FmtBytes(self.total_allocated_bytes),
+                    FmtBytes(self.total_reserved_bytes)
                 ),
             )
             .field("blocks", &self.blocks.len())
@@ -145,18 +145,20 @@ pub(crate) trait SubAllocator: SubAllocatorBase + fmt::Debug + Sync + Send {
     }
 }
 
-pub(crate) fn fmt_bytes(mut amount: u64) -> String {
-    const SUFFIX: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+pub struct FmtBytes(pub u64);
 
-    let mut idx = 0;
-    let mut print_amount = amount as f64;
-    loop {
-        if amount < 1024 {
-            return format!("{:.2} {}", print_amount, SUFFIX[idx]);
+impl fmt::Display for FmtBytes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const SUFFIX: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+        let mut idx = 0;
+        let mut amount = self.0 as f64;
+        loop {
+            if amount < 1024.0 || idx >= SUFFIX.len() - 1 {
+                return write!(f, "{:.2} {}", amount, SUFFIX[idx]);
+            }
+
+            amount /= 1024.0;
+            idx += 1;
         }
-
-        print_amount = amount as f64 / 1024.0;
-        amount /= 1024;
-        idx += 1;
     }
 }
