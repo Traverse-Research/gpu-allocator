@@ -168,6 +168,12 @@ pub struct Allocator {
     allocation_sizes: AllocationSizes,
 }
 
+impl std::fmt::Debug for Allocator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.generate_report().fmt(f)
+    }
+}
+
 #[derive(Debug)]
 pub struct AllocatorCreateDesc {
     pub device: Retained<ProtocolObject<dyn metal::MTLDevice>>,
