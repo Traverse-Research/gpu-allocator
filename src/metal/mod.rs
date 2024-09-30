@@ -1,5 +1,10 @@
 use std::{backtrace::Backtrace, sync::Arc};
 
+#[cfg(feature = "visualizer")]
+mod visualizer;
+#[cfg(feature = "visualizer")]
+pub use visualizer::AllocatorVisualizer;
+
 use log::debug;
 use metal::{MTLDevice as _, MTLHeap as _, MTLResource as _};
 use objc2::{rc::Retained, runtime::ProtocolObject};
