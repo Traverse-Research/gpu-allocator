@@ -1,5 +1,10 @@
 use std::{backtrace::Backtrace, sync::Arc};
 
+#[cfg(feature = "visualizer")]
+mod visualizer;
+#[cfg(feature = "visualizer")]
+pub use visualizer::AllocatorVisualizer;
+
 use log::debug;
 use metal::{MTLDevice as _, MTLHeap as _, MTLResource as _};
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -161,6 +166,12 @@ pub struct Allocator {
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
     allocation_sizes: AllocationSizes,
+}
+
+impl std::fmt::Debug for Allocator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.generate_report().fmt(f)
+    }
 }
 
 #[derive(Debug)]
