@@ -6,21 +6,23 @@ mod visualizer;
 pub use visualizer::AllocatorVisualizer;
 
 use log::debug;
-use metal::{MTLDevice as _, MTLHeap as _, MTLResource as _};
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_foundation::NSString;
-use objc2_metal as metal;
+use objc2_metal::{
+    MTLAccelerationStructure, MTLBuffer, MTLCPUCacheMode, MTLDevice, MTLHeap, MTLHeapDescriptor,
+    MTLHeapType, MTLResource, MTLResourceOptions, MTLStorageMode, MTLTexture, MTLTextureDescriptor,
+};
 
 use crate::{
     allocator::{self, AllocatorReport, MemoryBlockReport},
     AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
 
-fn memory_location_to_metal(location: MemoryLocation) -> metal::MTLResourceOptions {
+fn memory_location_to_metal(location: MemoryLocation) -> MTLResourceOptions {
     match location {
-        MemoryLocation::GpuOnly => metal::MTLResourceOptions::MTLResourceStorageModePrivate,
+        MemoryLocation::GpuOnly => MTLResourceOptions::MTLResourceStorageModePrivate,
         MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu | MemoryLocation::Unknown => {
-            metal::MTLResourceOptions::MTLResourceStorageModeShared
+            MTLResourceOptions::MTLResourceStorageModeShared
         }
     }
 }
@@ -32,16 +34,16 @@ pub struct Allocation {
     size: u64,
     memory_block_index: usize,
     memory_type_index: usize,
-    heap: Retained<ProtocolObject<dyn metal::MTLHeap>>,
+    heap: Retained<ProtocolObject<dyn MTLHeap>>,
     name: Option<Box<str>>,
 }
 
 impl Allocation {
-    pub fn heap(&self) -> &ProtocolObject<dyn metal::MTLHeap> {
+    pub fn heap(&self) -> &ProtocolObject<dyn MTLHeap> {
         &self.heap
     }
 
-    pub fn make_buffer(&self) -> Option<Retained<ProtocolObject<dyn metal::MTLBuffer>>> {
+    pub fn make_buffer(&self) -> Option<Retained<ProtocolObject<dyn MTLBuffer>>> {
         let resource = unsafe {
             self.heap.newBufferWithLength_options_offset(
                 self.size as usize,
@@ -59,8 +61,8 @@ impl Allocation {
 
     pub fn make_texture(
         &self,
-        desc: &metal::MTLTextureDescriptor,
-    ) -> Option<Retained<ProtocolObject<dyn metal::MTLTexture>>> {
+        desc: &MTLTextureDescriptor,
+    ) -> Option<Retained<ProtocolObject<dyn MTLTexture>>> {
         let resource = unsafe {
             self.heap
                 .newTextureWithDescriptor_offset(desc, self.offset as usize)
@@ -75,7 +77,7 @@ impl Allocation {
 
     pub fn make_acceleration_structure(
         &self,
-    ) -> Option<Retained<ProtocolObject<dyn metal::MTLAccelerationStructure>>> {
+    ) -> Option<Retained<ProtocolObject<dyn MTLAccelerationStructure>>> {
         let resource = unsafe {
             self.heap
                 .newAccelerationStructureWithSize_offset(self.size as usize, self.offset as usize)
@@ -105,7 +107,7 @@ pub struct AllocationCreateDesc<'a> {
 
 impl<'a> AllocationCreateDesc<'a> {
     pub fn buffer(
-        device: &ProtocolObject<dyn metal::MTLDevice>,
+        device: &ProtocolObject<dyn MTLDevice>,
         name: &'a str,
         length: u64,
         location: MemoryLocation,
@@ -123,19 +125,19 @@ impl<'a> AllocationCreateDesc<'a> {
     }
 
     pub fn texture(
-        device: &ProtocolObject<dyn metal::MTLDevice>,
+        device: &ProtocolObject<dyn MTLDevice>,
         name: &'a str,
-        desc: &metal::MTLTextureDescriptor,
+        desc: &MTLTextureDescriptor,
     ) -> Self {
         let size_and_align = device.heapTextureSizeAndAlignWithDescriptor(desc);
         Self {
             name,
             location: match desc.storageMode() {
-                metal::MTLStorageMode::Shared
-                | metal::MTLStorageMode::Managed
-                | metal::MTLStorageMode::Memoryless => MemoryLocation::Unknown,
-                metal::MTLStorageMode::Private => MemoryLocation::GpuOnly,
-                metal::MTLStorageMode(mode /* @ 4.. */) => todo!("Unknown storage mode {mode}"),
+                MTLStorageMode::Shared | MTLStorageMode::Managed | MTLStorageMode::Memoryless => {
+                    MemoryLocation::Unknown
+                }
+                MTLStorageMode::Private => MemoryLocation::GpuOnly,
+                MTLStorageMode(mode /* @ 4.. */) => todo!("Unknown storage mode {mode}"),
             },
             size: size_and_align.size as u64,
             alignment: size_and_align.align as u64,
@@ -143,7 +145,7 @@ impl<'a> AllocationCreateDesc<'a> {
     }
 
     pub fn acceleration_structure_with_size(
-        device: &ProtocolObject<dyn metal::MTLDevice>,
+        device: &ProtocolObject<dyn MTLDevice>,
         name: &'a str,
         size: u64, // TODO: usize
         location: MemoryLocation,
@@ -162,7 +164,7 @@ impl<'a> AllocationCreateDesc<'a> {
 }
 
 pub struct Allocator {
-    device: Retained<ProtocolObject<dyn metal::MTLDevice>>,
+    device: Retained<ProtocolObject<dyn MTLDevice>>,
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
     allocation_sizes: AllocationSizes,
@@ -176,7 +178,7 @@ impl std::fmt::Debug for Allocator {
 
 #[derive(Debug)]
 pub struct AllocatorCreateDesc {
-    pub device: Retained<ProtocolObject<dyn metal::MTLDevice>>,
+    pub device: Retained<ProtocolObject<dyn MTLDevice>>,
     pub debug_settings: AllocatorDebugSettings,
     pub allocation_sizes: AllocationSizes,
 }
@@ -189,16 +191,16 @@ pub struct CommittedAllocationStatistics {
 
 #[derive(Debug)]
 struct MemoryBlock {
-    heap: Retained<ProtocolObject<dyn metal::MTLHeap>>,
+    heap: Retained<ProtocolObject<dyn MTLHeap>>,
     size: u64,
     sub_allocator: Box<dyn allocator::SubAllocator>,
 }
 
 impl MemoryBlock {
     fn new(
-        device: &ProtocolObject<dyn metal::MTLDevice>,
+        device: &ProtocolObject<dyn MTLDevice>,
         size: u64,
-        heap_descriptor: &metal::MTLHeapDescriptor,
+        heap_descriptor: &MTLHeapDescriptor,
         dedicated: bool,
         memory_location: MemoryLocation,
     ) -> Result<Self> {
@@ -231,7 +233,7 @@ struct MemoryType {
     memory_blocks: Vec<Option<MemoryBlock>>,
     _committed_allocations: CommittedAllocationStatistics,
     memory_location: MemoryLocation,
-    heap_properties: Retained<metal::MTLHeapDescriptor>,
+    heap_properties: Retained<MTLHeapDescriptor>,
     memory_type_index: usize,
     active_general_blocks: usize,
 }
@@ -239,15 +241,14 @@ struct MemoryType {
 impl MemoryType {
     fn allocate(
         &mut self,
-        device: &ProtocolObject<dyn metal::MTLDevice>,
+        device: &ProtocolObject<dyn MTLDevice>,
         desc: &AllocationCreateDesc<'_>,
         backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = allocator::AllocationType::Linear;
 
-        let memblock_size = if self.heap_properties.storageMode() == metal::MTLStorageMode::Private
-        {
+        let memblock_size = if self.heap_properties.storageMode() == MTLStorageMode::Private {
             allocation_sizes.device_memblock_size
         } else {
             allocation_sizes.host_memblock_size
@@ -422,24 +423,24 @@ impl Allocator {
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
         let heap_types = [
             (MemoryLocation::GpuOnly, {
-                let heap_desc = unsafe { metal::MTLHeapDescriptor::new() };
-                heap_desc.setCpuCacheMode(metal::MTLCPUCacheMode::DefaultCache);
-                heap_desc.setStorageMode(metal::MTLStorageMode::Private);
-                heap_desc.setType(metal::MTLHeapType::Placement);
+                let heap_desc = unsafe { MTLHeapDescriptor::new() };
+                heap_desc.setCpuCacheMode(MTLCPUCacheMode::DefaultCache);
+                heap_desc.setStorageMode(MTLStorageMode::Private);
+                heap_desc.setType(MTLHeapType::Placement);
                 heap_desc
             }),
             (MemoryLocation::CpuToGpu, {
-                let heap_desc = unsafe { metal::MTLHeapDescriptor::new() };
-                heap_desc.setCpuCacheMode(metal::MTLCPUCacheMode::WriteCombined);
-                heap_desc.setStorageMode(metal::MTLStorageMode::Shared);
-                heap_desc.setType(metal::MTLHeapType::Placement);
+                let heap_desc = unsafe { MTLHeapDescriptor::new() };
+                heap_desc.setCpuCacheMode(MTLCPUCacheMode::WriteCombined);
+                heap_desc.setStorageMode(MTLStorageMode::Shared);
+                heap_desc.setType(MTLHeapType::Placement);
                 heap_desc
             }),
             (MemoryLocation::GpuToCpu, {
-                let heap_desc = unsafe { metal::MTLHeapDescriptor::new() };
-                heap_desc.setCpuCacheMode(metal::MTLCPUCacheMode::DefaultCache);
-                heap_desc.setStorageMode(metal::MTLStorageMode::Shared);
-                heap_desc.setType(metal::MTLHeapType::Placement);
+                let heap_desc = unsafe { MTLHeapDescriptor::new() };
+                heap_desc.setCpuCacheMode(MTLCPUCacheMode::DefaultCache);
+                heap_desc.setStorageMode(MTLStorageMode::Shared);
+                heap_desc.setType(MTLHeapType::Placement);
                 heap_desc
             }),
         ];
@@ -525,7 +526,7 @@ impl Allocator {
     }
 
     /// Returns heaps for all memory blocks
-    pub fn heaps(&self) -> impl Iterator<Item = &ProtocolObject<dyn metal::MTLHeap>> {
+    pub fn heaps(&self) -> impl Iterator<Item = &ProtocolObject<dyn MTLHeap>> {
         self.memory_types.iter().flat_map(|memory_type| {
             memory_type
                 .memory_blocks
