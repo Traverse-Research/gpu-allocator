@@ -1,9 +1,11 @@
 use gpu_allocator::metal::{AllocationCreateDesc, Allocator, AllocatorCreateDesc};
 use log::info;
-use metal::MTLDevice as _;
 use objc2::rc::Id;
 use objc2_foundation::NSArray;
-use objc2_metal as metal;
+use objc2_metal::{
+    MTLCreateSystemDefaultDevice, MTLDevice as _, MTLPixelFormat,
+    MTLPrimitiveAccelerationStructureDescriptor, MTLStorageMode, MTLTextureDescriptor,
+};
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
@@ -14,7 +16,7 @@ fn main() {
     extern "C" {}
 
     let device =
-        unsafe { Id::from_raw(metal::MTLCreateSystemDefaultDevice()) }.expect("No MTLDevice found");
+        unsafe { Id::from_raw(MTLCreateSystemDefaultDevice()) }.expect("No MTLDevice found");
 
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
@@ -68,11 +70,11 @@ fn main() {
 
     // Test allocating texture
     {
-        let texture_desc = unsafe { metal::MTLTextureDescriptor::new() };
-        texture_desc.setPixelFormat(metal::MTLPixelFormat::RGBA8Unorm);
+        let texture_desc = unsafe { MTLTextureDescriptor::new() };
+        texture_desc.setPixelFormat(MTLPixelFormat::RGBA8Unorm);
         unsafe { texture_desc.setWidth(64) };
         unsafe { texture_desc.setHeight(64) };
-        texture_desc.setStorageMode(metal::MTLStorageMode::Private);
+        texture_desc.setStorageMode(MTLStorageMode::Private);
         let allocation_desc =
             AllocationCreateDesc::texture(&device, "Test allocation (Texture)", &texture_desc);
         let allocation = allocator.allocate(&allocation_desc).unwrap();
@@ -84,7 +86,7 @@ fn main() {
     // Test allocating acceleration structure
     {
         let empty_array = NSArray::from_slice(&[]);
-        let acc_desc = metal::MTLPrimitiveAccelerationStructureDescriptor::descriptor();
+        let acc_desc = MTLPrimitiveAccelerationStructureDescriptor::descriptor();
         acc_desc.setGeometryDescriptors(Some(&empty_array));
         let sizes = device.accelerationStructureSizesWithDescriptor(&acc_desc);
         let allocation_desc = AllocationCreateDesc::acceleration_structure_with_size(
