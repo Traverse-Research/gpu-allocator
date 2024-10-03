@@ -134,7 +134,7 @@ allocator.free(allocation).unwrap();
 
 ```rust
 use gpu_allocator::metal::*;
-
+use objc2_metal as metal;
 let mut allocator = Allocator::new(&AllocatorCreateDesc {
     device: device.clone(),
     debug_settings: Default::default(),
@@ -146,12 +146,12 @@ let mut allocator = Allocator::new(&AllocatorCreateDesc {
 ```rust
 use gpu_allocator::metal::*;
 use gpu_allocator::MemoryLocation;
-
+use objc2_metal as metal;
 let allocation_desc = AllocationCreateDesc::buffer(
     &device,
     "Example allocation",
     512, // size in bytes
-    gpu_allocator::MemoryLocation::GpuOnly,
+    MemoryLocation::GpuOnly,
 );
 let allocation = allocator.allocate(&allocation_desc).unwrap();
 let resource = allocation.make_buffer().unwrap();
