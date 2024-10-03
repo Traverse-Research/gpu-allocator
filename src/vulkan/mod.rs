@@ -1,5 +1,3 @@
-#![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
-
 #[cfg(feature = "visualizer")]
 mod visualizer;
 use std::{backtrace::Backtrace, fmt, marker::PhantomData, sync::Arc};
