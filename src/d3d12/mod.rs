@@ -1,4 +1,10 @@
-use std::{backtrace::Backtrace, fmt, sync::Arc};
+use std::{
+    backtrace::Backtrace,
+    fmt,
+    // TODO: Remove when bumping MSRV to 1.80
+    mem::size_of_val,
+    sync::Arc,
+};
 
 use log::{debug, warn, Level};
 use windows::Win32::{
@@ -628,7 +634,7 @@ impl Allocator {
             device.CheckFeatureSupport(
                 D3D12_FEATURE_D3D12_OPTIONS,
                 <*mut D3D12_FEATURE_DATA_D3D12_OPTIONS>::cast(&mut options),
-                std::mem::size_of_val(&options) as u32,
+                size_of_val(&options) as u32,
             )
         }
         .map_err(|e| {
