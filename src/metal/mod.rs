@@ -39,55 +39,24 @@ pub struct Allocation {
 }
 
 impl Allocation {
-    pub fn heap(&self) -> &ProtocolObject<dyn MTLHeap> {
+    /// Return the backing heap for this allocation
+    pub unsafe fn heap(&self) -> &ProtocolObject<dyn MTLHeap> {
         &self.heap
     }
 
-    pub fn make_buffer(&self) -> Option<Retained<ProtocolObject<dyn MTLBuffer>>> {
-        let resource = unsafe {
-            self.heap.newBufferWithLength_options_offset(
-                self.size as usize,
-                self.heap.resourceOptions(),
-                self.offset as usize,
-            )
-        };
-        if let Some(resource) = &resource {
-            if let Some(name) = &self.name {
-                resource.setLabel(Some(&NSString::from_str(name)));
-            }
-        }
-        resource
+    /// Returns the size of the allocation
+    pub fn size(&self) -> u64 {
+        self.size
     }
 
-    pub fn make_texture(
-        &self,
-        desc: &MTLTextureDescriptor,
-    ) -> Option<Retained<ProtocolObject<dyn MTLTexture>>> {
-        let resource = unsafe {
-            self.heap
-                .newTextureWithDescriptor_offset(desc, self.offset as usize)
-        };
-        if let Some(resource) = &resource {
-            if let Some(name) = &self.name {
-                resource.setLabel(Some(&NSString::from_str(name)));
-            }
-        }
-        resource
+    /// Returns the offset of the allocation on the [`ID3D12Heap`].
+    /// When creating a placed resources, this offset needs to be supplied as well.
+    pub fn offset(&self) -> u64 {
+        self.offset
     }
 
-    pub fn make_acceleration_structure(
-        &self,
-    ) -> Option<Retained<ProtocolObject<dyn MTLAccelerationStructure>>> {
-        let resource = unsafe {
-            self.heap
-                .newAccelerationStructureWithSize_offset(self.size as usize, self.offset as usize)
-        };
-        if let Some(resource) = &resource {
-            if let Some(name) = &self.name {
-                resource.setLabel(Some(&NSString::from_str(name)));
-            }
-        }
-        resource
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_ref().map(|s| s.as_ref())
     }
 
     fn is_null(&self) -> bool {
