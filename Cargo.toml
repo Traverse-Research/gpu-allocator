@@ -38,6 +38,7 @@ objc2 = { version = "0.5.2", default-features = false, optional = true }
 objc2-foundation = { version = "0.2", default-features = false, optional = true }
 objc2-metal = { version = "0.2.1", default-features = false, features = [
     "MTLAccelerationStructure",
+    "MTLAllocation",
     "MTLBuffer",
     "MTLDevice",
     "MTLHeap",
@@ -105,3 +106,8 @@ metal = ["dep:objc2", "dep:objc2-metal", "dep:objc2-foundation"]
 public-winapi = ["dep:winapi"]
 
 default = ["d3d12", "vulkan", "metal"]
+
+[patch.crates-io]
+objc2 = { git = "https://github.com/madsmtm/objc2.git", rev = "c85f91e" }
+objc2-foundation  = { git = "https://github.com/madsmtm/objc2.git", rev = "c85f91e" }
+objc2-metal = { git = "https://github.com/madsmtm/objc2.git", rev = "c85f91e" }
