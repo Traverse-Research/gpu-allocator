@@ -32,7 +32,7 @@ pub(crate) struct MemoryChunk {
     pub(crate) allocation_type: AllocationType,
     pub(crate) name: Option<String>,
     /// Only used if [`crate::AllocatorDebugSettings::store_stack_traces`] is [`true`]
-    pub(crate) backtrace: Arc<Backtrace>,
+    pub(crate) backtrace: Option<Arc<Backtrace>>,
     next: Option<std::num::NonZeroU64>,
     prev: Option<std::num::NonZeroU64>,
 }
@@ -79,7 +79,7 @@ impl FreeListAllocator {
                 offset: 0,
                 allocation_type: AllocationType::Free,
                 name: None,
-                backtrace: Arc::new(Backtrace::disabled()),
+                backtrace: None,
                 prev: None,
                 next: None,
             },
@@ -162,7 +162,7 @@ impl SubAllocator for FreeListAllocator {
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Arc<Backtrace>,
+        backtrace: Option<Arc<Backtrace>>,
     ) -> Result<(u64, std::num::NonZeroU64)> {
         let free_size = self.size - self.allocated;
         if size > free_size {
@@ -302,7 +302,7 @@ impl SubAllocator for FreeListAllocator {
             })?;
             chunk.allocation_type = AllocationType::Free;
             chunk.name = None;
-            chunk.backtrace = Arc::new(Backtrace::disabled());
+            chunk.backtrace = None;
 
             self.allocated -= chunk.size;
 
@@ -384,7 +384,7 @@ impl SubAllocator for FreeListAllocator {
                 chunk.offset,
                 chunk.allocation_type,
                 name,
-                chunk.backtrace
+                chunk.backtrace.as_ref().map_or(&Backtrace::disabled(), |b| &b)
             );
         }
     }
