@@ -114,10 +114,12 @@ pub(crate) fn render_memory_chunks_ui<'a>(
                             if let Some(name) = &chunk.name {
                                 ui.label(format!("name: {}", name));
                             }
-                            if settings.show_backtraces
-                                && chunk.backtrace.status() == BacktraceStatus::Captured
-                            {
-                                ui.label(chunk.backtrace.to_string());
+                            if settings.show_backtraces {
+                                if let Some(backtrace) = chunk.backtrace.as_ref() {
+                                    if backtrace.status() == BacktraceStatus::Captured {
+                                        ui.label(backtrace.to_string());
+                                    }
+                                }
                             }
                         });
                     }

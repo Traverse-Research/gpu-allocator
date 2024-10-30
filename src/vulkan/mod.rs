@@ -452,7 +452,7 @@ impl MemoryType {
         device: &ash::Device,
         desc: &AllocationCreateDesc<'_>,
         granularity: u64,
-        backtrace: Arc<Backtrace>,
+        backtrace: Option<Arc<Backtrace>>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = if desc.linear {
@@ -768,11 +768,11 @@ impl Allocator {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
-        let backtrace = Arc::new(if self.debug_settings.store_stack_traces {
-            Backtrace::force_capture()
+        let backtrace = if self.debug_settings.store_stack_traces {
+            Some(Arc::new(Backtrace::force_capture()))
         } else {
-            Backtrace::disabled()
-        });
+            None
+        };
 
         if self.debug_settings.log_allocations {
             debug!(

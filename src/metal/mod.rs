@@ -243,7 +243,7 @@ impl MemoryType {
         &mut self,
         device: &ProtocolObject<dyn MTLDevice>,
         desc: &AllocationCreateDesc<'_>,
-        backtrace: Arc<Backtrace>,
+        backtrace: Option<Arc<Backtrace>>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = allocator::AllocationType::Linear;
@@ -473,11 +473,11 @@ impl Allocator {
         let size = desc.size;
         let alignment = desc.alignment;
 
-        let backtrace = Arc::new(if self.debug_settings.store_stack_traces {
-            Backtrace::force_capture()
+        let backtrace = if self.debug_settings.store_stack_traces {
+            Some(Arc::new(Backtrace::force_capture()))
         } else {
-            Backtrace::disabled()
-        });
+            None
+        };
 
         if self.debug_settings.log_allocations {
             debug!(
