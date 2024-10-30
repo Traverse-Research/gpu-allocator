@@ -108,7 +108,7 @@ impl SubAllocator for DedicatedBlockAllocator {
             name,
             self.backtrace
                 .as_ref()
-                .map_or(&Backtrace::disabled(), |b| &b)
+                .map_or(&Backtrace::disabled(), |b| b)
         )
     }
 
