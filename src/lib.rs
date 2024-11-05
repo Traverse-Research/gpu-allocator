@@ -273,62 +273,138 @@ impl Default for AllocatorDebugSettings {
 
 /// The sizes of the memory blocks that the allocator will create.
 ///
-/// Useful for tuning the allocator to your application's needs. For example most games will be fine with the default
+/// Useful for tuning the allocator to your application's needs. For example most games will be fine with the defaultsize
 /// values, but eg. an app might want to use smaller block sizes to reduce the amount of memory used.
 ///
 /// Clamped between 4MB and 256MB, and rounds up to the nearest multiple of 4MB for alignment reasons.
+///
+/// # Fixed or growable block size
+///
+/// This structure represents ranges of allowed sizes for shared memory blocks.
+/// By default, If the bounds of a given range are equal, the allocator will
+/// be configured to used a fixed memory block size for shared allocations.
+///
+/// Otherwise, the allocator will pick a memory block size within the specifed
+/// range, dependending on the number of existing allocations for the memory
+/// type.
+/// As a rule of thumb, the allocator will start with the minimum block size
+/// and double the size with each new allocation, up to the specified maximum
+/// block size. This growth is tracked independently for each memory type.
+/// The block size also decreases when blocks are deallocated.
+///
+/// # Example
+///
+/// ```
+/// use gpu_allocator::AllocationSizes;
+/// const MB: u64 = 1024 * 1024;
+/// // This configuration uses fixed memory block sizes.
+/// let fixed = AllocationSizes::new(256 * MB, 64 * MB);
+///
+/// // This configuration starts with 8MB memory blocks
+/// // and grows the block size of a given memory type each
+/// // time a new allocation is needed, up to a limit of
+/// // 256MB for device memory and 64MB for host memory.
+/// let growing = AllocationSizes::new(8 * MB, 8 * MB)
+///     .with_max_device_memblock_size(256 * MB)
+///     .with_max_host_memblock_size(64 * MB);
+/// ```
 #[derive(Clone, Copy, Debug)]
 pub struct AllocationSizes {
-    /// The size of the memory blocks that will be created for the GPU only memory type.
+    /// The initial size of the memory blocks that will be created for the GPU only memory type.
     ///
     /// Defaults to 256MB.
-    device_memblock_size: u64,
+    min_device_memblock_size: u64,
+    /// The size of device memory blocks doubles each time a new allocation is needed, up to
+    /// `device_maximum_memblock_size`.
+    max_device_memblock_size: u64,
     /// The size of the memory blocks that will be created for the CPU visible memory types.
     ///
     /// Defaults to 64MB.
-    host_memblock_size: u64,
+    min_host_memblock_size: u64,
+    /// The size of host memory blocks doubles each time a new allocation is needed, up to
+    /// `host_maximum_memblock_size`.
+    max_host_memblock_size: u64,
 }
 
 impl AllocationSizes {
+    /// Sets the minimum device and host memory block sizes.
+    ///
+    /// The maximum block sizes are initialized to the minimum sizes and
+    /// can be changed using `with_max_device_memblock_size` and
+    /// `with_max_host_memblock_size`.
     pub fn new(device_memblock_size: u64, host_memblock_size: u64) -> Self {
-        const FOUR_MB: u64 = 4 * 1024 * 1024;
-        const TWO_HUNDRED_AND_FIFTY_SIX_MB: u64 = 256 * 1024 * 1024;
-
-        let mut device_memblock_size =
-            device_memblock_size.clamp(FOUR_MB, TWO_HUNDRED_AND_FIFTY_SIX_MB);
-        let mut host_memblock_size =
-            host_memblock_size.clamp(FOUR_MB, TWO_HUNDRED_AND_FIFTY_SIX_MB);
-
-        if device_memblock_size % FOUR_MB != 0 {
-            let val = device_memblock_size / FOUR_MB + 1;
-            device_memblock_size = val * FOUR_MB;
-            log::warn!(
-                "Device memory block size must be a multiple of 4MB, clamping to {}MB",
-                device_memblock_size / 1024 / 1024
-            )
-        }
-
-        if host_memblock_size % FOUR_MB != 0 {
-            let val = host_memblock_size / FOUR_MB + 1;
-            host_memblock_size = val * FOUR_MB;
-            log::warn!(
-                "Host memory block size must be a multiple of 4MB, clamping to {}MB",
-                host_memblock_size / 1024 / 1024
-            )
-        }
+        let device_memblock_size = Self::adjust_memblock_size(device_memblock_size, "Device");
+        let host_memblock_size = Self::adjust_memblock_size(host_memblock_size, "Host");
 
         Self {
-            device_memblock_size,
-            host_memblock_size,
+            min_device_memblock_size: device_memblock_size,
+            max_device_memblock_size: device_memblock_size,
+            min_host_memblock_size: host_memblock_size,
+            max_host_memblock_size: host_memblock_size,
         }
+    }
+
+    /// Sets the maximum device memblock size, in bytes.
+    pub fn with_max_device_memblock_size(mut self, size: u64) -> Self {
+        self.max_device_memblock_size =
+            Self::adjust_memblock_size(size, "Device").max(self.min_device_memblock_size);
+
+        self
+    }
+
+    /// Sets the maximum host memblock size, in bytes.
+    pub fn with_max_host_memblock_size(mut self, size: u64) -> Self {
+        self.max_host_memblock_size =
+            Self::adjust_memblock_size(size, "Host").max(self.min_host_memblock_size);
+
+        self
+    }
+
+    fn adjust_memblock_size(size: u64, kind: &str) -> u64 {
+        const MB: u64 = 1024 * 1024;
+
+        let size = size.clamp(4 * MB, 256 * MB);
+
+        if size % (4 * MB) == 0 {
+            return size;
+        }
+
+        let val = size / (4 * MB) + 1;
+        let new_size = val * 4 * MB;
+        log::warn!(
+            "{kind} memory block size must be a multiple of 4MB, clamping to {}MB",
+            new_size / MB
+        );
+
+        new_size
+    }
+
+    /// Used internally to decide the size of a shared memory block
+    /// based withing the allowed range, based on the number of
+    /// existing allocations
+    pub(crate) fn get_memblock_size(&self, is_host: bool, count: usize) -> u64 {
+        let (min_size, max_size) = if is_host {
+            (self.min_host_memblock_size, self.max_host_memblock_size)
+        } else {
+            (self.min_device_memblock_size, self.max_device_memblock_size)
+        };
+
+        // The ranges are clamped to 4MB..256MB so we never need to
+        // shift by more than 7 bits. Clamping here to avoid having
+        // to worry about overflows.
+        let shift = count.min(7) as u64;
+        (min_size << shift).min(max_size)
     }
 }
 
 impl Default for AllocationSizes {
     fn default() -> Self {
+        const MB: u64 = 1024 * 1024;
         Self {
-            device_memblock_size: 256 * 1024 * 1024,
-            host_memblock_size: 64 * 1024 * 1024,
+            min_device_memblock_size: 256 * MB,
+            max_device_memblock_size: 256 * MB,
+            min_host_memblock_size: 64 * MB,
+            max_host_memblock_size: 64 * MB,
         }
     }
 }

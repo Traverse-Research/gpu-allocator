@@ -248,11 +248,8 @@ impl MemoryType {
     ) -> Result<Allocation> {
         let allocation_type = allocator::AllocationType::Linear;
 
-        let memblock_size = if self.heap_properties.storageMode() == MTLStorageMode::Private {
-            allocation_sizes.device_memblock_size
-        } else {
-            allocation_sizes.host_memblock_size
-        };
+        let is_host = self.heap_properties.storageMode() != MTLStorageMode::Private;
+        let memblock_size = allocation_sizes.get_memblock_size(is_host, self.active_general_blocks);
 
         let size = desc.size;
         let alignment = desc.alignment;
