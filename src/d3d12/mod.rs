@@ -440,11 +440,8 @@ impl MemoryType {
     ) -> Result<Allocation> {
         let allocation_type = AllocationType::Linear;
 
-        let memblock_size = if self.heap_properties.Type == D3D12_HEAP_TYPE_DEFAULT {
-            allocation_sizes.device_memblock_size
-        } else {
-            allocation_sizes.host_memblock_size
-        };
+        let is_host = self.heap_properties.Type != D3D12_HEAP_TYPE_DEFAULT;
+        let memblock_size = allocation_sizes.get_memblock_size(is_host, self.active_general_blocks);
 
         let size = desc.size;
         let alignment = desc.alignment;

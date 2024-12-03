@@ -461,14 +461,11 @@ impl MemoryType {
             allocator::AllocationType::NonLinear
         };
 
-        let memblock_size = if self
+        let is_host = self
             .memory_properties
-            .contains(vk::MemoryPropertyFlags::HOST_VISIBLE)
-        {
-            allocation_sizes.host_memblock_size
-        } else {
-            allocation_sizes.device_memblock_size
-        };
+            .contains(vk::MemoryPropertyFlags::HOST_VISIBLE);
+
+        let memblock_size = allocation_sizes.get_memblock_size(is_host, self.active_general_blocks);
 
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
@@ -760,7 +757,7 @@ impl Allocator {
             device: desc.device.clone(),
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
-            allocation_sizes: AllocationSizes::default(),
+            allocation_sizes: desc.allocation_sizes,
         })
     }
 
