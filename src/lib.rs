@@ -1,12 +1,5 @@
 //! This crate provides a fully written in Rust memory allocator for Vulkan, DirectX 12 and Metal.
 //!
-//! # [Windows-rs] and [winapi]
-//!
-//! `gpu-allocator` recently migrated from [winapi] to [windows-rs] but still provides convenient helpers to convert to and from [winapi] types, enabled when compiling with the `public-winapi` crate feature.
-//!
-//! [Windows-rs]: https://github.com/microsoft/windows-rs
-//! [winapi]: https://github.com/retep998/winapi-rs
-//!
 //! # Setting up the Vulkan memory allocator
 //!
 //! ```no_run

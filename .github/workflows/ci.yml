@@ -29,7 +29,7 @@ jobs:
           - os: ubuntu-latest
             features: vulkan,visualizer
           - os: windows-latest
-            features: vulkan,visualizer,d3d12,public-winapi
+            features: vulkan,visualizer,d3d12
           - os: macos-latest
             features: vulkan,visualizer,metal
     runs-on: ${{ matrix.os }}
@@ -56,7 +56,7 @@ jobs:
           - os: ubuntu-latest
             features: vulkan,visualizer
           - os: windows-latest
-            features: vulkan,visualizer,d3d12,public-winapi
+            features: vulkan,visualizer,d3d12
           - os: macos-latest
             features: vulkan,visualizer,metal
     runs-on: ${{ matrix.os }}
