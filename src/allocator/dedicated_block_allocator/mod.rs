@@ -106,9 +106,7 @@ impl SubAllocator for DedicatedBlockAllocator {
             memory_block_index,
             self.size,
             name,
-            self.backtrace
-                .as_ref()
-                .map_or(&Backtrace::disabled(), |b| b)
+            self.backtrace.as_deref().unwrap_or(&Backtrace::disabled())
         )
     }
 

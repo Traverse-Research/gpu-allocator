@@ -384,10 +384,7 @@ impl SubAllocator for FreeListAllocator {
                 chunk.offset,
                 chunk.allocation_type,
                 name,
-                chunk
-                    .backtrace
-                    .as_ref()
-                    .map_or(&Backtrace::disabled(), |b| b)
+                chunk.backtrace.as_deref().unwrap_or(&Backtrace::disabled())
             );
         }
     }
