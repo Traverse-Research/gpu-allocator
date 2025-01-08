@@ -206,13 +206,17 @@ impl Allocation {
     }
 
     /// Returns the [`vk::DeviceMemory`] object that is backing this allocation.
-    /// This memory object can be shared with multiple other allocations and shouldn't be freed (or allocated from)
+    ///
+    /// This memory object can be shared with multiple other allocations and shouldn't be freed or allocated from
     /// without this library, because that will lead to undefined behavior.
     ///
     /// # Safety
-    /// The result of this function can safely be used to pass into [`ash::Device::bind_buffer_memory()`],
-    /// [`ash::Device::bind_image_memory()`] etc. It is exposed for this reason. Keep in mind to also
-    /// pass [`Self::offset()`] along to those.
+    /// The result of this function can safely be passed into [`ash::Device::bind_buffer_memory()`],
+    /// [`ash::Device::bind_image_memory()`] etc. It is exposed for this reason.  Keep in mind to
+    /// also pass [`Self::offset()`] along to those.
+    ///
+    /// Also, this [`Allocation`] must not be [`Allocator::free()`]d while such a created resource
+    /// on this [`vk::DeviceMemory`] is still live.
     pub unsafe fn memory(&self) -> vk::DeviceMemory {
         self.device_memory
     }

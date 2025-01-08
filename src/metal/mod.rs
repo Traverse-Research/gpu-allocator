@@ -9,8 +9,8 @@ use log::debug;
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_foundation::NSString;
 use objc2_metal::{
-    MTLAccelerationStructure, MTLBuffer, MTLCPUCacheMode, MTLDevice, MTLHeap, MTLHeapDescriptor,
-    MTLHeapType, MTLResource, MTLResourceOptions, MTLStorageMode, MTLTexture, MTLTextureDescriptor,
+    MTLCPUCacheMode, MTLDevice, MTLHeap, MTLHeapDescriptor, MTLHeapType, MTLResourceOptions,
+    MTLStorageMode, MTLTextureDescriptor,
 };
 
 use crate::{
@@ -39,7 +39,18 @@ pub struct Allocation {
 }
 
 impl Allocation {
-    /// Return the backing heap for this allocation
+    /// Returns the [`MTLHeap`] object that is backing this allocation.
+    ///
+    /// This heap object can be shared with multiple other allocations and shouldn't be allocated from
+    /// without this library, because that will lead to undefined behavior.
+    ///
+    /// # Safety
+    /// When allocating new buffers, textures, or other resources on this [`MTLHeap`], be sure to
+    /// pass [`Self::offset()`] and not exceed [`Self::size()`] to not allocate new resources on top
+    /// of existing [`Allocation`]s.
+    ///
+    /// Also, this [`Allocation`] must not be [`Allocator::free()`]d while such a created resource
+    /// on this [`MTLHeap`] is still live.
     pub unsafe fn heap(&self) -> &ProtocolObject<dyn MTLHeap> {
         &self.heap
     }
@@ -49,14 +60,16 @@ impl Allocation {
         self.size
     }
 
-    /// Returns the offset of the allocation on the [`ID3D12Heap`].
-    /// When creating a placed resources, this offset needs to be supplied as well.
+    /// Returns the offset of the allocation on the [`MTLHeap`].
+    ///
+    /// Since all [`Allocation`]s are suballocated within a [`MTLHeap`], this offset always needs to
+    /// be supplied.  See the safety documentation on [`Self::heap()`].
     pub fn offset(&self) -> u64 {
         self.offset
     }
 
     pub fn name(&self) -> Option<&str> {
-        self.name.as_ref().map(|s| s.as_ref())
+        self.name.as_deref()
     }
 
     fn is_null(&self) -> bool {
