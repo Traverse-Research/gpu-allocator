@@ -52,9 +52,9 @@ unsafe impl Send for SendSyncPtr {}
 // `mapped_ptr` themselves.
 unsafe impl Sync for SendSyncPtr {}
 
-pub struct AllocatorCreateDesc {
+pub struct AllocatorCreateDesc<'a> {
     pub instance: ash::Instance,
-    pub device: ash::Device,
+    pub device: &'a ash::Device,
     pub physical_device: vk::PhysicalDevice,
     pub debug_settings: AllocatorDebugSettings,
     pub buffer_device_address: bool,
@@ -674,23 +674,23 @@ impl MemoryType {
     }
 }
 
-pub struct Allocator {
+pub struct Allocator<'a> {
     pub(crate) memory_types: Vec<MemoryType>,
     pub(crate) memory_heaps: Vec<vk::MemoryHeap>,
-    device: ash::Device,
+    device: &'a ash::Device,
     pub(crate) buffer_image_granularity: u64,
     pub(crate) debug_settings: AllocatorDebugSettings,
     allocation_sizes: AllocationSizes,
 }
 
-impl fmt::Debug for Allocator {
+impl fmt::Debug for Allocator<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.generate_report().fmt(f)
     }
 }
 
-impl Allocator {
-    pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
+impl<'a> Allocator<'a> {
+    pub fn new(desc: &AllocatorCreateDesc<'a>) -> Result<Self> {
         if desc.physical_device == vk::PhysicalDevice::null() {
             return Err(AllocationError::InvalidAllocatorCreateDesc(
                 "AllocatorCreateDesc field `physical_device` is null.".into(),
@@ -754,7 +754,7 @@ impl Allocator {
         Ok(Self {
             memory_types,
             memory_heaps,
-            device: desc.device.clone(),
+            device: desc.device,
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
             allocation_sizes: desc.allocation_sizes,
@@ -827,7 +827,7 @@ impl Allocator {
             Err(AllocationError::OutOfMemory)
         } else {
             memory_type.allocate(
-                &self.device,
+                self.device,
                 desc,
                 self.buffer_image_granularity,
                 backtrace.clone(),
@@ -849,7 +849,7 @@ impl Allocator {
                 };
 
                 self.memory_types[memory_type_index].allocate(
-                    &self.device,
+                    self.device,
                     desc,
                     self.buffer_image_granularity,
                     backtrace,
@@ -877,7 +877,7 @@ impl Allocator {
             return Ok(());
         }
 
-        self.memory_types[allocation.memory_type_index].free(allocation, &self.device)?;
+        self.memory_types[allocation.memory_type_index].free(allocation, self.device)?;
 
         Ok(())
     }
@@ -955,7 +955,7 @@ impl Allocator {
     }
 }
 
-impl Drop for Allocator {
+impl Drop for Allocator<'_> {
     fn drop(&mut self) {
         if self.debug_settings.log_leaks_on_shutdown {
             self.report_memory_leaks(Level::Warn);
@@ -966,7 +966,7 @@ impl Drop for Allocator {
             for mem_block in mem_type.memory_blocks.iter_mut() {
                 let block = mem_block.take();
                 if let Some(block) = block {
-                    block.destroy(&self.device);
+                    block.destroy(self.device);
                 }
             }
         }

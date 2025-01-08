@@ -40,7 +40,7 @@ impl AllocatorVisualizer {
         self.color_scheme = color_scheme;
     }
 
-    pub fn render_memory_block_ui(&mut self, ui: &mut egui::Ui, alloc: &Allocator) {
+    pub fn render_memory_block_ui(&mut self, ui: &mut egui::Ui, alloc: &Allocator<'_>) {
         ui.label(format!(
             "buffer image granularity: {:?}",
             alloc.buffer_image_granularity
@@ -145,7 +145,7 @@ impl AllocatorVisualizer {
     pub fn render_memory_block_window(
         &mut self,
         ctx: &egui::Context,
-        allocator: &Allocator,
+        allocator: &Allocator<'_>,
         open: &mut bool,
     ) {
         egui::Window::new("Allocator Memory Blocks")
@@ -156,7 +156,7 @@ impl AllocatorVisualizer {
     pub fn render_memory_block_visualization_windows(
         &mut self,
         ctx: &egui::Context,
-        allocator: &Allocator,
+        allocator: &Allocator<'_>,
     ) {
         // Draw each window.
         let color_scheme = &self.color_scheme;
@@ -200,7 +200,7 @@ impl AllocatorVisualizer {
         });
     }
 
-    pub fn render_breakdown_ui(&mut self, ui: &mut egui::Ui, allocator: &Allocator) {
+    pub fn render_breakdown_ui(&mut self, ui: &mut egui::Ui, allocator: &Allocator<'_>) {
         render_allocation_reports_ui(
             ui,
             &mut self.breakdown_settings,
@@ -216,7 +216,7 @@ impl AllocatorVisualizer {
     pub fn render_breakdown_window(
         &mut self,
         ctx: &egui::Context,
-        allocator: &Allocator,
+        allocator: &Allocator<'_>,
         open: &mut bool,
     ) {
         egui::Window::new("Allocator Breakdown")
