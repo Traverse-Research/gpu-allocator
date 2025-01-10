@@ -287,7 +287,7 @@ pub struct MappedAllocationSlab<'a> {
 }
 
 // SAFETY: See the safety comment of Allocation::as_mapped_slab above.
-unsafe impl<'a> presser::Slab for MappedAllocationSlab<'a> {
+unsafe impl presser::Slab for MappedAllocationSlab<'_> {
     fn base_ptr(&self) -> *const u8 {
         self.mapped_ptr
     }
