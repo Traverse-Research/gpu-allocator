@@ -10,7 +10,7 @@ homepage = "https://github.com/Traverse-Research/gpu-allocator"
 repository = "https://github.com/Traverse-Research/gpu-allocator"
 keywords = ["vulkan", "memory", "allocator"]
 documentation = "https://docs.rs/gpu-allocator/"
-rust-version = "1.70"
+rust-version = "1.71"
 
 include = [
     "/README.md",
