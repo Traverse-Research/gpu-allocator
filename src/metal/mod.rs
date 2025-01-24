@@ -20,9 +20,9 @@ use crate::{
 
 fn memory_location_to_metal(location: MemoryLocation) -> MTLResourceOptions {
     match location {
-        MemoryLocation::GpuOnly => MTLResourceOptions::MTLResourceStorageModePrivate,
+        MemoryLocation::GpuOnly => MTLResourceOptions::StorageModePrivate,
         MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu | MemoryLocation::Unknown => {
-            MTLResourceOptions::MTLResourceStorageModeShared
+            MTLResourceOptions::StorageModeShared
         }
     }
 }
