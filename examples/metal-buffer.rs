@@ -1,6 +1,5 @@
 use gpu_allocator::metal::{AllocationCreateDesc, Allocator, AllocatorCreateDesc};
 use log::info;
-use objc2::rc::Id;
 use objc2_foundation::NSArray;
 use objc2_metal::{
     MTLCreateSystemDefaultDevice, MTLDevice as _, MTLHeap, MTLPixelFormat,
@@ -15,8 +14,7 @@ fn main() {
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {}
 
-    let device =
-        unsafe { Id::from_raw(MTLCreateSystemDefaultDevice()) }.expect("No MTLDevice found");
+    let device = MTLCreateSystemDefaultDevice().expect("No MTLDevice found");
 
     // Setting up the allocator
     let mut allocator = Allocator::new(&AllocatorCreateDesc {
