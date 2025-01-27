@@ -335,18 +335,22 @@ impl Allocation {
     }
 
     /// Returns the [`ID3D12Heap`] object that is backing this allocation.
-    /// This heap object can be shared with multiple other allocations and shouldn't be freed (or allocated from)
+    ///
+    /// This heap object can be shared with multiple other allocations and shouldn't be allocated from
     /// without this library, because that will lead to undefined behavior.
     ///
     /// # Safety
-    /// The result of this function be safely passed into [`ID3D12Device::CreatePlacedResource()`].
-    /// It is exposed for this reason. Keep in mind to also pass [`Self::offset()`] along to it.
+    /// The result of this function can safely be passed into [`ID3D12Device::CreatePlacedResource()`].
+    /// It is exposed for this reason.  Keep in mind to also pass [`Self::offset()`] along to it.
+    ///
+    /// Also, this [`Allocation`] must not be [`Allocator::free()`]d while such a created resource
+    /// on this [`ID3D12Heap`] is still live.
     pub unsafe fn heap(&self) -> &ID3D12Heap {
         &self.heap
     }
 
     /// Returns the offset of the allocation on the [`ID3D12Heap`].
-    /// When creating a placed resources, this offset needs to be supplied as well.
+    /// When creating a placed resource, this offset needs to be supplied as well.
     pub fn offset(&self) -> u64 {
         self.offset
     }

@@ -9,8 +9,8 @@ use log::debug;
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_foundation::NSString;
 use objc2_metal::{
-    MTLAccelerationStructure, MTLBuffer, MTLCPUCacheMode, MTLDevice, MTLHeap, MTLHeapDescriptor,
-    MTLHeapType, MTLResource, MTLResourceOptions, MTLStorageMode, MTLTexture, MTLTextureDescriptor,
+    MTLCPUCacheMode, MTLDevice, MTLHeap, MTLHeapDescriptor, MTLHeapType, MTLResourceOptions,
+    MTLStorageMode, MTLTextureDescriptor,
 };
 
 use crate::{
@@ -39,55 +39,37 @@ pub struct Allocation {
 }
 
 impl Allocation {
-    pub fn heap(&self) -> &ProtocolObject<dyn MTLHeap> {
+    /// Returns the [`MTLHeap`] object that is backing this allocation.
+    ///
+    /// This heap object can be shared with multiple other allocations and shouldn't be allocated from
+    /// without this library, because that will lead to undefined behavior.
+    ///
+    /// # Safety
+    /// When allocating new buffers, textures, or other resources on this [`MTLHeap`], be sure to
+    /// pass [`Self::offset()`] and not exceed [`Self::size()`] to not allocate new resources on top
+    /// of existing [`Allocation`]s.
+    ///
+    /// Also, this [`Allocation`] must not be [`Allocator::free()`]d while such a created resource
+    /// on this [`MTLHeap`] is still live.
+    pub unsafe fn heap(&self) -> &ProtocolObject<dyn MTLHeap> {
         &self.heap
     }
 
-    pub fn make_buffer(&self) -> Option<Retained<ProtocolObject<dyn MTLBuffer>>> {
-        let resource = unsafe {
-            self.heap.newBufferWithLength_options_offset(
-                self.size as usize,
-                self.heap.resourceOptions(),
-                self.offset as usize,
-            )
-        };
-        if let Some(resource) = &resource {
-            if let Some(name) = &self.name {
-                resource.setLabel(Some(&NSString::from_str(name)));
-            }
-        }
-        resource
+    /// Returns the size of the allocation
+    pub fn size(&self) -> u64 {
+        self.size
     }
 
-    pub fn make_texture(
-        &self,
-        desc: &MTLTextureDescriptor,
-    ) -> Option<Retained<ProtocolObject<dyn MTLTexture>>> {
-        let resource = unsafe {
-            self.heap
-                .newTextureWithDescriptor_offset(desc, self.offset as usize)
-        };
-        if let Some(resource) = &resource {
-            if let Some(name) = &self.name {
-                resource.setLabel(Some(&NSString::from_str(name)));
-            }
-        }
-        resource
+    /// Returns the offset of the allocation on the [`MTLHeap`].
+    ///
+    /// Since all [`Allocation`]s are suballocated within a [`MTLHeap`], this offset always needs to
+    /// be supplied.  See the safety documentation on [`Self::heap()`].
+    pub fn offset(&self) -> u64 {
+        self.offset
     }
 
-    pub fn make_acceleration_structure(
-        &self,
-    ) -> Option<Retained<ProtocolObject<dyn MTLAccelerationStructure>>> {
-        let resource = unsafe {
-            self.heap
-                .newAccelerationStructureWithSize_offset(self.size as usize, self.offset as usize)
-        };
-        if let Some(resource) = &resource {
-            if let Some(name) = &self.name {
-                resource.setLabel(Some(&NSString::from_str(name)));
-            }
-        }
-        resource
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     fn is_null(&self) -> bool {

@@ -197,7 +197,16 @@
 //!     MemoryLocation::GpuOnly,
 //! );
 //! let allocation = allocator.allocate(&allocation_desc).unwrap();
-//! let resource = allocation.make_buffer().unwrap();
+//! # use objc2_metal::MTLHeap;
+//! let heap = unsafe { allocation.heap() };
+//! let resource = unsafe {
+//!     heap.newBufferWithLength_options_offset(
+//!         allocation.size() as usize,
+//!         heap.resourceOptions(),
+//!         allocation.offset() as usize,
+//!     )
+//! }
+//! .unwrap();
 //!
 //! // Cleanup
 //! drop(resource);

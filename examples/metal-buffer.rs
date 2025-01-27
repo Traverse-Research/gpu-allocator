@@ -3,7 +3,7 @@ use log::info;
 use objc2::rc::Id;
 use objc2_foundation::NSArray;
 use objc2_metal::{
-    MTLCreateSystemDefaultDevice, MTLDevice as _, MTLPixelFormat,
+    MTLCreateSystemDefaultDevice, MTLDevice as _, MTLHeap, MTLPixelFormat,
     MTLPrimitiveAccelerationStructureDescriptor, MTLStorageMode, MTLTextureDescriptor,
 };
 
@@ -35,7 +35,17 @@ fn main() {
             gpu_allocator::MemoryLocation::GpuOnly,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
-        let _buffer = allocation.make_buffer().unwrap();
+        // SAFETY: We will only allocate objects on this heap within the returned offset and size
+        let heap = unsafe { allocation.heap() };
+        let buffer = unsafe {
+            heap.newBufferWithLength_options_offset(
+                allocation.size() as usize,
+                heap.resourceOptions(),
+                allocation.offset() as usize,
+            )
+        }
+        .unwrap();
+        drop(buffer);
         allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of GpuOnly memory was successful.");
     }
@@ -49,7 +59,17 @@ fn main() {
             gpu_allocator::MemoryLocation::CpuToGpu,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
-        let _buffer = allocation.make_buffer().unwrap();
+        // SAFETY: We will only allocate objects on this heap within the returned offset and size
+        let heap = unsafe { allocation.heap() };
+        let buffer = unsafe {
+            heap.newBufferWithLength_options_offset(
+                allocation.size() as usize,
+                heap.resourceOptions(),
+                allocation.offset() as usize,
+            )
+        }
+        .unwrap();
+        drop(buffer);
         allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of CpuToGpu memory was successful.");
     }
@@ -63,7 +83,17 @@ fn main() {
             gpu_allocator::MemoryLocation::GpuToCpu,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
-        let _buffer = allocation.make_buffer().unwrap();
+        // SAFETY: We will only allocate objects on this heap within the returned offset and size
+        let heap = unsafe { allocation.heap() };
+        let buffer = unsafe {
+            heap.newBufferWithLength_options_offset(
+                allocation.size() as usize,
+                heap.resourceOptions(),
+                allocation.offset() as usize,
+            )
+        }
+        .unwrap();
+        drop(buffer);
         allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of GpuToCpu memory was successful.");
     }
@@ -78,7 +108,13 @@ fn main() {
         let allocation_desc =
             AllocationCreateDesc::texture(&device, "Test allocation (Texture)", &texture_desc);
         let allocation = allocator.allocate(&allocation_desc).unwrap();
-        let _texture = allocation.make_texture(&texture_desc).unwrap();
+        // SAFETY: We will only allocate objects on this heap within the returned offset and size
+        let heap = unsafe { allocation.heap() };
+        let buffer = unsafe {
+            heap.newTextureWithDescriptor_offset(&texture_desc, allocation.offset() as usize)
+        }
+        .unwrap();
+        drop(buffer);
         allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of Texture was successful.");
     }
@@ -96,7 +132,16 @@ fn main() {
             gpu_allocator::MemoryLocation::GpuOnly,
         );
         let allocation = allocator.allocate(&allocation_desc).unwrap();
-        let _acc_structure = allocation.make_acceleration_structure();
+        // SAFETY: We will only allocate objects on this heap within the returned offset and size
+        let heap = unsafe { allocation.heap() };
+        let buffer = unsafe {
+            heap.newAccelerationStructureWithSize_offset(
+                allocation.size() as usize,
+                allocation.offset() as usize,
+            )
+        }
+        .unwrap();
+        drop(buffer);
         allocator.free(&allocation).unwrap();
         info!("Allocation and deallocation of Acceleration structure was successful.");
     }
