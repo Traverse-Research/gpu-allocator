@@ -9,7 +9,10 @@ use std::{
 use log::{debug, warn, Level};
 use windows::Win32::{
     Foundation::E_OUTOFMEMORY,
-    Graphics::{Direct3D12::*, Dxgi::Common::DXGI_FORMAT},
+    Graphics::{
+        Direct3D12::*,
+        Dxgi::{Common::DXGI_FORMAT, DXGI_ERROR_DEVICE_REMOVED},
+    },
 };
 
 #[cfg(feature = "public-winapi")]
@@ -954,6 +957,12 @@ impl Allocator {
                         }
                     }
                 } {
+                    if e.code() == DXGI_ERROR_DEVICE_REMOVED {
+                        return Err(AllocationError::Internal(format!(
+                            "ID3D12Device::CreateCommittedResource DEVICE_REMOVED: {:?}",
+                            unsafe { self.device.GetDeviceRemovedReason() }
+                        )));
+                    }
                     return Err(AllocationError::Internal(format!(
                         "ID3D12Device::CreateCommittedResource failed: {}",
                         e
@@ -1064,6 +1073,12 @@ impl Allocator {
                         }
                     }
                 } {
+                    if e.code() == DXGI_ERROR_DEVICE_REMOVED {
+                        return Err(AllocationError::Internal(format!(
+                            "ID3D12Device::CreatePlacedResource DEVICE_REMOVED: {:?}",
+                            unsafe { self.device.GetDeviceRemovedReason() }
+                        )));
+                    }
                     return Err(AllocationError::Internal(format!(
                         "ID3D12Device::CreatePlacedResource failed: {}",
                         e
