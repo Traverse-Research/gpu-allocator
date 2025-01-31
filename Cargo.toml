@@ -38,11 +38,13 @@ objc2 = { version = "0.5.2", default-features = false, optional = true }
 objc2-foundation = { version = "0.2", default-features = false, optional = true }
 objc2-metal = { version = "0.2.1", default-features = false, features = [
     "MTLAccelerationStructure",
+    "MTLAllocation",
     "MTLBuffer",
     "MTLDevice",
     "MTLHeap",
     "MTLResource",
     "MTLTexture",
+    "MTLHeap",
     "std",
 ], optional = true }
 
