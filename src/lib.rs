@@ -162,9 +162,7 @@
 //! # #[cfg(feature = "metal")]
 //! # fn main() {
 //! use gpu_allocator::metal::*;
-//! # use objc2::rc::Id;
-//! # let device = unsafe { objc2_metal::MTLCreateSystemDefaultDevice() };
-//! # let device = unsafe { Id::from_raw(device) }.expect("No MTLDevice found");
+//! # let device = objc2_metal::MTLCreateSystemDefaultDevice().expect("No MTLDevice found");
 //! let mut allocator = Allocator::new(&AllocatorCreateDesc {
 //!     device: device.clone(),
 //!     debug_settings: Default::default(),
@@ -181,9 +179,7 @@
 //! # fn main() {
 //! use gpu_allocator::metal::*;
 //! use gpu_allocator::MemoryLocation;
-//! # use objc2::rc::Id;
-//! # let device = unsafe { objc2_metal::MTLCreateSystemDefaultDevice() };
-//! # let device = unsafe { Id::from_raw(device) }.expect("No MTLDevice found");
+//! # let device = objc2_metal::MTLCreateSystemDefaultDevice().expect("No MTLDevice found");
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
 //! #     device: device.clone(),
 //! #     debug_settings: Default::default(),
