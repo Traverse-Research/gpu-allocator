@@ -4,7 +4,7 @@ name: CI
 
 jobs:
   check_msrv:
-    name: Check MSRV (1.70.0)
+    name: Check MSRV (1.71.0)
     strategy:
       matrix:
         include:
@@ -20,7 +20,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - name: Generate lockfile with minimal dependency versions
         run: cargo +nightly generate-lockfile -Zminimal-versions
-      - uses: dtolnay/rust-toolchain@1.70.0
+      - uses: dtolnay/rust-toolchain@1.71.0
       # Note that examples are extempt from the MSRV check, so that they can use newer Rust features
       - run: cargo check --workspace --features ${{ matrix.features }} --no-default-features
 
