@@ -278,20 +278,27 @@ impl Default for AllocatorDebugSettings {
 
 /// The sizes of the memory blocks that the allocator will create.
 ///
-/// Useful for tuning the allocator to your application's needs. For example most games will be fine with the defaultsize
+/// Useful for tuning the allocator to your application's needs. For example most games will be fine with the default
 /// values, but eg. an app might want to use smaller block sizes to reduce the amount of memory used.
 ///
 /// Clamped between 4MB and 256MB, and rounds up to the nearest multiple of 4MB for alignment reasons.
 ///
+/// Note that these limits only apply to shared memory blocks that can hold multiple allocations.
+/// If an allocation does not fit within the corresponding maximum block size, it will be placed
+/// in a dedicated memory block holding only this allocation, without limitations other than what
+/// the underlying hardware and driver are able to provide.
+///
 /// # Fixed or growable block size
 ///
 /// This structure represents ranges of allowed sizes for shared memory blocks.
-/// By default, If the bounds of a given range are equal, the allocator will
-/// be configured to used a fixed memory block size for shared allocations.
+/// By default, if the upper bounds are not extended using `with_max_*_memblock_size`,
+/// the allocator will be configured to use a fixed memory block size for shared
+/// allocations.
 ///
 /// Otherwise, the allocator will pick a memory block size within the specifed
-/// range, dependending on the number of existing allocations for the memory
+/// range, depending on the number of existing allocations for the memory
 /// type.
+///
 /// As a rule of thumb, the allocator will start with the minimum block size
 /// and double the size with each new allocation, up to the specified maximum
 /// block size. This growth is tracked independently for each memory type.
@@ -315,19 +322,27 @@ impl Default for AllocatorDebugSettings {
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct AllocationSizes {
-    /// The initial size of the memory blocks that will be created for the GPU only memory type.
+    /// The initial size for device memory blocks.
+    ///
+    /// The size of new device memory blocks doubles each time a new block is needed, up to
+    /// [`AllocationSizes::max_device_memblock_size`].
     ///
     /// Defaults to 256MB.
     min_device_memblock_size: u64,
-    /// The size of device memory blocks doubles each time a new allocation is needed, up to
-    /// `device_maximum_memblock_size`.
+    /// The maximum size for device memory blocks.
+    ///
+    /// Defaults to the value of [`AllocationSizes::min_device_memblock_size`].
     max_device_memblock_size: u64,
-    /// The size of the memory blocks that will be created for the CPU visible memory types.
+    /// The initial size for host memory blocks.
+    ///
+    /// The size of new host memory blocks doubles each time a new block is needed, up to
+    /// [`AllocationSizes::max_host_memblock_size`].
     ///
     /// Defaults to 64MB.
     min_host_memblock_size: u64,
-    /// The size of host memory blocks doubles each time a new allocation is needed, up to
-    /// `host_maximum_memblock_size`.
+    /// The maximum size for host memory blocks.
+    ///
+    /// Defaults to the value of [`AllocationSizes::min_host_memblock_size`].
     max_host_memblock_size: u64,
 }
 
@@ -335,8 +350,8 @@ impl AllocationSizes {
     /// Sets the minimum device and host memory block sizes.
     ///
     /// The maximum block sizes are initialized to the minimum sizes and
-    /// can be changed using `with_max_device_memblock_size` and
-    /// `with_max_host_memblock_size`.
+    /// can be increased using [`AllocationSizes::with_max_device_memblock_size`] and
+    /// [`AllocationSizes::with_max_host_memblock_size`].
     pub fn new(device_memblock_size: u64, host_memblock_size: u64) -> Self {
         let device_memblock_size = Self::adjust_memblock_size(device_memblock_size, "Device");
         let host_memblock_size = Self::adjust_memblock_size(host_memblock_size, "Host");
@@ -385,8 +400,11 @@ impl AllocationSizes {
     }
 
     /// Used internally to decide the size of a shared memory block
-    /// based withing the allowed range, based on the number of
-    /// existing allocations
+    /// based within the allowed range, based on the number of
+    /// existing allocations. The more blocks there already are
+    /// (where the requested allocation didn't fit), the larger
+    /// the returned memory block size is going to be (up to
+    /// `max_*_memblock_size`).
     pub(crate) fn get_memblock_size(&self, is_host: bool, count: usize) -> u64 {
         let (min_size, max_size) = if is_host {
             (self.min_host_memblock_size, self.max_host_memblock_size)
