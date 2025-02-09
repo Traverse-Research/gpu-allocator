@@ -39,7 +39,7 @@ pub struct AllocationReport {
     /// The size in bytes of the allocation.
     pub size: u64,
     #[cfg(feature = "visualizer")]
-    pub(crate) backtrace: Arc<Backtrace>,
+    pub(crate) backtrace: Option<Arc<Backtrace>>,
 }
 
 /// Describes a memory block in the [`AllocatorReport`].
@@ -113,7 +113,7 @@ pub(crate) trait SubAllocator: SubAllocatorBase + fmt::Debug + Sync + Send {
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Arc<Backtrace>,
+        backtrace: Option<Arc<Backtrace>>,
     ) -> Result<(u64, std::num::NonZeroU64)>;
 
     fn free(&mut self, chunk_id: Option<std::num::NonZeroU64>) -> Result<()>;
