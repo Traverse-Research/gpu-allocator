@@ -1,5 +1,5 @@
-use std::{backtrace::Backtrace, fmt, ops::Range, sync::Arc};
-
+use alloc::{fmt, string::String, vec::Vec};
+use core::ops::Range;
 use log::*;
 #[cfg(feature = "std")]
 use std::{backtrace::Backtrace, sync::Arc};
@@ -81,7 +81,7 @@ impl fmt::Debug for AllocationReport {
 impl fmt::Debug for AllocatorReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut allocations = self.allocations.clone();
-        allocations.sort_by_key(|alloc| std::cmp::Reverse(alloc.size));
+        allocations.sort_by_key(|alloc| core::cmp::Reverse(alloc.size));
 
         let max_num_allocations_to_print = f.precision().unwrap_or(usize::MAX);
         allocations.truncate(max_num_allocations_to_print);
@@ -89,7 +89,7 @@ impl fmt::Debug for AllocatorReport {
         f.debug_struct("AllocatorReport")
             .field(
                 "summary",
-                &std::format_args!(
+                &core::format_args!(
                     "{} / {}",
                     fmt_bytes(self.total_allocated_bytes),
                     fmt_bytes(self.total_reserved_bytes)
@@ -118,11 +118,11 @@ pub(crate) trait SubAllocator: SubAllocatorBase + fmt::Debug + Sync + Send {
         #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
     ) -> Result<(u64, core::num::NonZeroU64)>;
 
-    fn free(&mut self, chunk_id: Option<std::num::NonZeroU64>) -> Result<()>;
+    fn free(&mut self, chunk_id: Option<core::num::NonZeroU64>) -> Result<()>;
 
     fn rename_allocation(
         &mut self,
-        chunk_id: Option<std::num::NonZeroU64>,
+        chunk_id: Option<core::num::NonZeroU64>,
         name: &str,
     ) -> Result<()>;
 

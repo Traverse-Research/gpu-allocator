@@ -1,6 +1,8 @@
 #[cfg(feature = "std")]
 use std::{backtrace::Backtrace, sync::Arc};
 
+use alloc::{boxed::Box, string::ToString, vec::Vec};
+
 #[cfg(feature = "visualizer")]
 mod visualizer;
 #[cfg(feature = "visualizer")]
@@ -30,7 +32,7 @@ fn memory_location_to_metal(location: MemoryLocation) -> MTLResourceOptions {
 
 #[derive(Debug)]
 pub struct Allocation {
-    chunk_id: Option<std::num::NonZeroU64>,
+    chunk_id: Option<core::num::NonZeroU64>,
     offset: u64,
     size: u64,
     memory_block_index: usize,

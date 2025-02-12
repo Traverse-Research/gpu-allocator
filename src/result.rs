@@ -1,3 +1,4 @@
+use alloc::string::String;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -22,4 +23,4 @@ pub enum AllocationError {
     CastableFormatsRequiresAtLeastDevice12,
 }
 
-pub type Result<V, E = AllocationError> = ::std::result::Result<V, E>;
+pub type Result<V, E = AllocationError> = ::core::result::Result<V, E>;
