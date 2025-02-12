@@ -20,9 +20,11 @@ mod visualizer;
 #[cfg(feature = "visualizer")]
 pub use visualizer::AllocatorVisualizer;
 
-use super::{allocator, allocator::AllocationType};
 use crate::{
-    allocator::{AllocatorReport, MemoryBlockReport},
+    allocator::{
+        AllocationType, AllocatorReport, DedicatedBlockAllocator, FreeListAllocator,
+        MemoryBlockReport, SubAllocator,
+    },
     AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
 
@@ -257,7 +259,7 @@ impl Allocation {
 struct MemoryBlock {
     heap: ID3D12Heap,
     size: u64,
-    sub_allocator: Box<dyn allocator::SubAllocator>,
+    sub_allocator: Box<dyn SubAllocator>,
 }
 impl MemoryBlock {
     fn new(
@@ -297,10 +299,10 @@ impl MemoryBlock {
             }?
         };
 
-        let sub_allocator: Box<dyn allocator::SubAllocator> = if dedicated {
-            Box::new(allocator::DedicatedBlockAllocator::new(size))
+        let sub_allocator: Box<dyn SubAllocator> = if dedicated {
+            Box::new(DedicatedBlockAllocator::new(size))
         } else {
-            Box::new(allocator::FreeListAllocator::new(size))
+            Box::new(FreeListAllocator::new(size))
         };
 
         Ok(Self {
