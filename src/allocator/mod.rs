@@ -1,6 +1,8 @@
 use std::{backtrace::Backtrace, fmt, ops::Range, sync::Arc};
 
 use log::*;
+#[cfg(feature = "std")]
+use std::{backtrace::Backtrace, sync::Arc};
 
 use crate::result::*;
 
@@ -113,8 +115,8 @@ pub(crate) trait SubAllocator: SubAllocatorBase + fmt::Debug + Sync + Send {
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Arc<Backtrace>,
-    ) -> Result<(u64, std::num::NonZeroU64)>;
+        #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
+    ) -> Result<(u64, core::num::NonZeroU64)>;
 
     fn free(&mut self, chunk_id: Option<std::num::NonZeroU64>) -> Result<()>;
 

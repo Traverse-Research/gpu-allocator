@@ -3,6 +3,7 @@
 #[cfg(feature = "visualizer")]
 pub(crate) mod visualizer;
 
+#[cfg(feature = "std")]
 use std::{
     backtrace::Backtrace,
     collections::{HashMap, HashSet},
@@ -32,6 +33,7 @@ pub(crate) struct MemoryChunk {
     pub(crate) allocation_type: AllocationType,
     pub(crate) name: Option<String>,
     /// Only used if [`crate::AllocatorDebugSettings::store_stack_traces`] is [`true`]
+    #[cfg(feature = "std")]
     pub(crate) backtrace: Arc<Backtrace>,
     next: Option<std::num::NonZeroU64>,
     prev: Option<std::num::NonZeroU64>,
@@ -79,6 +81,7 @@ impl FreeListAllocator {
                 offset: 0,
                 allocation_type: AllocationType::Free,
                 name: None,
+                #[cfg(feature = "std")]
                 backtrace: Arc::new(Backtrace::disabled()),
                 prev: None,
                 next: None,
@@ -162,8 +165,8 @@ impl SubAllocator for FreeListAllocator {
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Arc<Backtrace>,
-    ) -> Result<(u64, std::num::NonZeroU64)> {
+        #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
+    ) -> Result<(u64, core::num::NonZeroU64)> {
         let free_size = self.size - self.allocated;
         if size > free_size {
             return Err(AllocationError::OutOfMemory);
@@ -249,6 +252,7 @@ impl SubAllocator for FreeListAllocator {
                     offset: free_chunk.offset,
                     allocation_type,
                     name: Some(name.to_string()),
+                    #[cfg(feature = "std")]
                     backtrace,
                     prev: free_chunk.prev,
                     next: Some(first_fit_id),
@@ -278,7 +282,10 @@ impl SubAllocator for FreeListAllocator {
 
             chunk.allocation_type = allocation_type;
             chunk.name = Some(name.to_string());
-            chunk.backtrace = backtrace;
+            #[cfg(feature = "std")]
+            {
+                chunk.backtrace = backtrace;
+            }
 
             self.remove_id_from_free_list(first_fit_id);
 
@@ -302,7 +309,10 @@ impl SubAllocator for FreeListAllocator {
             })?;
             chunk.allocation_type = AllocationType::Free;
             chunk.name = None;
-            chunk.backtrace = Arc::new(Backtrace::disabled());
+            #[cfg(feature = "std")]
+            {
+                chunk.backtrace = Arc::new(Backtrace::disabled());
+            }
 
             self.allocated -= chunk.size;
 
@@ -363,6 +373,7 @@ impl SubAllocator for FreeListAllocator {
             let empty = "".to_string();
             let name = chunk.name.as_ref().unwrap_or(&empty);
 
+            #[cfg(feature = "std")]
             log!(
                 log_level,
                 r#"leak detected: {{
@@ -385,6 +396,28 @@ impl SubAllocator for FreeListAllocator {
                 chunk.allocation_type,
                 name,
                 chunk.backtrace
+            );
+            #[cfg(not(feature = "std"))]
+            log!(
+                log_level,
+                r#"leak detected: {{
+    memory type: {}
+    memory block: {}
+    chunk: {{
+        chunk_id: {},
+        size: 0x{:x},
+        offset: 0x{:x},
+        allocation_type: {:?},
+        name: {},
+    }}
+}}"#,
+                memory_type_index,
+                memory_block_index,
+                chunk_id,
+                chunk.size,
+                chunk.offset,
+                chunk.allocation_type,
+                name,
             );
         }
     }

@@ -1,3 +1,4 @@
+#[cfg(feature = "std")]
 use std::{backtrace::Backtrace, sync::Arc};
 
 #[cfg(feature = "visualizer")]
@@ -225,7 +226,7 @@ impl MemoryType {
         &mut self,
         device: &ProtocolObject<dyn MTLDevice>,
         desc: &AllocationCreateDesc<'_>,
-        backtrace: Arc<Backtrace>,
+        #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = allocator::AllocationType::Linear;
@@ -268,6 +269,7 @@ impl MemoryType {
                 allocation_type,
                 1,
                 desc.name,
+                #[cfg(feature = "std")]
                 backtrace,
             )?;
 
@@ -291,6 +293,7 @@ impl MemoryType {
                     allocation_type,
                     1,
                     desc.name,
+                    #[cfg(feature = "std")]
                     backtrace.clone(),
                 );
 
@@ -341,6 +344,7 @@ impl MemoryType {
             allocation_type,
             1,
             desc.name,
+            #[cfg(feature = "std")]
             backtrace,
         );
         let (offset, chunk_id) = match allocation {
@@ -452,6 +456,7 @@ impl Allocator {
         let size = desc.size;
         let alignment = desc.alignment;
 
+        #[cfg(feature = "std")]
         let backtrace = Arc::new(if self.debug_settings.store_stack_traces {
             Backtrace::force_capture()
         } else {
@@ -463,6 +468,7 @@ impl Allocator {
                 "Allocating `{}` of {} bytes with an alignment of {}.",
                 &desc.name, size, alignment
             );
+            #[cfg(feature = "std")]
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
                 debug!("Allocation stack trace: {}", backtrace);
@@ -484,13 +490,20 @@ impl Allocator {
             })
             .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
 
-        memory_type.allocate(&self.device, desc, backtrace, &self.allocation_sizes)
+        memory_type.allocate(
+            &self.device,
+            desc,
+            #[cfg(feature = "std")]
+            backtrace,
+            &self.allocation_sizes,
+        )
     }
 
     pub fn free(&mut self, allocation: &Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
             debug!("Freeing `{}`.", name);
+            #[cfg(feature = "std")]
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
                 debug!("Free stack trace: {}", backtrace);

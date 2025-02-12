@@ -1,9 +1,15 @@
 #[cfg(feature = "visualizer")]
 mod visualizer;
-use std::{backtrace::Backtrace, fmt, marker::PhantomData, sync::Arc};
+
+#[cfg(feature = "std")]
+use std::{backtrace::Backtrace, sync::Arc};
+
+use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec::Vec};
+use core::{fmt, marker::PhantomData};
 
 use ash::vk;
 use log::{debug, Level};
+
 #[cfg(feature = "visualizer")]
 pub use visualizer::AllocatorVisualizer;
 
@@ -456,7 +462,7 @@ impl MemoryType {
         device: &ash::Device,
         desc: &AllocationCreateDesc<'_>,
         granularity: u64,
-        backtrace: Arc<Backtrace>,
+        #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = if desc.linear {
@@ -518,6 +524,7 @@ impl MemoryType {
                 allocation_type,
                 granularity,
                 desc.name,
+                #[cfg(feature = "std")]
                 backtrace,
             )?;
 
@@ -544,6 +551,7 @@ impl MemoryType {
                     allocation_type,
                     granularity,
                     desc.name,
+                    #[cfg(feature = "std")]
                     backtrace.clone(),
                 );
 
@@ -608,6 +616,7 @@ impl MemoryType {
             allocation_type,
             granularity,
             desc.name,
+            #[cfg(feature = "std")]
             backtrace,
         );
         let (offset, chunk_id) = match allocation {
@@ -769,6 +778,7 @@ impl Allocator {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
+        #[cfg(feature = "std")]
         let backtrace = Arc::new(if self.debug_settings.store_stack_traces {
             Backtrace::force_capture()
         } else {
@@ -780,6 +790,7 @@ impl Allocator {
                 "Allocating `{}` of {} bytes with an alignment of {}.",
                 &desc.name, size, alignment
             );
+            #[cfg(feature = "std")]
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
                 debug!("Allocation stack trace: {}", backtrace);
@@ -834,6 +845,7 @@ impl Allocator {
                 &self.device,
                 desc,
                 self.buffer_image_granularity,
+                #[cfg(feature = "std")]
                 backtrace.clone(),
                 &self.allocation_sizes,
             )
@@ -856,6 +868,7 @@ impl Allocator {
                     &self.device,
                     desc,
                     self.buffer_image_granularity,
+                    #[cfg(feature = "std")]
                     backtrace,
                     &self.allocation_sizes,
                 )
@@ -871,6 +884,7 @@ impl Allocator {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
             debug!("Freeing `{}`.", name);
+            #[cfg(feature = "std")]
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
                 debug!("Free stack trace: {}", backtrace);

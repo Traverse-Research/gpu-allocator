@@ -264,12 +264,14 @@ pub struct AllocatorDebugSettings {
     /// Stores a copy of the full backtrace for every allocation made, this makes it easier to debug leaks
     /// or other memory allocations, but storing stack traces has a RAM overhead so should be disabled
     /// in shipping applications.
+    #[cfg(feature = "std")]
     pub store_stack_traces: bool,
     /// Log out every allocation as it's being made with log level Debug, rather spammy so off by default
     pub log_allocations: bool,
     /// Log out every free that is being called with log level Debug, rather spammy so off by default
     pub log_frees: bool,
     /// Log out stack traces when either `log_allocations` or `log_frees` is enabled.
+    #[cfg(feature = "std")]
     pub log_stack_traces: bool,
 }
 
@@ -278,9 +280,11 @@ impl Default for AllocatorDebugSettings {
         Self {
             log_memory_information: false,
             log_leaks_on_shutdown: true,
+            #[cfg(feature = "std")]
             store_stack_traces: false,
             log_allocations: false,
             log_frees: false,
+            #[cfg(feature = "std")]
             log_stack_traces: false,
         }
     }
