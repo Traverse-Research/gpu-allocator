@@ -1,15 +1,18 @@
-#[cfg(feature = "visualizer")]
-mod visualizer;
 use std::{backtrace::Backtrace, fmt, marker::PhantomData, sync::Arc};
 
 use ash::vk;
 use log::{debug, Level};
+
+#[cfg(feature = "visualizer")]
+mod visualizer;
 #[cfg(feature = "visualizer")]
 pub use visualizer::AllocatorVisualizer;
 
-use super::allocator;
 use crate::{
-    allocator::{AllocatorReport, MemoryBlockReport},
+    allocator::{
+        AllocationType, AllocatorReport, DedicatedBlockAllocator, FreeListAllocator,
+        MemoryBlockReport, SubAllocator,
+    },
     AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
 
@@ -337,7 +340,7 @@ pub(crate) struct MemoryBlock {
     pub(crate) device_memory: vk::DeviceMemory,
     pub(crate) size: u64,
     pub(crate) mapped_ptr: Option<SendSyncPtr>,
-    pub(crate) sub_allocator: Box<dyn allocator::SubAllocator>,
+    pub(crate) sub_allocator: Box<dyn SubAllocator>,
     #[cfg(feature = "visualizer")]
     pub(crate) dedicated_allocation: bool,
 }
@@ -411,13 +414,13 @@ impl MemoryBlock {
             })
             .transpose()?;
 
-        let sub_allocator: Box<dyn allocator::SubAllocator> = if allocation_scheme
+        let sub_allocator: Box<dyn SubAllocator> = if allocation_scheme
             != AllocationScheme::GpuAllocatorManaged
             || requires_personal_block
         {
-            Box::new(allocator::DedicatedBlockAllocator::new(size))
+            Box::new(DedicatedBlockAllocator::new(size))
         } else {
-            Box::new(allocator::FreeListAllocator::new(size))
+            Box::new(FreeListAllocator::new(size))
         };
 
         Ok(Self {
@@ -460,9 +463,9 @@ impl MemoryType {
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = if desc.linear {
-            allocator::AllocationType::Linear
+            AllocationType::Linear
         } else {
-            allocator::AllocationType::NonLinear
+            AllocationType::NonLinear
         };
 
         let is_host = self
