@@ -212,6 +212,16 @@
 //! # fn main() {}
 //! ```
 #![deny(clippy::unimplemented, clippy::unwrap_used, clippy::ok_expect)]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[macro_use]
+extern crate alloc;
+
+#[cfg(all(not(feature = "std"), not(feature = "hashbrown")))]
+compile_error!("\"hashbrown\" feature should be enabled in \"no_std\" environment.");
+
+#[cfg(all(not(feature = "std"), feature = "visualizer"))]
+compile_error!("Cannot enable \"visualizer\" feature in \"no_std\" environment.");
 
 mod result;
 pub use result::*;
