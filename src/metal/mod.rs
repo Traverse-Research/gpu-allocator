@@ -1,10 +1,5 @@
 use std::{backtrace::Backtrace, sync::Arc};
 
-#[cfg(feature = "visualizer")]
-mod visualizer;
-#[cfg(feature = "visualizer")]
-pub use visualizer::AllocatorVisualizer;
-
 use log::debug;
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_foundation::NSString;
@@ -13,8 +8,16 @@ use objc2_metal::{
     MTLStorageMode, MTLTextureDescriptor,
 };
 
+#[cfg(feature = "visualizer")]
+mod visualizer;
+#[cfg(feature = "visualizer")]
+pub use visualizer::AllocatorVisualizer;
+
 use crate::{
-    allocator::{self, AllocatorReport, MemoryBlockReport},
+    allocator::{
+        AllocationType, AllocatorReport, DedicatedBlockAllocator, FreeListAllocator,
+        MemoryBlockReport, SubAllocator,
+    },
     AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
 
@@ -175,7 +178,7 @@ pub struct CommittedAllocationStatistics {
 struct MemoryBlock {
     heap: Retained<ProtocolObject<dyn MTLHeap>>,
     size: u64,
-    sub_allocator: Box<dyn allocator::SubAllocator>,
+    sub_allocator: Box<dyn SubAllocator>,
 }
 
 impl MemoryBlock {
@@ -196,10 +199,10 @@ impl MemoryBlock {
             "MemoryBlock {memory_location:?}"
         ))));
 
-        let sub_allocator: Box<dyn allocator::SubAllocator> = if dedicated {
-            Box::new(allocator::DedicatedBlockAllocator::new(size))
+        let sub_allocator: Box<dyn SubAllocator> = if dedicated {
+            Box::new(DedicatedBlockAllocator::new(size))
         } else {
-            Box::new(allocator::FreeListAllocator::new(size))
+            Box::new(FreeListAllocator::new(size))
         };
 
         Ok(Self {
@@ -228,7 +231,7 @@ impl MemoryType {
         backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
-        let allocation_type = allocator::AllocationType::Linear;
+        let allocation_type = AllocationType::Linear;
 
         let is_host = self.heap_properties.storageMode() != MTLStorageMode::Private;
         let memblock_size = allocation_sizes.get_memblock_size(is_host, self.active_general_blocks);
