@@ -260,6 +260,7 @@ pub enum MemoryLocation {
     GpuToCpu,
 }
 
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug)]
 pub struct AllocatorDebugSettings {
     /// Logs out debugging information about the various heaps the current device has on startup
