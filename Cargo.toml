@@ -23,9 +23,9 @@ include = [
 all-features = true
 
 [dependencies]
-log = { version = "0.4", default-feature = false }
-thiserror = { version = "2.0", default-feature = false }
-presser = { version = "0.3", default-feature = false }
+log = { version = "0.4", default-features = false }
+thiserror = { version = "2.0", default-features = false }
+presser = { version = "0.3", default-features = false }
 # Only needed for Vulkan.  Disable all default features as good practice,
 # such as the ability to link/load a Vulkan library.
 ash = { version = "0.38", optional = true, default-features = false, features = ["debug"] }
