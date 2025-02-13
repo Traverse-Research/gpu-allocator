@@ -2,8 +2,6 @@
 #[cfg(feature = "std")]
 use std::{backtrace::Backtrace, sync::Arc};
 
-#[cfg(feature = "visualizer")]
-pub(crate) mod visualizer;
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},
@@ -11,6 +9,9 @@ use alloc::{
 };
 
 use log::{log, Level};
+
+#[cfg(feature = "visualizer")]
+pub(crate) mod visualizer;
 
 use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};

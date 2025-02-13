@@ -1,8 +1,5 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
 
-#[cfg(feature = "visualizer")]
-pub(crate) mod visualizer;
-
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},
@@ -16,6 +13,9 @@ use std::{backtrace::Backtrace, sync::Arc};
 #[cfg(all(not(feature = "std"), feature = "hashbrown"))]
 use hashbrown::{HashMap, HashSet};
 use log::{log, Level};
+
+#[cfg(feature = "visualizer")]
+pub(crate) mod visualizer;
 
 use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
