@@ -1,15 +1,13 @@
-#[cfg(feature = "visualizer")]
-mod visualizer;
-
-#[cfg(feature = "std")]
-use std::{backtrace::Backtrace, sync::Arc};
-
 use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec::Vec};
 use core::{fmt, marker::PhantomData};
+#[cfg(feature = "std")]
+use std::{backtrace::Backtrace, sync::Arc};
 
 use ash::vk;
 use log::{debug, Level};
 
+#[cfg(feature = "visualizer")]
+mod visualizer;
 #[cfg(feature = "visualizer")]
 pub use visualizer::AllocatorVisualizer;
 

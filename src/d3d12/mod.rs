@@ -1,14 +1,13 @@
-#[cfg(feature = "std")]
-use std::{backtrace::Backtrace, sync::Arc};
-
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::{
     fmt,
     // TODO: Remove when bumping MSRV to 1.80
     mem::size_of_val,
 };
-use log::{debug, warn, Level};
+#[cfg(feature = "std")]
+use std::{backtrace::Backtrace, sync::Arc};
 
+use log::{debug, warn, Level};
 use windows::Win32::{
     Foundation::E_OUTOFMEMORY,
     Graphics::{

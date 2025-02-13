@@ -1,8 +1,9 @@
 use alloc::{fmt, string::String, vec::Vec};
 use core::ops::Range;
-use log::*;
 #[cfg(feature = "std")]
 use std::{backtrace::Backtrace, sync::Arc};
+
+use log::*;
 
 use crate::result::*;
 

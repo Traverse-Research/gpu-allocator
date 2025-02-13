@@ -1,12 +1,6 @@
+use alloc::{boxed::Box, string::ToString, vec::Vec};
 #[cfg(feature = "std")]
 use std::{backtrace::Backtrace, sync::Arc};
-
-use alloc::{boxed::Box, string::ToString, vec::Vec};
-
-#[cfg(feature = "visualizer")]
-mod visualizer;
-#[cfg(feature = "visualizer")]
-pub use visualizer::AllocatorVisualizer;
 
 use log::debug;
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -15,6 +9,11 @@ use objc2_metal::{
     MTLCPUCacheMode, MTLDevice, MTLHeap, MTLHeapDescriptor, MTLHeapType, MTLResourceOptions,
     MTLStorageMode, MTLTextureDescriptor,
 };
+
+#[cfg(feature = "visualizer")]
+mod visualizer;
+#[cfg(feature = "visualizer")]
+pub use visualizer::AllocatorVisualizer;
 
 use crate::{
     allocator::{self, AllocatorReport, MemoryBlockReport},
