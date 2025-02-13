@@ -377,8 +377,16 @@ impl SubAllocator for FreeListAllocator {
             }
             let empty = "".to_string();
             let name = chunk.name.as_ref().unwrap_or(&empty);
-
-            #[cfg(feature = "std")]
+            let backtrace_info = if cfg!(feature = "std") {
+                format!(
+                    r#"
+            backtrace: {}
+        "#,
+                    chunk.backtrace
+                )
+            } else {
+                "".to_owned()
+            };
             log!(
                 log_level,
                 r#"leak detected: {{
@@ -389,32 +397,7 @@ impl SubAllocator for FreeListAllocator {
         size: 0x{:x},
         offset: 0x{:x},
         allocation_type: {:?},
-        name: {},
-        backtrace: {}
-    }}
-}}"#,
-                memory_type_index,
-                memory_block_index,
-                chunk_id,
-                chunk.size,
-                chunk.offset,
-                chunk.allocation_type,
-                name,
-                chunk.backtrace
-            );
-            #[cfg(not(feature = "std"))]
-            log!(
-                log_level,
-                r#"leak detected: {{
-    memory type: {}
-    memory block: {}
-    chunk: {{
-        chunk_id: {},
-        size: 0x{:x},
-        offset: 0x{:x},
-        allocation_type: {:?},
-        name: {},
-    }}
+        name: {},{backtrace_info}}}
 }}"#,
                 memory_type_index,
                 memory_block_index,

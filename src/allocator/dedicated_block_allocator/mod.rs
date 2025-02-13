@@ -101,25 +101,17 @@ impl SubAllocator for DedicatedBlockAllocator {
         let empty = "".to_string();
         let name = self.name.as_ref().unwrap_or(&empty);
 
-        #[cfg(feature = "std")]
-        log!(
-            log_level,
-            r#"leak detected: {{
-    memory type: {}
-    memory block: {}
-    dedicated allocation: {{
-        size: 0x{:x},
-        name: {},
+        let backtrace_info = if cfg!(feature = "std") {
+            format!(
+                r#"
         backtrace: {}
-    }}
-}}"#,
-            memory_type_index,
-            memory_block_index,
-            self.size,
-            name,
-            self.backtrace
-        );
-        #[cfg(not(feature = "std"))]
+    "#,
+                self.backtrace
+            )
+        } else {
+            "".to_owned()
+        };
+
         log!(
             log_level,
             r#"leak detected: {{
@@ -127,8 +119,7 @@ impl SubAllocator for DedicatedBlockAllocator {
     memory block: {}
     dedicated allocation: {{
         size: 0x{:x},
-        name: {},
-    }}
+        name: {},{backtrace_info}}}
 }}"#,
             memory_type_index,
             memory_block_index,
