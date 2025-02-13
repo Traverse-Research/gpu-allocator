@@ -5,12 +5,15 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-#[cfg(all(feature = "std", not(feature = "hashbrown")))]
-use std::collections::{HashMap, HashSet};
-#[cfg(feature = "std")]
-use std::{backtrace::Backtrace, sync::Arc};
 
-#[cfg(all(not(feature = "std"), feature = "hashbrown"))]
+#[cfg(feature = "std")]
+use std::{
+    backtrace::Backtrace,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
+
+#[cfg(feature = "hashbrown")]
 use hashbrown::{HashMap, HashSet};
 use log::{log, Level};
 
@@ -377,16 +380,20 @@ impl SubAllocator for FreeListAllocator {
             }
             let empty = "".to_string();
             let name = chunk.name.as_ref().unwrap_or(&empty);
-            let backtrace_info = if cfg!(feature = "std") {
-                format!(
+            let backtrace_info;
+            #[cfg(feature = "std")]
+            {
+                backtrace_info = format!(
                     r#"
             backtrace: {}
         "#,
                     chunk.backtrace
                 )
-            } else {
-                "".to_owned()
-            };
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                backtrace_info = "".to_owned()
+            }
             log!(
                 log_level,
                 r#"leak detected: {{

@@ -101,17 +101,20 @@ impl SubAllocator for DedicatedBlockAllocator {
     ) {
         let empty = "".to_string();
         let name = self.name.as_ref().unwrap_or(&empty);
-
-        let backtrace_info = if cfg!(feature = "std") {
-            format!(
+        let backtrace_info;
+        #[cfg(feature = "std")]
+        {
+            backtrace_info = format!(
                 r#"
-        backtrace: {}
-    "#,
+            backtrace: {}
+        "#,
                 self.backtrace
             )
-        } else {
-            "".to_owned()
-        };
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            backtrace_info = "".to_owned()
+        }
 
         log!(
             log_level,

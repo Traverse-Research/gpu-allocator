@@ -222,8 +222,8 @@
 #[macro_use]
 extern crate alloc;
 
-#[cfg(all(not(feature = "std"), not(feature = "hashbrown")))]
-compile_error!("\"hashbrown\" feature should be enabled in \"no_std\" environment.");
+#[cfg(all(feature = "std", feature = "hashbrown"))]
+compile_error!("\"hashbrown\" feature should not be enabled in \"std\" environment.");
 
 #[cfg(all(not(feature = "std"), feature = "visualizer"))]
 compile_error!("Cannot enable \"visualizer\" feature in \"no_std\" environment.");
