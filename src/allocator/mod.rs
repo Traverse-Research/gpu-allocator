@@ -61,8 +61,8 @@ pub struct AllocatorReport {
     pub blocks: Vec<MemoryBlockReport>,
     /// Sum of the memory used by all allocations, in bytes.
     pub total_allocated_bytes: u64,
-    /// Sum of the memory reserved by all memory blocks including unallocated regions, in bytes.
-    pub total_reserved_bytes: u64,
+    /// Sum of the memory capacity of all memory blocks including unallocated regions, in bytes.
+    pub total_capacity_bytes: u64,
 }
 
 impl fmt::Debug for AllocationReport {
@@ -90,7 +90,7 @@ impl fmt::Debug for AllocatorReport {
                 &std::format_args!(
                     "{} / {}",
                     fmt_bytes(self.total_allocated_bytes),
-                    fmt_bytes(self.total_reserved_bytes)
+                    fmt_bytes(self.total_capacity_bytes)
                 ),
             )
             .field("blocks", &self.blocks.len())
