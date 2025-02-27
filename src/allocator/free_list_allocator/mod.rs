@@ -5,12 +5,10 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+#[cfg(all(feature = "std", not(feature = "hashbrown")))]
+use std::collections::{HashMap, HashSet};
 #[cfg(feature = "std")]
-use std::{
-    backtrace::Backtrace,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{backtrace::Backtrace, sync::Arc};
 
 #[cfg(feature = "hashbrown")]
 use hashbrown::{HashMap, HashSet};
