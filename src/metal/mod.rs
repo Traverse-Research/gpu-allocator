@@ -518,11 +518,11 @@ impl Allocator {
     pub fn generate_report(&self) -> AllocatorReport {
         let mut allocations = vec![];
         let mut blocks = vec![];
-        let mut total_reserved_bytes = 0;
+        let mut total_capacity_bytes = 0;
 
         for memory_type in &self.memory_types {
             for block in memory_type.memory_blocks.iter().flatten() {
-                total_reserved_bytes += block.size;
+                total_capacity_bytes += block.size;
                 let first_allocation = allocations.len();
                 allocations.extend(block.sub_allocator.report_allocations());
                 blocks.push(MemoryBlockReport {
@@ -538,7 +538,20 @@ impl Allocator {
             allocations,
             blocks,
             total_allocated_bytes,
-            total_reserved_bytes,
+            total_capacity_bytes,
         }
+    }
+
+    /// Current total capacity of memory blocks allocated on the device, in bytes
+    pub fn capacity(&self) -> u64 {
+        let mut total_capacity_bytes = 0;
+
+        for memory_type in &self.memory_types {
+            for block in memory_type.memory_blocks.iter().flatten() {
+                total_capacity_bytes += block.size;
+            }
+        }
+
+        total_capacity_bytes
     }
 }
