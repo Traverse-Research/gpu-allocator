@@ -9,11 +9,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            features: vulkan
+            features: std,vulkan
           - os: windows-latest
-            features: vulkan,d3d12
+            features: std,vulkan,d3d12
           - os: macos-latest
-            features: vulkan,metal
+            features: std,vulkan,metal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,11 +30,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            features: vulkan,visualizer
+            features: std,vulkan,visualizer
           - os: windows-latest
-            features: vulkan,visualizer,d3d12,public-winapi
+            features: std,vulkan,visualizer,d3d12,public-winapi
           - os: macos-latest
-            features: vulkan,visualizer,metal
+            features: std,vulkan,visualizer,metal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -57,11 +57,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            features: vulkan,visualizer
+            features: std,vulkan,visualizer
           - os: windows-latest
-            features: vulkan,visualizer,d3d12,public-winapi
+            features: std,vulkan,visualizer,d3d12,public-winapi
           - os: macos-latest
-            features: vulkan,visualizer,metal
+            features: std,vulkan,visualizer,metal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
