@@ -383,15 +383,14 @@ impl SubAllocator for FreeListAllocator {
             #[cfg(feature = "std")]
             {
                 backtrace_info = format!(
-                    r#"
-            backtrace: {}
-        "#,
+                    ",
+        backtrace: {}",
                     chunk.backtrace
                 )
             }
             #[cfg(not(feature = "std"))]
             {
-                backtrace_info = "".to_owned()
+                backtrace_info = ""
             }
             log!(
                 log_level,
@@ -403,7 +402,8 @@ impl SubAllocator for FreeListAllocator {
         size: 0x{:x},
         offset: 0x{:x},
         allocation_type: {:?},
-        name: {},{backtrace_info}}}
+        name: {}{backtrace_info}
+    }}
 }}"#,
                 memory_type_index,
                 memory_block_index,

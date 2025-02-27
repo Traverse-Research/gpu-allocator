@@ -104,15 +104,14 @@ impl SubAllocator for DedicatedBlockAllocator {
         #[cfg(feature = "std")]
         {
             backtrace_info = format!(
-                r#"
-            backtrace: {}
-        "#,
+                ",
+        backtrace: {}",
                 self.backtrace
             )
         }
         #[cfg(not(feature = "std"))]
         {
-            backtrace_info = "".to_owned()
+            backtrace_info = ""
         }
 
         log!(
@@ -122,7 +121,8 @@ impl SubAllocator for DedicatedBlockAllocator {
     memory block: {}
     dedicated allocation: {{
         size: 0x{:x},
-        name: {},{backtrace_info}}}
+        name: {}{backtrace_info}
+    }}
 }}"#,
             memory_type_index,
             memory_block_index,
