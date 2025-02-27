@@ -5,7 +5,6 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-
 #[cfg(feature = "std")]
 use std::{
     backtrace::Backtrace,
