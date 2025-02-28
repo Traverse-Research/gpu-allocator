@@ -37,6 +37,8 @@ pub struct AllocationCreateDesc<'a> {
     pub linear: bool,
     /// Determines how this allocation should be managed.
     pub allocation_scheme: AllocationScheme,
+    /// Allow the allocator to request additional memory from the device to fulfill this request.
+    pub allow_capacity_increase: bool,
 }
 
 /// Wrapper type to only mark a raw pointer [`Send`] + [`Sync`] without having to
@@ -577,6 +579,10 @@ impl MemoryType {
             } else if empty_block_index.is_none() {
                 empty_block_index = Some(mem_block_i);
             }
+        }
+
+        if !desc.allow_capacity_increase {
+            return Err(AllocationError::OutOfMemory);
         }
 
         let new_memory_block = MemoryBlock::new(
