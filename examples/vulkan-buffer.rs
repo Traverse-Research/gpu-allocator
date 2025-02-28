@@ -110,6 +110,7 @@ fn main() {
                 linear: true,
                 allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 name: "Test allocation (Gpu Only)",
+                allow_capacity_increase: true,
             })
             .unwrap();
 
@@ -143,6 +144,7 @@ fn main() {
                 linear: true,
                 allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 name: "Test allocation (Cpu to Gpu)",
+                allow_capacity_increase: true,
             })
             .unwrap();
 
@@ -176,6 +178,7 @@ fn main() {
                 linear: true,
                 allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 name: "Test allocation (Gpu to Cpu)",
+                allow_capacity_increase: true,
             })
             .unwrap();
 
