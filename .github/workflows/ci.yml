@@ -9,11 +9,23 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            features: std,vulkan
+            features: vulkan,hashbrown
+          - os: ubuntu-latest
+            features: vulkan,std
+          - os: ubuntu-latest
+            features: vulkan,std,hashbrown
           - os: windows-latest
-            features: std,vulkan,d3d12
+            features: d3d12,hashbrown
+          - os: windows-latest
+            features: d3d12,std
+          - os: windows-latest
+            features: d3d12,std,hashbrown
           - os: macos-latest
-            features: std,vulkan,metal
+            features: metal,hashbrown
+          - os: macos-latest
+            features: metal,std
+          - os: macos-latest
+            features: metal,std,hashbrown
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,11 +42,23 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            features: std,vulkan,visualizer
+            features: vulkan,visualizer,hashbrown
+          - os: ubuntu-latest
+            features: vulkan,visualizer,std
+          - os: ubuntu-latest
+            features: vulkan,visualizer,std,hashbrown
           - os: windows-latest
-            features: std,vulkan,visualizer,d3d12,public-winapi
+            features: d3d12,visualizer,public-winapi,hashbrown
+          - os: windows-latest
+            features: d3d12,visualizer,public-winapi,std
+          - os: windows-latest
+            features: d3d12,visualizer,public-winapi,std,hashbrown
           - os: macos-latest
-            features: std,vulkan,visualizer,metal
+            features: metal,visualizer,hashbrown
+          - os: macos-latest
+            features: metal,visualizer,std
+          - os: macos-latest
+            features: metal,visualizer,std,hashbrown
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
