@@ -10,9 +10,7 @@ use crate::result::*;
 pub(crate) mod dedicated_block_allocator;
 pub(crate) use dedicated_block_allocator::DedicatedBlockAllocator;
 
-#[cfg(any(feature = "std", feature = "hashbrown"))]
 pub(crate) mod free_list_allocator;
-#[cfg(any(feature = "std", feature = "hashbrown"))]
 pub(crate) use free_list_allocator::FreeListAllocator;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
