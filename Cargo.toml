@@ -106,6 +106,7 @@ d3d12 = ["dep:windows"]
 metal = ["dep:objc2", "dep:objc2-metal", "dep:objc2-foundation"]
 # Expose helper functionality for winapi types to interface with gpu-allocator, which is primarily windows-rs driven
 public-winapi = ["dep:winapi"]
+# Enables the FreeListAllocator when `std` is not enabled by using the `hashbrown` crate
 hashbrown = ["dep:hashbrown"]
 
 default = ["std", "d3d12", "vulkan", "metal"]
