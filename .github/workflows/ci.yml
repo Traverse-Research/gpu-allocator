@@ -7,26 +7,18 @@ jobs:
     name: Check MSRV (1.71.0)
     strategy:
       matrix:
-        include:
+        target:
           - os: ubuntu-latest
-            features: vulkan,hashbrown
-          - os: ubuntu-latest
-            features: vulkan,std
-          - os: ubuntu-latest
-            features: vulkan,std,hashbrown
+            backend: vulkan
           - os: windows-latest
-            features: d3d12,hashbrown
-          - os: windows-latest
-            features: d3d12,std
-          - os: windows-latest
-            features: d3d12,std,hashbrown
+            backend: vulkan,d3d12
           - os: macos-latest
-            features: metal,hashbrown
-          - os: macos-latest
-            features: metal,std
-          - os: macos-latest
-            features: metal,std,hashbrown
-    runs-on: ${{ matrix.os }}
+            backend: vulkan,metal
+        features:
+          - hashbrown
+          - std
+          - hashbrown,std
+    runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -34,38 +26,30 @@ jobs:
         run: cargo +nightly generate-lockfile -Zminimal-versions
       - uses: dtolnay/rust-toolchain@1.71.0
       # Note that examples are extempt from the MSRV check, so that they can use newer Rust features
-      - run: cargo check --workspace --features ${{ matrix.features }} --no-default-features
+      - run: cargo check --workspace --features ${{ matrix.target.backend }},${{ matrix.features }} --no-default-features
 
   test:
     name: Test Suite
     strategy:
       matrix:
-        include:
+        target:
           - os: ubuntu-latest
-            features: vulkan,visualizer,hashbrown
-          - os: ubuntu-latest
-            features: vulkan,visualizer,std
-          - os: ubuntu-latest
-            features: vulkan,visualizer,std,hashbrown
+            backend: vulkan
           - os: windows-latest
-            features: d3d12,visualizer,public-winapi,hashbrown
-          - os: windows-latest
-            features: d3d12,visualizer,public-winapi,std
-          - os: windows-latest
-            features: d3d12,visualizer,public-winapi,std,hashbrown
+            backend: vulkan,d3d12
           - os: macos-latest
-            features: metal,visualizer,hashbrown
-          - os: macos-latest
-            features: metal,visualizer,std
-          - os: macos-latest
-            features: metal,visualizer,std,hashbrown
-    runs-on: ${{ matrix.os }}
+            backend: vulkan,metal
+        features:
+          - hashbrown
+          - std
+          - hashbrown,std
+    runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Cargo test all targets
-        run: cargo test --workspace --all-targets --features ${{ matrix.features }} --no-default-features
+        run: cargo test --workspace --all-targets --features visualizer,${{ matrix.target.backend }},${{ matrix.features }} --no-default-features
       - name: Cargo test docs
-        run: cargo test --workspace --doc --features ${{ matrix.features }} --no-default-features
+        run: cargo test --workspace --doc --features visualizer,${{ matrix.target.backend }},${{ matrix.features }} --no-default-features
 
   fmt:
     name: Rustfmt
@@ -79,18 +63,22 @@ jobs:
     name: Clippy
     strategy:
       matrix:
-        include:
+        target:
           - os: ubuntu-latest
-            features: std,vulkan,visualizer
+            backend: vulkan
           - os: windows-latest
-            features: std,vulkan,visualizer,d3d12,public-winapi
+            backend: vulkan,d3d12
           - os: macos-latest
-            features: std,vulkan,visualizer,metal
-    runs-on: ${{ matrix.os }}
+            backend: vulkan,metal
+        features:
+          - hashbrown
+          - std
+          - hashbrown,std
+    runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Cargo clippy
-        run: cargo clippy --workspace --all-targets --features ${{ matrix.features }} --no-default-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --features visualizer,${{ matrix.target.backend }},${{ matrix.features }} --no-default-features -- -D warnings
 
   doc:
     name: Build documentation
@@ -98,7 +86,7 @@ jobs:
       matrix:
         # Rely on Windows and Mac to also compile the Vulkan portion (via --all-features)
         os: [windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.target.os }}
     env:
       RUSTDOCFLAGS: -Dwarnings
     steps:
