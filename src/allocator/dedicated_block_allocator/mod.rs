@@ -103,6 +103,7 @@ impl SubAllocator for DedicatedBlockAllocator {
         let backtrace_info;
         #[cfg(feature = "std")]
         {
+            // TODO: Allocation could be avoided here if https://github.com/rust-lang/rust/pull/139135 is merged and stabilized.
             backtrace_info = format!(
                 ",
         backtrace: {}",
