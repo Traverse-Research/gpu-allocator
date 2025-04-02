@@ -40,7 +40,6 @@ jobs:
           - os: macos-latest
             backend: vulkan,metal
         features:
-          - hashbrown
           - std
           - hashbrown,std
     runs-on: ${{ matrix.target.os }}
@@ -71,7 +70,6 @@ jobs:
           - os: macos-latest
             backend: vulkan,metal
         features:
-          - hashbrown
           - std
           - hashbrown,std
     runs-on: ${{ matrix.target.os }}
