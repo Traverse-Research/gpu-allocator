@@ -1,3 +1,5 @@
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::{
     fmt,
@@ -5,7 +7,7 @@ use core::{
     mem::size_of_val,
 };
 #[cfg(feature = "std")]
-use std::{backtrace::Backtrace, sync::Arc};
+use std::backtrace::Backtrace;
 
 use log::{debug, warn, Level};
 use windows::Win32::{

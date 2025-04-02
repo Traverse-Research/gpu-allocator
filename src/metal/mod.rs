@@ -1,6 +1,8 @@
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
 use alloc::{boxed::Box, string::ToString, vec::Vec};
 #[cfg(feature = "std")]
-use std::{backtrace::Backtrace, sync::Arc};
+use std::backtrace::Backtrace;
 
 use log::debug;
 use objc2::{rc::Retained, runtime::ProtocolObject};
