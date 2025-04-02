@@ -80,7 +80,6 @@ pub(crate) fn render_memory_chunks_ui<'a>(
                         if cursor_idx < data.len() {
                             bytes_required = data[cursor_idx].size;
                         }
-                        continue;
                     }
 
                     let bytes_used = bytes_required.min(bytes_left);

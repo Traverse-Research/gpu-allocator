@@ -1,7 +1,9 @@
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
 use alloc::{fmt, string::String, vec::Vec};
 use core::ops::Range;
 #[cfg(feature = "std")]
-use std::{backtrace::Backtrace, sync::Arc};
+use std::backtrace::Backtrace;
 
 use log::*;
 

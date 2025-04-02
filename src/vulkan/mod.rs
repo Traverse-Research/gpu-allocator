@@ -1,7 +1,9 @@
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
 use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec::Vec};
 use core::{fmt, marker::PhantomData};
 #[cfg(feature = "std")]
-use std::{backtrace::Backtrace, sync::Arc};
+use std::backtrace::Backtrace;
 
 use ash::vk;
 use log::{debug, Level};

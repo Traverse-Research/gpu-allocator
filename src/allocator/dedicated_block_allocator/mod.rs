@@ -1,11 +1,13 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},
     vec::Vec,
 };
 #[cfg(feature = "std")]
-use std::{backtrace::Backtrace, sync::Arc};
+use std::backtrace::Backtrace;
 
 use log::{log, Level};
 

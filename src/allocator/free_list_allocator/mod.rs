@@ -1,14 +1,15 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
-
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},
     vec::Vec,
 };
+#[cfg(feature = "std")]
+use std::backtrace::Backtrace;
 #[cfg(all(feature = "std", not(feature = "hashbrown")))]
 use std::collections::{HashMap, HashSet};
-#[cfg(feature = "std")]
-use std::{backtrace::Backtrace, sync::Arc};
 
 #[cfg(feature = "hashbrown")]
 use hashbrown::{HashMap, HashSet};
