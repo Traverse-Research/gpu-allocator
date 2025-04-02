@@ -223,7 +223,7 @@
 extern crate alloc;
 
 #[cfg(all(not(feature = "std"), feature = "visualizer"))]
-compile_error!("Cannot enable \"visualizer\" feature in \"no_std\" environment.");
+compile_error!("Cannot enable `visualizer` feature in `no_std` environment.");
 
 #[cfg(not(any(feature = "std", feature = "hashbrown")))]
 compile_error!("Either `std` or `hashbrown` feature must be enabled");
