@@ -84,7 +84,7 @@ jobs:
       matrix:
         # Rely on Windows and Mac to also compile the Vulkan portion (via --all-features)
         os: [windows-latest, macos-latest]
-    runs-on: ${{ matrix.target.os }}
+    runs-on: ${{ matrix.os }}
     env:
       RUSTDOCFLAGS: -Dwarnings
     steps:
