@@ -174,6 +174,7 @@
 //! ```
 //!
 //! # Simple Metal allocation example
+//!
 //! ```no_run
 //! # #[cfg(feature = "metal")]
 //! # fn main() {
