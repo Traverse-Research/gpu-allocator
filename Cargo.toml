@@ -24,7 +24,7 @@ all-features = true
 
 [dependencies]
 log = "0.4"
-thiserror = "1.0"
+thiserror = "2.0"
 presser = { version = "0.3" }
 # Only needed for Vulkan.  Disable all default features as good practice,
 # such as the ability to link/load a Vulkan library.
