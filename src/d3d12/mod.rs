@@ -15,85 +15,16 @@ use windows::Win32::{
     },
 };
 
-#[cfg(feature = "public-winapi")]
-mod public_winapi {
-    pub use winapi::um::d3d12 as winapi_d3d12;
-
-    use super::*;
-
-    /// Trait similar to [`AsRef`]/[`AsMut`],
-    pub trait ToWinapi<T> {
-        fn as_winapi(&self) -> *const T;
-        fn as_winapi_mut(&mut self) -> *mut T;
-    }
-
-    /// [`windows`] types hold their pointer internally and provide drop semantics. As such this trait
-    /// is usually implemented on the _pointer type_ (`*const`, `*mut`) of the [`winapi`] object so that
-    /// a **borrow of** that pointer becomes a borrow of the [`windows`] type.
-    pub trait ToWindows<T> {
-        fn as_windows(&self) -> &T;
-    }
-
-    impl ToWinapi<winapi_d3d12::ID3D12Resource> for ID3D12Resource {
-        fn as_winapi(&self) -> *const winapi_d3d12::ID3D12Resource {
-            unsafe { std::mem::transmute_copy(self) }
-        }
-
-        fn as_winapi_mut(&mut self) -> *mut winapi_d3d12::ID3D12Resource {
-            unsafe { std::mem::transmute_copy(self) }
-        }
-    }
-
-    impl ToWinapi<winapi_d3d12::ID3D12Device> for ID3D12Device {
-        fn as_winapi(&self) -> *const winapi_d3d12::ID3D12Device {
-            unsafe { std::mem::transmute_copy(self) }
-        }
-
-        fn as_winapi_mut(&mut self) -> *mut winapi_d3d12::ID3D12Device {
-            unsafe { std::mem::transmute_copy(self) }
-        }
-    }
-
-    impl ToWindows<ID3D12Device> for *const winapi_d3d12::ID3D12Device {
-        fn as_windows(&self) -> &ID3D12Device {
-            unsafe { std::mem::transmute(self) }
-        }
-    }
-
-    impl ToWindows<ID3D12Device> for *mut winapi_d3d12::ID3D12Device {
-        fn as_windows(&self) -> &ID3D12Device {
-            unsafe { std::mem::transmute(self) }
-        }
-    }
-
-    impl ToWindows<ID3D12Device> for &mut winapi_d3d12::ID3D12Device {
-        fn as_windows(&self) -> &ID3D12Device {
-            unsafe { std::mem::transmute(self) }
-        }
-    }
-
-    impl ToWinapi<winapi_d3d12::ID3D12Heap> for ID3D12Heap {
-        fn as_winapi(&self) -> *const winapi_d3d12::ID3D12Heap {
-            unsafe { std::mem::transmute_copy(self) }
-        }
-
-        fn as_winapi_mut(&mut self) -> *mut winapi_d3d12::ID3D12Heap {
-            unsafe { std::mem::transmute_copy(self) }
-        }
-    }
-}
-
-#[cfg(feature = "public-winapi")]
-pub use public_winapi::*;
-
 #[cfg(feature = "visualizer")]
 mod visualizer;
 #[cfg(feature = "visualizer")]
 pub use visualizer::AllocatorVisualizer;
 
-use super::{allocator, allocator::AllocationType};
 use crate::{
-    allocator::{AllocatorReport, MemoryBlockReport},
+    allocator::{
+        AllocationType, AllocatorReport, DedicatedBlockAllocator, FreeListAllocator,
+        MemoryBlockReport, SubAllocator,
+    },
     AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
 };
 
@@ -157,23 +88,6 @@ impl From<&D3D12_RESOURCE_DESC> for ResourceCategory {
     }
 }
 
-#[cfg(feature = "public-winapi")]
-impl From<&winapi_d3d12::D3D12_RESOURCE_DESC> for ResourceCategory {
-    fn from(desc: &winapi_d3d12::D3D12_RESOURCE_DESC) -> Self {
-        if desc.Dimension == winapi_d3d12::D3D12_RESOURCE_DIMENSION_BUFFER {
-            Self::Buffer
-        } else if (desc.Flags
-            & (winapi_d3d12::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
-                | winapi_d3d12::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
-            != 0
-        {
-            Self::RtvDsvTexture
-        } else {
-            Self::OtherTexture
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
     /// Name of the allocation, for tracking and debugging purposes
@@ -186,51 +100,24 @@ pub struct AllocationCreateDesc<'a> {
     /// Alignment of allocation, should be queried using [`ID3D12Device::GetResourceAllocationInfo()`]
     pub alignment: u64,
     /// Resource category based on resource dimension and flags. Can be created from a [`D3D12_RESOURCE_DESC`]
-    /// using the helper into function. The resource category is ignored when Resource Heap Tier 2 or higher
+    /// using the [helper `into()` function]. The resource category is ignored when Resource Heap Tier 2 or higher
     /// is supported.
+    ///
+    /// [helper `into()` function]: ResourceCategory::from()
     pub resource_category: ResourceCategory,
 }
 
 impl<'a> AllocationCreateDesc<'a> {
-    /// Helper conversion function utilizing [`winapi`] types.
-    ///
-    /// This function is also available for [`windows::Win32::Graphics::Direct3D12`]
-    /// types as [`from_d3d12_resource_desc()`][Self::from_d3d12_resource_desc()].
-    #[cfg(feature = "public-winapi")]
-    pub fn from_winapi_d3d12_resource_desc(
-        device: *const winapi_d3d12::ID3D12Device,
-        desc: &winapi_d3d12::D3D12_RESOURCE_DESC,
-        name: &'a str,
-        location: MemoryLocation,
-    ) -> Self {
-        let device = device.as_windows();
-        // Raw structs are binary-compatible
-        let desc = unsafe {
-            std::mem::transmute::<&winapi_d3d12::D3D12_RESOURCE_DESC, &D3D12_RESOURCE_DESC>(desc)
-        };
-        let allocation_info =
-            unsafe { device.GetResourceAllocationInfo(0, std::slice::from_ref(desc)) };
-        let resource_category: ResourceCategory = desc.into();
-
-        AllocationCreateDesc {
-            name,
-            location,
-            size: allocation_info.SizeInBytes,
-            alignment: allocation_info.Alignment,
-            resource_category,
-        }
-    }
-
-    /// Helper conversion function utilizing [`windows::Win32::Graphics::Direct3D12`] types.
-    ///
-    /// This function is also available for `winapi` types as `from_winapi_d3d12_resource_desc()`
-    /// when the `public-winapi` feature is enabled.
+    /// Helper function to construct an [`AllocationCreateDesc`] from an existing
+    /// [`D3D12_RESOURCE_DESC`] utilizing [`ID3D12Device::GetResourceAllocationInfo()`].
     pub fn from_d3d12_resource_desc(
         device: &ID3D12Device,
         desc: &D3D12_RESOURCE_DESC,
         name: &'a str,
         location: MemoryLocation,
     ) -> Self {
+        // SAFETY: `device` is a valid device handle, and no arguments (like pointers) are passed
+        // that could induce UB.
         let allocation_info =
             unsafe { device.GetResourceAllocationInfo(0, std::slice::from_ref(desc)) };
         let resource_category: ResourceCategory = desc.into();
@@ -372,7 +259,7 @@ impl Allocation {
 struct MemoryBlock {
     heap: ID3D12Heap,
     size: u64,
-    sub_allocator: Box<dyn allocator::SubAllocator>,
+    sub_allocator: Box<dyn SubAllocator>,
 }
 impl MemoryBlock {
     fn new(
@@ -412,10 +299,10 @@ impl MemoryBlock {
             }?
         };
 
-        let sub_allocator: Box<dyn allocator::SubAllocator> = if dedicated {
-            Box::new(allocator::DedicatedBlockAllocator::new(size))
+        let sub_allocator: Box<dyn SubAllocator> = if dedicated {
+            Box::new(DedicatedBlockAllocator::new(size))
         } else {
-            Box::new(allocator::FreeListAllocator::new(size))
+            Box::new(FreeListAllocator::new(size))
         };
 
         Ok(Self {

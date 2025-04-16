@@ -47,10 +47,6 @@ objc2-metal = { version = "0.3", default-features = false, features = [
     "std",
 ], optional = true }
 
-[target.'cfg(windows)'.dependencies]
-# Only needed for public-winapi interop helpers
-winapi = { version = "0.3.9", features = ["d3d12", "winerror", "impl-default", "impl-debug"], optional = true }
-
 [target.'cfg(windows)'.dependencies.windows]
 version = ">=0.53, <=0.61"
 features = [
@@ -63,9 +59,6 @@ optional = true
 # Enable the "loaded" feature to be able to access the Vulkan entrypoint.
 ash = { version = "0.38", default-features = false, features = ["debug", "loaded"] }
 env_logger = "0.10"
-
-[target.'cfg(windows)'.dev-dependencies]
-winapi = { version = "0.3.9", features = ["d3d12", "d3d12sdklayers", "dxgi1_6", "winerror", "impl-default", "impl-debug", "winuser", "windowsx", "libloaderapi"] }
 
 [target.'cfg(windows)'.dev-dependencies.windows]
 # API-breaks since Windows 0.58 only affect our examples
@@ -86,10 +79,6 @@ name = "vulkan-buffer"
 required-features = ["vulkan", "ash/loaded"]
 
 [[example]]
-name = "d3d12-buffer"
-required-features = ["d3d12", "public-winapi"]
-
-[[example]]
 name = "d3d12-buffer-winrs"
 required-features = ["d3d12"]
 
@@ -102,7 +91,5 @@ visualizer = ["dep:egui", "dep:egui_extras"]
 vulkan = ["dep:ash"]
 d3d12 = ["dep:windows"]
 metal = ["dep:objc2", "dep:objc2-metal", "dep:objc2-foundation"]
-# Expose helper functionality for winapi types to interface with gpu-allocator, which is primarily windows-rs driven
-public-winapi = ["dep:winapi"]
 
 default = ["d3d12", "vulkan", "metal"]
