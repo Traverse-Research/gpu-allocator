@@ -1,15 +1,22 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
+use alloc::{
+    borrow::ToOwned,
+    string::{String, ToString},
+    vec::Vec,
+};
+#[cfg(feature = "std")]
+use std::backtrace::Backtrace;
+#[cfg(all(feature = "std", not(feature = "hashbrown")))]
+use std::collections::{HashMap, HashSet};
+
+#[cfg(feature = "hashbrown")]
+use hashbrown::{HashMap, HashSet};
+use log::{log, Level};
 
 #[cfg(feature = "visualizer")]
 pub(crate) mod visualizer;
-
-use std::{
-    backtrace::Backtrace,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-
-use log::{log, Level};
 
 use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
@@ -26,15 +33,16 @@ fn align_up(val: u64, alignment: u64) -> u64 {
 
 #[derive(Debug)]
 pub(crate) struct MemoryChunk {
-    pub(crate) chunk_id: std::num::NonZeroU64,
+    pub(crate) chunk_id: core::num::NonZeroU64,
     pub(crate) size: u64,
     pub(crate) offset: u64,
     pub(crate) allocation_type: AllocationType,
     pub(crate) name: Option<String>,
     /// Only used if [`crate::AllocatorDebugSettings::store_stack_traces`] is [`true`]
+    #[cfg(feature = "std")]
     pub(crate) backtrace: Arc<Backtrace>,
-    next: Option<std::num::NonZeroU64>,
-    prev: Option<std::num::NonZeroU64>,
+    next: Option<core::num::NonZeroU64>,
+    prev: Option<core::num::NonZeroU64>,
 }
 
 #[derive(Debug)]
@@ -42,8 +50,8 @@ pub(crate) struct FreeListAllocator {
     size: u64,
     allocated: u64,
     pub(crate) chunk_id_counter: u64,
-    pub(crate) chunks: HashMap<std::num::NonZeroU64, MemoryChunk>,
-    free_chunks: HashSet<std::num::NonZeroU64>,
+    pub(crate) chunks: HashMap<core::num::NonZeroU64, MemoryChunk>,
+    free_chunks: HashSet<core::num::NonZeroU64>,
 }
 
 /// Test if two suballocations will overlap the same page.
@@ -68,7 +76,7 @@ fn has_granularity_conflict(type0: AllocationType, type1: AllocationType) -> boo
 impl FreeListAllocator {
     pub(crate) fn new(size: u64) -> Self {
         #[allow(clippy::unwrap_used)]
-        let initial_chunk_id = std::num::NonZeroU64::new(1).unwrap();
+        let initial_chunk_id = core::num::NonZeroU64::new(1).unwrap();
 
         let mut chunks = HashMap::default();
         chunks.insert(
@@ -79,6 +87,7 @@ impl FreeListAllocator {
                 offset: 0,
                 allocation_type: AllocationType::Free,
                 name: None,
+                #[cfg(feature = "std")]
                 backtrace: Arc::new(Backtrace::disabled()),
                 prev: None,
                 next: None,
@@ -100,7 +109,7 @@ impl FreeListAllocator {
     }
 
     /// Generates a new unique chunk ID
-    fn get_new_chunk_id(&mut self) -> Result<std::num::NonZeroU64> {
+    fn get_new_chunk_id(&mut self) -> Result<core::num::NonZeroU64> {
         if self.chunk_id_counter == u64::MAX {
             // End of chunk id counter reached, no more allocations are possible.
             return Err(AllocationError::OutOfMemory);
@@ -108,19 +117,19 @@ impl FreeListAllocator {
 
         let id = self.chunk_id_counter;
         self.chunk_id_counter += 1;
-        std::num::NonZeroU64::new(id).ok_or_else(|| {
+        core::num::NonZeroU64::new(id).ok_or_else(|| {
             AllocationError::Internal("New chunk id was 0, which is not allowed.".into())
         })
     }
     /// Finds the specified `chunk_id` in the list of free chunks and removes if from the list
-    fn remove_id_from_free_list(&mut self, chunk_id: std::num::NonZeroU64) {
+    fn remove_id_from_free_list(&mut self, chunk_id: core::num::NonZeroU64) {
         self.free_chunks.remove(&chunk_id);
     }
     /// Merges two adjacent chunks. Right chunk will be merged into the left chunk
     fn merge_free_chunks(
         &mut self,
-        chunk_left: std::num::NonZeroU64,
-        chunk_right: std::num::NonZeroU64,
+        chunk_left: core::num::NonZeroU64,
+        chunk_right: core::num::NonZeroU64,
     ) -> Result<()> {
         // Gather data from right chunk and remove it
         let (right_size, right_next) = {
@@ -162,14 +171,14 @@ impl SubAllocator for FreeListAllocator {
         allocation_type: AllocationType,
         granularity: u64,
         name: &str,
-        backtrace: Arc<Backtrace>,
-    ) -> Result<(u64, std::num::NonZeroU64)> {
+        #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
+    ) -> Result<(u64, core::num::NonZeroU64)> {
         let free_size = self.size - self.allocated;
         if size > free_size {
             return Err(AllocationError::OutOfMemory);
         }
 
-        let mut best_fit_id: Option<std::num::NonZeroU64> = None;
+        let mut best_fit_id: Option<core::num::NonZeroU64> = None;
         let mut best_offset = 0u64;
         let mut best_aligned_size = 0u64;
         let mut best_chunk_size = 0u64;
@@ -249,6 +258,7 @@ impl SubAllocator for FreeListAllocator {
                     offset: free_chunk.offset,
                     allocation_type,
                     name: Some(name.to_string()),
+                    #[cfg(feature = "std")]
                     backtrace,
                     prev: free_chunk.prev,
                     next: Some(first_fit_id),
@@ -278,7 +288,10 @@ impl SubAllocator for FreeListAllocator {
 
             chunk.allocation_type = allocation_type;
             chunk.name = Some(name.to_string());
-            chunk.backtrace = backtrace;
+            #[cfg(feature = "std")]
+            {
+                chunk.backtrace = backtrace;
+            }
 
             self.remove_id_from_free_list(first_fit_id);
 
@@ -290,7 +303,7 @@ impl SubAllocator for FreeListAllocator {
         Ok((best_offset, chunk_id))
     }
 
-    fn free(&mut self, chunk_id: Option<std::num::NonZeroU64>) -> Result<()> {
+    fn free(&mut self, chunk_id: Option<core::num::NonZeroU64>) -> Result<()> {
         let chunk_id = chunk_id
             .ok_or_else(|| AllocationError::Internal("Chunk ID must be a valid value.".into()))?;
 
@@ -302,7 +315,10 @@ impl SubAllocator for FreeListAllocator {
             })?;
             chunk.allocation_type = AllocationType::Free;
             chunk.name = None;
-            chunk.backtrace = Arc::new(Backtrace::disabled());
+            #[cfg(feature = "std")]
+            {
+                chunk.backtrace = Arc::new(Backtrace::disabled());
+            }
 
             self.allocated -= chunk.size;
 
@@ -327,7 +343,7 @@ impl SubAllocator for FreeListAllocator {
 
     fn rename_allocation(
         &mut self,
-        chunk_id: Option<std::num::NonZeroU64>,
+        chunk_id: Option<core::num::NonZeroU64>,
         name: &str,
     ) -> Result<()> {
         let chunk_id = chunk_id
@@ -362,7 +378,20 @@ impl SubAllocator for FreeListAllocator {
             }
             let empty = "".to_string();
             let name = chunk.name.as_ref().unwrap_or(&empty);
-
+            let backtrace_info;
+            #[cfg(feature = "std")]
+            {
+                // TODO: Allocation could be avoided here if https://github.com/rust-lang/rust/pull/139135 is merged and stabilized.
+                backtrace_info = format!(
+                    ",
+        backtrace: {}",
+                    chunk.backtrace
+                )
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                backtrace_info = ""
+            }
             log!(
                 log_level,
                 r#"leak detected: {{
@@ -373,8 +402,7 @@ impl SubAllocator for FreeListAllocator {
         size: 0x{:x},
         offset: 0x{:x},
         allocation_type: {:?},
-        name: {},
-        backtrace: {}
+        name: {}{backtrace_info}
     }}
 }}"#,
                 memory_type_index,
@@ -384,7 +412,6 @@ impl SubAllocator for FreeListAllocator {
                 chunk.offset,
                 chunk.allocation_type,
                 name,
-                chunk.backtrace
             );
         }
     }

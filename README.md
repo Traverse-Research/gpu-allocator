@@ -12,7 +12,7 @@
 
 ```toml
 [dependencies]
-gpu-allocator = "0.27.0"
+gpu-allocator = { version = "0.27.0" }
 ```
 
 ![Visualizer](visualizer.png)
@@ -142,6 +142,7 @@ let mut allocator = Allocator::new(&AllocatorCreateDesc {
 ```
 
 ## Simple Metal allocation example
+
 ```rust
 use gpu_allocator::metal::*;
 use gpu_allocator::MemoryLocation;
@@ -167,9 +168,39 @@ drop(resource);
 allocator.free(&allocation).unwrap();
 ```
 
+## `no_std` Support
+
+`no_std` support can be enabled by compiling with `--no-default-features` to
+disable `std` support and `--features hashbrown` for `Hash` collections that are only
+defined in `std` for internal usages in crate. For example:
+
+```toml
+[dependencies]
+gpu-allocator = { version = "0.27", default-features = false, features = ["hashbrown", "other features"] }
+```
+
+To support both `std` and `no_std` builds in project, you can use the following
+in your `Cargo.toml`:
+
+```toml
+[features]
+default = ["std", "other features"]
+
+std = ["gpu-allocator/std"]
+hashbrown = ["gpu-allocator/hashbrown"]
+other_features = []
+
+[dependencies]
+gpu-allocator = { version = "0.27", default-features = false }
+```
+
 ## Minimum Supported Rust Version
 
-The MSRV for this crate and the `vulkan`, `d3d12` and `metal` features is Rust 1.71.  Any other features such as the `visualizer` (with all the `egui` dependencies) may have a higher requirement and are not tested in our CI.
+The MSRV for this crate and the `vulkan`, `d3d12` and `metal` features is Rust **1.71**.
+
+The `no_std` support requires Rust **1.81** or higher because `no_std` support of dependency `thiserror` requires `core::error::Error` which is stabilized in **1.81**.
+
+Any other features such as the `visualizer` (with all the `egui` dependencies) may have a higher requirement and are not tested in our CI.
 
 ## License
 
