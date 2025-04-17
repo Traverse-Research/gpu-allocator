@@ -12,7 +12,7 @@
 
 ```toml
 [dependencies]
-gpu-allocator = "0.27.0"
+gpu-allocator = { version = "0.27.0" }
 ```
 
 ![Visualizer](visualizer.png)
@@ -49,7 +49,7 @@ gpu-allocator = { version = "0.27", default-features = false }
 
 The MSRV for this crate and the `vulkan`, `d3d12` and `metal` features is Rust **1.71**.
 
-The `no_std` support requires version above **1.81** beacuase `no_std` support of dependency `thiserror` requires `core::error::Error` which is stabalized in **1.81**.
+The `no_std` support requires Rust **1.81** or higher because `no_std` support of dependency `thiserror` requires `core::error::Error` which is stabilized in **1.81**.
 
 Any other features such as the `visualizer` (with all the `egui` dependencies) may have a higher requirement and are not tested in our CI.
 
