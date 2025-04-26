@@ -32,7 +32,7 @@ impl MemoryChunksVisualizationSettings {
         ui.horizontal(|ui| {
             ui.add(
                 DragValue::new(&mut self.width_in_bytes)
-                    .clamp_range(BYTES_PER_UNIT_MIN..=BYTES_PER_UNIT_MAX)
+                    .range(BYTES_PER_UNIT_MIN..=BYTES_PER_UNIT_MAX)
                     .speed(10.0),
             );
             ui.label("Bytes per line");
@@ -95,10 +95,11 @@ pub(crate) fn render_memory_chunks_ui<'a>(
                     if ui.is_rect_visible(resp.rect) {
                         ui.painter().rect(
                             resp.rect,
-                            egui::Rounding::ZERO,
+                            egui::CornerRadius::ZERO,
                             color_scheme
                                 .get_allocation_type_color(data[cursor_idx].allocation_type),
                             egui::Stroke::new(1.0, Color32::BLACK),
+                            egui::StrokeKind::Outside,
                         );
 
                         resp.on_hover_ui_at_pointer(|ui| {
