@@ -126,10 +126,12 @@ pub(crate) fn render_allocation_reports_ui(
                     ui.label(name);
                 });
 
-                if backtrace.status() == BacktraceStatus::Captured {
-                    resp.1.on_hover_ui(|ui| {
-                        ui.label(backtrace.to_string());
-                    });
+                if let Some(backtrace) = backtrace {
+                    if backtrace.status() == BacktraceStatus::Captured {
+                        resp.1.on_hover_ui(|ui| {
+                            ui.label(backtrace.to_string());
+                        });
+                    }
                 }
 
                 row.col(|ui| {
