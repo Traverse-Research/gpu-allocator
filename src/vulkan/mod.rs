@@ -248,18 +248,24 @@ impl Allocation {
 
     /// Returns a valid mapped slice if the memory is host visible, otherwise it will return None.
     /// The slice already references the exact memory region of the allocation, so no offset needs to be applied.
-    pub fn mapped_slice(&self) -> Option<&[u8]> {
-        self.mapped_ptr().map(|ptr| unsafe {
-            std::slice::from_raw_parts(ptr.cast().as_ptr(), self.size as usize)
-        })
+    ///
+    /// # Safety
+    /// Only to be called when the memory is known to be _fully_ initialized.
+    pub unsafe fn mapped_slice(&self) -> Option<&[u8]> {
+        self.mapped_ptr()
+            .map(|ptr| std::slice::from_raw_parts(ptr.cast().as_ptr(), self.size as usize))
     }
 
     /// Returns a valid mapped mutable slice if the memory is host visible, otherwise it will return None.
     /// The slice already references the exact memory region of the allocation, so no offset needs to be applied.
-    pub fn mapped_slice_mut(&mut self) -> Option<&mut [u8]> {
-        self.mapped_ptr().map(|ptr| unsafe {
-            std::slice::from_raw_parts_mut(ptr.cast().as_ptr(), self.size as usize)
-        })
+    ///
+    /// # Safety
+    /// Only to be called when the memory is known to be _fully_ initialized. Use [`std::ptr::copy()`] or
+    /// [`std::ptr::copy_nonoverlapping()`] on [`mapped_ptr()`][Self::mapped_ptr()] to initialize this buffer
+    /// from the CPU instead.
+    pub unsafe fn mapped_mut_slice(&mut self) -> Option<&mut [u8]> {
+        self.mapped_ptr()
+            .map(|ptr| std::slice::from_raw_parts_mut(ptr.cast().as_ptr(), self.size as usize))
     }
 
     pub fn is_null(&self) -> bool {
