@@ -1,4 +1,8 @@
-use std::{backtrace::Backtrace, sync::Arc};
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
+use alloc::{boxed::Box, string::ToString, vec::Vec};
+#[cfg(feature = "std")]
+use std::backtrace::Backtrace;
 
 use log::debug;
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -32,7 +36,7 @@ fn memory_location_to_metal(location: MemoryLocation) -> MTLResourceOptions {
 
 #[derive(Debug)]
 pub struct Allocation {
-    chunk_id: Option<std::num::NonZeroU64>,
+    chunk_id: Option<core::num::NonZeroU64>,
     offset: u64,
     size: u64,
     memory_block_index: usize,
@@ -155,8 +159,8 @@ pub struct Allocator {
     allocation_sizes: AllocationSizes,
 }
 
-impl std::fmt::Debug for Allocator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Allocator {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.generate_report().fmt(f)
     }
 }
@@ -228,7 +232,7 @@ impl MemoryType {
         &mut self,
         device: &ProtocolObject<dyn MTLDevice>,
         desc: &AllocationCreateDesc<'_>,
-        backtrace: Arc<Backtrace>,
+        #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = AllocationType::Linear;
@@ -271,6 +275,7 @@ impl MemoryType {
                 allocation_type,
                 1,
                 desc.name,
+                #[cfg(feature = "std")]
                 backtrace,
             )?;
 
@@ -294,6 +299,7 @@ impl MemoryType {
                     allocation_type,
                     1,
                     desc.name,
+                    #[cfg(feature = "std")]
                     backtrace.clone(),
                 );
 
@@ -344,6 +350,7 @@ impl MemoryType {
             allocation_type,
             1,
             desc.name,
+            #[cfg(feature = "std")]
             backtrace,
         );
         let (offset, chunk_id) = match allocation {
@@ -455,6 +462,7 @@ impl Allocator {
         let size = desc.size;
         let alignment = desc.alignment;
 
+        #[cfg(feature = "std")]
         let backtrace = Arc::new(if self.debug_settings.store_stack_traces {
             Backtrace::force_capture()
         } else {
@@ -466,6 +474,7 @@ impl Allocator {
                 "Allocating `{}` of {} bytes with an alignment of {}.",
                 &desc.name, size, alignment
             );
+            #[cfg(feature = "std")]
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
                 debug!("Allocation stack trace: {}", backtrace);
@@ -487,13 +496,20 @@ impl Allocator {
             })
             .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
 
-        memory_type.allocate(&self.device, desc, backtrace, &self.allocation_sizes)
+        memory_type.allocate(
+            &self.device,
+            desc,
+            #[cfg(feature = "std")]
+            backtrace,
+            &self.allocation_sizes,
+        )
     }
 
     pub fn free(&mut self, allocation: &Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
             debug!("Freeing `{}`.", name);
+            #[cfg(feature = "std")]
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
                 debug!("Free stack trace: {}", backtrace);

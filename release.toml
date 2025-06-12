@@ -6,6 +6,8 @@ sign-tag = true
 publish = false
 
 pre-release-replacements = [
-  { file = "README.md", search = "gpu-allocator = .*", replace = "{{crate_name}} = \"{{version}}\"" },
-  { file = "README.tpl", search = "gpu-allocator = .*", replace = "{{crate_name}} = \"{{version}}\"" },
+  { file = "README.md", search = "gpu-allocator = \".*\"", replace = "{{crate_name}} = \"{{version}}\"" },
+  { file = "README.tpl", search = "gpu-allocator = \".*\"", replace = "{{crate_name}} = \"{{version}}\"" },
+  { file = "README.md", search = "gpu-allocator = \\{ version = \".*?\"", replace = "{{crate_name}} = { version = \"{{version}}\"" },
+  { file = "README.tpl", search = "gpu-allocator = \\{ version = \".*?\"", replace = "{{crate_name}} = { version = \"{{version}}\"" },
 ]
