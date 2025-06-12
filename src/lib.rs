@@ -160,6 +160,7 @@
 //!     device: device.clone(),
 //!     debug_settings: Default::default(),
 //!     allocation_sizes: Default::default(),
+//!     create_residency_set: false,
 //! });
 //! # }
 //! # #[cfg(not(feature = "metal"))]
@@ -177,6 +178,7 @@
 //! #     device: device.clone(),
 //! #     debug_settings: Default::default(),
 //! #     allocation_sizes: Default::default(),
+//! #    create_residency_set: false,
 //! # })
 //! # .unwrap();
 //! let allocation_desc = AllocationCreateDesc::buffer(

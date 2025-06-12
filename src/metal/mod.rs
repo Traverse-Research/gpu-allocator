@@ -2,10 +2,12 @@ use std::{backtrace::Backtrace, sync::Arc};
 
 use log::debug;
 use objc2::{rc::Retained, runtime::ProtocolObject};
-use objc2_foundation::NSString;
+use objc2_foundation::{ns_string, NSString};
+#[cfg(doc)]
+use objc2_metal::{MTLAllocation, MTLResource};
 use objc2_metal::{
-    MTLCPUCacheMode, MTLDevice, MTLHeap, MTLHeapDescriptor, MTLHeapType, MTLResourceOptions,
-    MTLStorageMode, MTLTextureDescriptor,
+    MTLCPUCacheMode, MTLDevice, MTLHeap, MTLHeapDescriptor, MTLHeapType, MTLResidencySet,
+    MTLResourceOptions, MTLStorageMode, MTLTextureDescriptor,
 };
 
 #[cfg(feature = "visualizer")]
@@ -150,6 +152,7 @@ impl<'a> AllocationCreateDesc<'a> {
 
 pub struct Allocator {
     device: Retained<ProtocolObject<dyn MTLDevice>>,
+    global_residency_set: Option<Retained<ProtocolObject<dyn MTLResidencySet>>>,
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
     allocation_sizes: AllocationSizes,
@@ -166,6 +169,9 @@ pub struct AllocatorCreateDesc {
     pub device: Retained<ProtocolObject<dyn MTLDevice>>,
     pub debug_settings: AllocatorDebugSettings,
     pub allocation_sizes: AllocationSizes,
+    /// Whether to create a [`MTLResidencySet`] containing all live heaps, that can be retrieved via
+    /// [`Allocator::residency_set()`].  Only supported on `MacOS 15.0+` / `iOS 18.0+`.
+    pub create_residency_set: bool,
 }
 
 #[derive(Debug)]
@@ -215,6 +221,7 @@ impl MemoryBlock {
 
 #[derive(Debug)]
 struct MemoryType {
+    global_residency_set: Option<Retained<ProtocolObject<dyn MTLResidencySet>>>,
     memory_blocks: Vec<Option<MemoryBlock>>,
     _committed_allocations: CommittedAllocationStatistics,
     memory_location: MemoryLocation,
@@ -248,6 +255,10 @@ impl MemoryType {
                 true,
                 self.memory_location,
             )?;
+
+            if let Some(rs) = &self.global_residency_set {
+                unsafe { rs.addAllocation(mem_block.heap.as_ref()) }
+            }
 
             let block_index = self.memory_blocks.iter().position(|block| block.is_none());
             let block_index = match block_index {
@@ -317,7 +328,7 @@ impl MemoryType {
             }
         }
 
-        let new_memory_block = MemoryBlock::new(
+        let mem_block = MemoryBlock::new(
             device,
             memblock_size,
             &self.heap_properties,
@@ -325,11 +336,15 @@ impl MemoryType {
             self.memory_location,
         )?;
 
+        if let Some(rs) = &self.global_residency_set {
+            unsafe { rs.addAllocation(mem_block.heap.as_ref()) }
+        }
+
         let new_block_index = if let Some(block_index) = empty_block_index {
-            self.memory_blocks[block_index] = Some(new_memory_block);
+            self.memory_blocks[block_index] = Some(mem_block);
             block_index
         } else {
-            self.memory_blocks.push(Some(new_memory_block));
+            self.memory_blocks.push(Some(mem_block));
             self.memory_blocks.len() - 1
         };
 
@@ -373,28 +388,26 @@ impl MemoryType {
 
         mem_block.sub_allocator.free(allocation.chunk_id)?;
 
-        if mem_block.sub_allocator.is_empty() {
-            if mem_block.sub_allocator.supports_general_allocations() {
-                if self.active_general_blocks > 1 {
-                    let block = self.memory_blocks[block_idx].take();
-                    if block.is_none() {
-                        return Err(AllocationError::Internal(
-                            "Memory block must be Some.".into(),
-                        ));
-                    }
-                    // Note that `block` will be destroyed on `drop` here
+        // We only want to destroy this now-empty block if it is either a dedicated/personal
+        // allocation, or a block supporting sub-allocations that is not the last one (ensuring
+        // there's always at least one block/allocator readily available).
+        let is_dedicated_or_not_last_general_block =
+            !mem_block.sub_allocator.supports_general_allocations()
+                || self.active_general_blocks > 1;
+        if mem_block.sub_allocator.is_empty() && is_dedicated_or_not_last_general_block {
+            let block = self.memory_blocks[block_idx]
+                .take()
+                .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
 
-                    self.active_general_blocks -= 1;
-                }
-            } else {
-                let block = self.memory_blocks[block_idx].take();
-                if block.is_none() {
-                    return Err(AllocationError::Internal(
-                        "Memory block must be Some.".into(),
-                    ));
-                }
-                // Note that `block` will be destroyed on `drop` here
+            if block.sub_allocator.supports_general_allocations() {
+                self.active_general_blocks -= 1;
             }
+
+            if let Some(rs) = &self.global_residency_set {
+                unsafe { rs.removeAllocation(block.heap.as_ref()) }
+            }
+
+            // Note that `block` will be destroyed on `drop` here
         }
 
         Ok(())
@@ -427,10 +440,23 @@ impl Allocator {
             }),
         ];
 
+        let global_residency_set = if desc.create_residency_set {
+            Some(unsafe {
+                let rs_desc = objc2_metal::MTLResidencySetDescriptor::new();
+                rs_desc.setLabel(Some(ns_string!("gpu-allocator global residency set")));
+                desc.device
+                    .newResidencySetWithDescriptor_error(&rs_desc)
+                    .expect("Failed to create MTLResidencySet.  Unsupported MacOS/iOS version?")
+            })
+        } else {
+            None
+        };
+
         let memory_types = heap_types
             .into_iter()
             .enumerate()
             .map(|(i, (memory_location, heap_descriptor))| MemoryType {
+                global_residency_set: global_residency_set.clone(),
                 memory_blocks: vec![],
                 _committed_allocations: CommittedAllocationStatistics {
                     num_allocations: 0,
@@ -448,6 +474,7 @@ impl Allocator {
             debug_settings: desc.debug_settings,
             memory_types,
             allocation_sizes: desc.allocation_sizes,
+            global_residency_set,
         })
     }
 
@@ -556,5 +583,32 @@ impl Allocator {
         }
 
         total_capacity_bytes
+    }
+
+    /// Optional residency set containing all heap allocations created/owned by this allocator to
+    /// be made resident at once when its allocations are used on the GPU.  The caller _must_ invoke
+    /// [`MTLResidencySet::commit()`] whenever these resources are used to make sure the latest
+    /// changes are visible to Metal, e.g. before committing a command buffer.
+    ///
+    /// This residency set can be attached to individual command buffers or to a queue directly
+    /// since usage of allocated resources is expected to be global.
+    ///
+    /// Alternatively callers can build up their own residency set(s) based on individual
+    /// [`MTLAllocation`]s [^heap-allocation] rather than making all heaps allocated via
+    /// `gpu-allocator` resident at once.
+    ///
+    /// [^heap-allocation]: Note that [`MTLHeap`]s returned by [`Allocator::heaps()`] are also
+    /// allocations.  If individual placed [`MTLResource`]s on a heap are made resident, the entire
+    /// heap will be made resident.
+    ///
+    /// Callers still need to be careful to make resources created outside of `gpu-allocator`
+    /// resident on the GPU, such as indirect command buffers.
+    ///
+    /// This residency set is only available when requested via
+    /// [`AllocatorCreateDesc::create_residency_set`], otherwise this function returns [`None`].
+    pub fn residency_set(&self) -> Option<&Retained<ProtocolObject<dyn MTLResidencySet>>> {
+        // Return the retained object so that the caller also has a way to store it, since we will
+        // keep using and updating the same object going forward.
+        self.global_residency_set.as_ref()
     }
 }
