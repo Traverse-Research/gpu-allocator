@@ -1,11 +1,18 @@
 #![deny(unsafe_code, clippy::unwrap_used)]
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
+use alloc::{
+    borrow::ToOwned,
+    string::{String, ToString},
+    vec::Vec,
+};
+#[cfg(feature = "std")]
+use std::backtrace::Backtrace;
+
+use log::{log, Level};
 
 #[cfg(feature = "visualizer")]
 pub(crate) mod visualizer;
-
-use std::{backtrace::Backtrace, sync::Arc};
-
-use log::{log, Level};
 
 use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
@@ -16,6 +23,7 @@ pub(crate) struct DedicatedBlockAllocator {
     allocated: u64,
     /// Only used if [`crate::AllocatorDebugSettings::store_stack_traces`] is [`true`]
     name: Option<String>,
+    #[cfg(feature = "std")]
     backtrace: Arc<Backtrace>,
 }
 
@@ -25,6 +33,7 @@ impl DedicatedBlockAllocator {
             size,
             allocated: 0,
             name: None,
+            #[cfg(feature = "std")]
             backtrace: Arc::new(Backtrace::disabled()),
         }
     }
@@ -39,8 +48,8 @@ impl SubAllocator for DedicatedBlockAllocator {
         _allocation_type: AllocationType,
         _granularity: u64,
         name: &str,
-        backtrace: Arc<Backtrace>,
-    ) -> Result<(u64, std::num::NonZeroU64)> {
+        #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
+    ) -> Result<(u64, core::num::NonZeroU64)> {
         if self.allocated != 0 {
             return Err(AllocationError::OutOfMemory);
         }
@@ -53,15 +62,18 @@ impl SubAllocator for DedicatedBlockAllocator {
 
         self.allocated = size;
         self.name = Some(name.to_string());
-        self.backtrace = backtrace;
+        #[cfg(feature = "std")]
+        {
+            self.backtrace = backtrace;
+        }
 
         #[allow(clippy::unwrap_used)]
-        let dummy_id = std::num::NonZeroU64::new(1).unwrap();
+        let dummy_id = core::num::NonZeroU64::new(1).unwrap();
         Ok((0, dummy_id))
     }
 
-    fn free(&mut self, chunk_id: Option<std::num::NonZeroU64>) -> Result<()> {
-        if chunk_id != std::num::NonZeroU64::new(1) {
+    fn free(&mut self, chunk_id: Option<core::num::NonZeroU64>) -> Result<()> {
+        if chunk_id != core::num::NonZeroU64::new(1) {
             Err(AllocationError::Internal("Chunk ID must be 1.".into()))
         } else {
             self.allocated = 0;
@@ -71,10 +83,10 @@ impl SubAllocator for DedicatedBlockAllocator {
 
     fn rename_allocation(
         &mut self,
-        chunk_id: Option<std::num::NonZeroU64>,
+        chunk_id: Option<core::num::NonZeroU64>,
         name: &str,
     ) -> Result<()> {
-        if chunk_id != std::num::NonZeroU64::new(1) {
+        if chunk_id != core::num::NonZeroU64::new(1) {
             Err(AllocationError::Internal("Chunk ID must be 1.".into()))
         } else {
             self.name = Some(name.into());
@@ -90,6 +102,20 @@ impl SubAllocator for DedicatedBlockAllocator {
     ) {
         let empty = "".to_string();
         let name = self.name.as_ref().unwrap_or(&empty);
+        let backtrace_info;
+        #[cfg(feature = "std")]
+        {
+            // TODO: Allocation could be avoided here if https://github.com/rust-lang/rust/pull/139135 is merged and stabilized.
+            backtrace_info = format!(
+                ",
+        backtrace: {}",
+                self.backtrace
+            )
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            backtrace_info = ""
+        }
 
         log!(
             log_level,
@@ -98,16 +124,14 @@ impl SubAllocator for DedicatedBlockAllocator {
     memory block: {}
     dedicated allocation: {{
         size: 0x{:x},
-        name: {},
-        backtrace: {}
+        name: {}{backtrace_info}
     }}
 }}"#,
             memory_type_index,
             memory_block_index,
             self.size,
             name,
-            self.backtrace
-        )
+        );
     }
 
     fn report_allocations(&self) -> Vec<AllocationReport> {
