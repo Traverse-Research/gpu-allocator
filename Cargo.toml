@@ -42,6 +42,7 @@ objc2-metal = { version = "0.3", default-features = false, features = [
     "MTLBuffer",
     "MTLDevice",
     "MTLHeap",
+    "MTLResidencySet",
     "MTLResource",
     "MTLTexture",
     "std",

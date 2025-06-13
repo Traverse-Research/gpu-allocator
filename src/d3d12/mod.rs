@@ -475,28 +475,22 @@ impl MemoryType {
 
         mem_block.sub_allocator.free(allocation.chunk_id)?;
 
-        if mem_block.sub_allocator.is_empty() {
-            if mem_block.sub_allocator.supports_general_allocations() {
-                if self.active_general_blocks > 1 {
-                    let block = self.memory_blocks[block_idx].take();
-                    if block.is_none() {
-                        return Err(AllocationError::Internal(
-                            "Memory block must be Some.".into(),
-                        ));
-                    }
-                    // Note that `block` will be destroyed on `drop` here
+        // We only want to destroy this now-empty block if it is either a dedicated/personal
+        // allocation, or a block supporting sub-allocations that is not the last one (ensuring
+        // there's always at least one block/allocator readily available).
+        let is_dedicated_or_not_last_general_block =
+            !mem_block.sub_allocator.supports_general_allocations()
+                || self.active_general_blocks > 1;
+        if mem_block.sub_allocator.is_empty() && is_dedicated_or_not_last_general_block {
+            let block = self.memory_blocks[block_idx]
+                .take()
+                .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
 
-                    self.active_general_blocks -= 1;
-                }
-            } else {
-                let block = self.memory_blocks[block_idx].take();
-                if block.is_none() {
-                    return Err(AllocationError::Internal(
-                        "Memory block must be Some.".into(),
-                    ));
-                }
-                // Note that `block` will be destroyed on `drop` here
+            if block.sub_allocator.supports_general_allocations() {
+                self.active_general_blocks -= 1;
             }
+
+            // Note that `block` will be destroyed on `drop` here
         }
 
         Ok(())

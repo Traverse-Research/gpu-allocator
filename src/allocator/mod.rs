@@ -133,6 +133,8 @@ pub(crate) trait SubAllocator: SubAllocatorBase + fmt::Debug + Sync + Send {
 
     fn report_allocations(&self) -> Vec<AllocationReport>;
 
+    /// Returns [`true`] if this allocator allows sub-allocating multiple allocations, [`false`] if
+    /// it is designed to only represent dedicated allocations.
     #[must_use]
     fn supports_general_allocations(&self) -> bool;
     #[must_use]
