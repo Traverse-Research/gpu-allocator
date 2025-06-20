@@ -40,6 +40,8 @@ pub struct AllocationCreateDesc<'a> {
     pub linear: bool,
     /// Determines how this allocation should be managed.
     pub allocation_scheme: AllocationScheme,
+    /// Determines whether the memory should be usable with `VK_KHR_external_memory_fd` or `VK_KHR_external_memory_win32`
+    pub external_use: bool,
 }
 
 /// Wrapper type to only mark a raw pointer [`Send`] + [`Sync`] without having to
@@ -62,6 +64,8 @@ pub struct AllocatorCreateDesc {
     pub debug_settings: AllocatorDebugSettings,
     pub buffer_device_address: bool,
     pub allocation_sizes: AllocationSizes,
+    /// Whether the device supports the proper external memory extension like `VK_KHR_external_memory_fd`
+    pub external_memory: bool,
 }
 
 /// A piece of allocated memory.
@@ -343,9 +347,11 @@ pub(crate) struct MemoryBlock {
     pub(crate) sub_allocator: Box<dyn SubAllocator>,
     #[cfg(feature = "visualizer")]
     pub(crate) dedicated_allocation: bool,
+    pub(crate) exportable: bool,
 }
 
 impl MemoryBlock {
+    #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
     fn new(
         device: &ash::Device,
         size: u64,
@@ -354,6 +360,7 @@ impl MemoryBlock {
         buffer_device_address: bool,
         allocation_scheme: AllocationScheme,
         requires_personal_block: bool,
+        exportable: bool,
     ) -> Result<Self> {
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::default()
@@ -365,6 +372,20 @@ impl MemoryBlock {
             // TODO(manon): Test this based on if the device has this feature enabled or not
             let alloc_info = if buffer_device_address {
                 alloc_info.push_next(&mut flags_info)
+            } else {
+                alloc_info
+            };
+            #[cfg(windows)]
+            let mut export_info = vk::ExportMemoryAllocateInfoKHR::default()
+                .handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KHR);
+            #[cfg(all(unix, not(target_vendor = "apple")))]
+            let mut export_info = vk::ExportMemoryAllocateInfoKHR::default()
+                .handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD_KHR);
+
+            // On other platforms you can't create an external capable allocator, so this would be unreachable
+            #[cfg(any(windows, all(unix, not(target_vendor = "apple"))))]
+            let alloc_info = if exportable {
+                alloc_info.push_next(&mut export_info)
             } else {
                 alloc_info
             };
@@ -430,6 +451,7 @@ impl MemoryBlock {
             sub_allocator,
             #[cfg(feature = "visualizer")]
             dedicated_allocation: allocation_scheme != AllocationScheme::GpuAllocatorManaged,
+            exportable,
         })
     }
 
@@ -490,6 +512,7 @@ impl MemoryType {
                 self.buffer_device_address,
                 desc.allocation_scheme,
                 requires_personal_block,
+                desc.external_use,
             )?;
 
             let mut block_index = None;
@@ -541,6 +564,9 @@ impl MemoryType {
         let mut empty_block_index = None;
         for (mem_block_i, mem_block) in self.memory_blocks.iter_mut().enumerate().rev() {
             if let Some(mem_block) = mem_block {
+                if mem_block.exportable != desc.external_use {
+                    continue;
+                }
                 let allocation = mem_block.sub_allocator.allocate(
                     size,
                     alignment,
@@ -590,6 +616,7 @@ impl MemoryType {
             self.buffer_device_address,
             desc.allocation_scheme,
             false,
+            desc.external_use,
         )?;
 
         let new_block_index = if let Some(block_index) = empty_block_index {
@@ -684,6 +711,7 @@ pub struct Allocator {
     pub(crate) memory_heaps: Vec<vk::MemoryHeap>,
     device: ash::Device,
     pub(crate) buffer_image_granularity: u64,
+    pub(crate) external_memory_support: bool,
     pub(crate) debug_settings: AllocatorDebugSettings,
     allocation_sizes: AllocationSizes,
 }
@@ -699,6 +727,12 @@ impl Allocator {
         if desc.physical_device == vk::PhysicalDevice::null() {
             return Err(AllocationError::InvalidAllocatorCreateDesc(
                 "AllocatorCreateDesc field `physical_device` is null.".into(),
+            ));
+        }
+        #[cfg(not(any(windows, all(unix, not(target_vendor = "apple")))))]
+        if desc.external_memory {
+            return Err(AllocationError::InvalidAllocatorCreateDesc(
+                "External memory is enabled but currently only supported on windows and non-apple unix platforms".into(),
             ));
         }
 
@@ -763,6 +797,7 @@ impl Allocator {
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
             allocation_sizes: desc.allocation_sizes,
+            external_memory_support: desc.external_memory,
         })
     }
 
@@ -789,6 +824,9 @@ impl Allocator {
 
         if size == 0 || !alignment.is_power_of_two() {
             return Err(AllocationError::InvalidAllocationCreateDesc);
+        }
+        if desc.external_use && !self.external_memory_support {
+            return Err(AllocationError::ExternalMemoryUnsupported);
         }
 
         let mem_loc_preferred_bits = match desc.location {
