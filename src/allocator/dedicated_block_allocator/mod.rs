@@ -16,7 +16,7 @@ pub(crate) struct DedicatedBlockAllocator {
     allocated: u64,
     /// Only used if [`crate::AllocatorDebugSettings::store_stack_traces`] is [`true`]
     name: Option<String>,
-    backtrace: Arc<Backtrace>,
+    backtrace: Option<Arc<Backtrace>>,
 }
 
 impl DedicatedBlockAllocator {
@@ -25,7 +25,7 @@ impl DedicatedBlockAllocator {
             size,
             allocated: 0,
             name: None,
-            backtrace: Arc::new(Backtrace::disabled()),
+            backtrace: None,
         }
     }
 }
@@ -39,7 +39,7 @@ impl SubAllocator for DedicatedBlockAllocator {
         _allocation_type: AllocationType,
         _granularity: u64,
         name: &str,
-        backtrace: Arc<Backtrace>,
+        backtrace: Option<Arc<Backtrace>>,
     ) -> Result<(u64, std::num::NonZeroU64)> {
         if self.allocated != 0 {
             return Err(AllocationError::OutOfMemory);
@@ -106,7 +106,7 @@ impl SubAllocator for DedicatedBlockAllocator {
             memory_block_index,
             self.size,
             name,
-            self.backtrace
+            self.backtrace.as_deref().unwrap_or(&Backtrace::disabled())
         )
     }
 
