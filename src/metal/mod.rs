@@ -80,6 +80,10 @@ impl Allocation {
     fn is_null(&self) -> bool {
         self.chunk_id.is_none()
     }
+
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
 }
 
 #[derive(Clone, Debug)]
