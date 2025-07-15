@@ -150,7 +150,7 @@ impl AllocatorVisualizer {
     ) {
         egui::Window::new("Allocator Memory Blocks")
             .open(open)
-            .show(ctx, |ui| self.render_breakdown_ui(ui, allocator));
+            .show(ctx, |ui| self.render_memory_block_ui(ui, allocator));
     }
 
     pub fn render_memory_block_visualization_windows(
