@@ -111,7 +111,7 @@ pub(crate) fn render_memory_chunks_ui<'a>(
                                 chunk.allocation_type.as_str()
                             ));
                             if let Some(name) = &chunk.name {
-                                ui.label(format!("name: {}", name));
+                                ui.label(format!("name: {name}"));
                             }
                             if settings.show_backtraces
                                 && chunk.backtrace.status() == BacktraceStatus::Captured
