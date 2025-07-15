@@ -495,7 +495,7 @@ impl Allocator {
             );
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
-                debug!("Allocation stack trace: {}", backtrace);
+                debug!("Allocation stack trace: {backtrace}");
             }
         }
 
@@ -520,10 +520,10 @@ impl Allocator {
     pub fn free(&mut self, allocation: &Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
-            debug!("Freeing `{}`.", name);
+            debug!("Freeing `{name}`.");
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
-                debug!("Free stack trace: {}", backtrace);
+                debug!("Free stack trace: {backtrace}");
             }
         }
 

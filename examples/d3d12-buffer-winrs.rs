@@ -33,7 +33,7 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
         let adapter1 = match unsafe { dxgi_factory.EnumAdapters1(idx) } {
             Ok(a) => a,
             Err(e) if e.code() == DXGI_ERROR_NOT_FOUND => break,
-            Err(e) => panic!("{:?}", e),
+            Err(e) => panic!("{e:?}"),
         };
         let adapter4: IDXGIAdapter4 = adapter1.cast().unwrap();
 
@@ -58,7 +58,7 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
                     let mut device = None;
                     match unsafe { D3D12CreateDevice(&adapter4, feature_level, &mut device) } {
                         Ok(()) => {
-                            info!("Using D3D12 feature level: {}", feature_level_name);
+                            info!("Using D3D12 feature level: {feature_level_name}");
                             Some(device.unwrap())
                         }
                         Err(e) if e.code() == E_NOINTERFACE => {
@@ -66,10 +66,7 @@ fn create_d3d12_device(dxgi_factory: &IDXGIFactory6) -> Option<ID3D12Device> {
                             None
                         }
                         Err(e) => {
-                            info!(
-                                "D3D12 feature level {} not supported: {}",
-                                feature_level_name, e
-                            );
+                            info!("D3D12 feature level {feature_level_name} not supported: {e}");
                             None
                         }
                     }

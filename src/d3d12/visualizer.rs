@@ -128,12 +128,12 @@ impl AllocatorVisualizer {
                                 "total committed resource allocations: {} KiB",
                                 mem_type.committed_allocations.total_size
                             ));
-                            ui.label(format!("block count: {}", active_block_count));
+                            ui.label(format!("block count: {active_block_count}"));
 
                             for (block_idx, block) in mem_type.memory_blocks.iter().enumerate() {
                                 let Some(block) = block else { continue };
 
-                                ui.collapsing(format!("Block: {}", block_idx), |ui| {
+                                ui.collapsing(format!("Block: {block_idx}"), |ui| {
                                     ui.label(format!("size: {} KiB", block.size / 1024));
                                     ui.label(format!(
                                         "allocated: {} KiB",

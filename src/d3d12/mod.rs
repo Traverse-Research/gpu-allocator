@@ -288,8 +288,7 @@ impl MemoryBlock {
             match hr {
                 Err(e) if e.code() == E_OUTOFMEMORY => Err(AllocationError::OutOfMemory),
                 Err(e) => Err(AllocationError::Internal(format!(
-                    "ID3D12Device::CreateHeap failed: {}",
-                    e
+                    "ID3D12Device::CreateHeap failed: {e}"
                 ))),
                 Ok(()) => heap.ok_or_else(|| {
                     AllocationError::Internal(
@@ -523,7 +522,7 @@ impl Allocator {
             )
         }
         .map_err(|e| {
-            AllocationError::Internal(format!("ID3D12Device::CheckFeatureSupport failed: {}", e))
+            AllocationError::Internal(format!("ID3D12Device::CheckFeatureSupport failed: {e}"))
         })?;
 
         let is_heap_tier1 = options.ResourceHeapTier == D3D12_RESOURCE_HEAP_TIER_1;
@@ -629,7 +628,7 @@ impl Allocator {
             );
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
-                debug!("Allocation stack trace: {}", backtrace);
+                debug!("Allocation stack trace: {backtrace}");
             }
         }
 
@@ -658,10 +657,10 @@ impl Allocator {
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
-            debug!("Freeing `{}`.", name);
+            debug!("Freeing `{name}`.");
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
-                debug!("Free stack trace: {}", backtrace);
+                debug!("Free stack trace: {backtrace}");
             }
         }
 
@@ -845,8 +844,7 @@ impl Allocator {
                         )));
                     }
                     return Err(AllocationError::Internal(format!(
-                        "ID3D12Device::CreateCommittedResource failed: {}",
-                        e
+                        "ID3D12Device::CreateCommittedResource failed: {e}"
                     )));
                 }
 
@@ -961,8 +959,7 @@ impl Allocator {
                         )));
                     }
                     return Err(AllocationError::Internal(format!(
-                        "ID3D12Device::CreatePlacedResource failed: {}",
-                        e
+                        "ID3D12Device::CreatePlacedResource failed: {e}"
                     )));
                 }
 
