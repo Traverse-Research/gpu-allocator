@@ -4,44 +4,56 @@ name: CI
 
 jobs:
   check_msrv:
-    name: Check MSRV (1.71.0)
+    name: Check MSRV
     strategy:
       matrix:
-        include:
+        target:
           - os: ubuntu-latest
-            features: vulkan
+            backend: vulkan
           - os: windows-latest
-            features: vulkan,d3d12
+            backend: vulkan,d3d12
           - os: macos-latest
-            features: vulkan,metal
-    runs-on: ${{ matrix.os }}
+            backend: vulkan,metal
+        version:
+          - msrv: 1.71.0
+            features: std
+          - msrv: 1.81.0
+            features: hashbrown
+    runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Generate lockfile with minimal dependency versions
         run: cargo +nightly generate-lockfile -Zminimal-versions
-      - uses: dtolnay/rust-toolchain@1.71.0
-      # Note that examples are extempt from the MSRV check, so that they can use newer Rust features
-      - run: cargo check --workspace --features ${{ matrix.features }} --no-default-features
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.version.msrv }}
+      # Note that examples are exempt from the MSRV check, so that they can use newer Rust features
+      - run: cargo check --workspace --no-default-features --features ${{ matrix.target.backend }},${{ matrix.version.features }}
 
   test:
     name: Test Suite
     strategy:
       matrix:
-        include:
+        target:
           - os: ubuntu-latest
-            features: vulkan,visualizer
+            backend: vulkan
           - os: windows-latest
-            features: vulkan,visualizer,d3d12
+            backend: vulkan,d3d12
           - os: macos-latest
-            features: vulkan,visualizer,metal
-    runs-on: ${{ matrix.os }}
+            backend: vulkan,metal
+        features:
+          - hashbrown
+          - std
+          - hashbrown,std
+          - visualizer,std
+    runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Cargo test all targets
-        run: cargo test --workspace --all-targets --features ${{ matrix.features }} --no-default-features
+        run: cargo test --workspace --all-targets --no-default-features --features ${{ matrix.target.backend }},${{ matrix.features }}
       - name: Cargo test docs
-        run: cargo test --workspace --doc --features ${{ matrix.features }} --no-default-features
+        run: cargo test --workspace --doc --no-default-features --features ${{ matrix.target.backend }},${{ matrix.features }}
 
   fmt:
     name: Rustfmt
@@ -55,18 +67,23 @@ jobs:
     name: Clippy
     strategy:
       matrix:
-        include:
+        target:
           - os: ubuntu-latest
-            features: vulkan,visualizer
+            backend: vulkan
           - os: windows-latest
-            features: vulkan,visualizer,d3d12
+            backend: vulkan,d3d12
           - os: macos-latest
-            features: vulkan,visualizer,metal
-    runs-on: ${{ matrix.os }}
+            backend: vulkan,metal
+        features:
+          - hashbrown
+          - std
+          - hashbrown,std
+          - visualizer,std
+    runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Cargo clippy
-        run: cargo clippy --workspace --all-targets --features ${{ matrix.features }} --no-default-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --no-default-features --features ${{ matrix.target.backend }},${{ matrix.features }} -- -D warnings
 
   doc:
     name: Build documentation
