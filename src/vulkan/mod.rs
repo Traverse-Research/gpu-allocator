@@ -339,6 +339,17 @@ unsafe impl presser::Slab for Allocation {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct MemoryBlockCreateDesc {
+    pub size: u64,
+    pub mem_type_index: usize,
+    pub mapped: bool,
+    pub buffer_device_address: bool,
+    pub allocation_scheme: AllocationScheme,
+    pub requires_personal_block: bool,
+    pub exportable: bool,
+}
+
 #[derive(Debug)]
 pub(crate) struct MemoryBlock {
     pub(crate) device_memory: vk::DeviceMemory,
@@ -351,26 +362,16 @@ pub(crate) struct MemoryBlock {
 }
 
 impl MemoryBlock {
-    #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
-    fn new(
-        device: &ash::Device,
-        size: u64,
-        mem_type_index: usize,
-        mapped: bool,
-        buffer_device_address: bool,
-        allocation_scheme: AllocationScheme,
-        requires_personal_block: bool,
-        exportable: bool,
-    ) -> Result<Self> {
+    fn new(device: &ash::Device, desc: &MemoryBlockCreateDesc) -> Result<Self> {
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::default()
-                .allocation_size(size)
-                .memory_type_index(mem_type_index as u32);
+                .allocation_size(desc.size)
+                .memory_type_index(desc.mem_type_index as u32);
 
             let allocation_flags = vk::MemoryAllocateFlags::DEVICE_ADDRESS;
             let mut flags_info = vk::MemoryAllocateFlagsInfo::default().flags(allocation_flags);
             // TODO(manon): Test this based on if the device has this feature enabled or not
-            let alloc_info = if buffer_device_address {
+            let alloc_info = if desc.buffer_device_address {
                 alloc_info.push_next(&mut flags_info)
             } else {
                 alloc_info
@@ -384,7 +385,7 @@ impl MemoryBlock {
 
             // On other platforms you can't create an external capable allocator, so this would be unreachable
             #[cfg(any(windows, all(unix, not(target_vendor = "apple"))))]
-            let alloc_info = if exportable {
+            let alloc_info = if desc.exportable {
                 alloc_info.push_next(&mut export_info)
             } else {
                 alloc_info
@@ -392,7 +393,7 @@ impl MemoryBlock {
 
             // Flag the memory as dedicated if required.
             let mut dedicated_memory_info = vk::MemoryDedicatedAllocateInfo::default();
-            let alloc_info = match allocation_scheme {
+            let alloc_info = match desc.allocation_scheme {
                 AllocationScheme::DedicatedBuffer(buffer) => {
                     dedicated_memory_info = dedicated_memory_info.buffer(buffer);
                     alloc_info.push_next(&mut dedicated_memory_info)
@@ -413,7 +414,8 @@ impl MemoryBlock {
             })?
         };
 
-        let mapped_ptr = mapped
+        let mapped_ptr = desc
+            .mapped
             .then(|| {
                 unsafe {
                     device.map_memory(
@@ -435,23 +437,23 @@ impl MemoryBlock {
             })
             .transpose()?;
 
-        let sub_allocator: Box<dyn SubAllocator> = if allocation_scheme
+        let sub_allocator: Box<dyn SubAllocator> = if desc.allocation_scheme
             != AllocationScheme::GpuAllocatorManaged
-            || requires_personal_block
+            || desc.requires_personal_block
         {
-            Box::new(DedicatedBlockAllocator::new(size))
+            Box::new(DedicatedBlockAllocator::new(desc.size))
         } else {
-            Box::new(FreeListAllocator::new(size))
+            Box::new(FreeListAllocator::new(desc.size))
         };
 
         Ok(Self {
             device_memory,
-            size,
+            size: desc.size,
             mapped_ptr,
             sub_allocator,
             #[cfg(feature = "visualizer")]
-            dedicated_allocation: allocation_scheme != AllocationScheme::GpuAllocatorManaged,
-            exportable,
+            dedicated_allocation: desc.allocation_scheme != AllocationScheme::GpuAllocatorManaged,
+            exportable: desc.exportable,
         })
     }
 
@@ -506,13 +508,15 @@ impl MemoryType {
         if dedicated_allocation || requires_personal_block {
             let mem_block = MemoryBlock::new(
                 device,
-                size,
-                self.memory_type_index,
-                self.mappable,
-                self.buffer_device_address,
-                desc.allocation_scheme,
-                requires_personal_block,
-                desc.external_use,
+                &MemoryBlockCreateDesc {
+                    size,
+                    mem_type_index: self.memory_type_index,
+                    mapped: self.mappable,
+                    allocation_scheme: desc.allocation_scheme,
+                    requires_personal_block,
+                    exportable: desc.external_use,
+                    buffer_device_address: self.buffer_device_address,
+                },
             )?;
 
             let mut block_index = None;
@@ -610,13 +614,15 @@ impl MemoryType {
 
         let new_memory_block = MemoryBlock::new(
             device,
-            memblock_size,
-            self.memory_type_index,
-            self.mappable,
-            self.buffer_device_address,
-            desc.allocation_scheme,
-            false,
-            desc.external_use,
+            &MemoryBlockCreateDesc {
+                size: memblock_size,
+                mem_type_index: self.memory_type_index,
+                mapped: self.mappable,
+                buffer_device_address: self.buffer_device_address,
+                allocation_scheme: desc.allocation_scheme,
+                requires_personal_block: false,
+                exportable: desc.external_use,
+            },
         )?;
 
         let new_block_index = if let Some(block_index) = empty_block_index {

@@ -90,6 +90,7 @@ fn main() {
         debug_settings: Default::default(),
         buffer_device_address: false,
         allocation_sizes: Default::default(),
+        external_memory: false,
     })
     .unwrap();
 
@@ -110,6 +111,7 @@ fn main() {
                 linear: true,
                 allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 name: "Test allocation (Gpu Only)",
+                external_use: false,
             })
             .unwrap();
 
@@ -143,6 +145,7 @@ fn main() {
                 linear: true,
                 allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 name: "Test allocation (Cpu to Gpu)",
+                external_use: false,
             })
             .unwrap();
 
@@ -176,6 +179,7 @@ fn main() {
                 linear: true,
                 allocation_scheme: AllocationScheme::GpuAllocatorManaged,
                 name: "Test allocation (Gpu to Cpu)",
+                external_use: false,
             })
             .unwrap();
 
