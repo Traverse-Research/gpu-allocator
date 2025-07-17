@@ -60,7 +60,7 @@ optional = true
 [dev-dependencies]
 # Enable the "loaded" feature to be able to access the Vulkan entrypoint.
 ash = { version = "0.38", default-features = false, features = ["debug", "loaded"] }
-env_logger = "0.10"
+env_logger = "0.11"
 
 [target.'cfg(windows)'.dev-dependencies.windows]
 # API-breaks since Windows 0.58 only affect our examples
