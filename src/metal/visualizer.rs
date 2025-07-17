@@ -70,12 +70,12 @@ impl AllocatorVisualizer {
                             ui.label(format!("memory type index: {}", mem_type.memory_type_index));
                             ui.label(format!("total block size: {} KiB", total_block_size / 1024));
                             ui.label(format!("total allocated:  {} KiB", total_allocated / 1024));
-                            ui.label(format!("block count: {}", active_block_count));
+                            ui.label(format!("block count: {active_block_count}"));
 
                             for (block_idx, block) in mem_type.memory_blocks.iter().enumerate() {
                                 let Some(block) = block else { continue };
 
-                                ui.collapsing(format!("Block: {}", block_idx), |ui| {
+                                ui.collapsing(format!("Block: {block_idx}"), |ui| {
                                     ui.label(format!("size: {} KiB", block.size / 1024));
                                     ui.label(format!(
                                         "allocated: {} KiB",

@@ -23,15 +23,16 @@ include = [
 all-features = true
 
 [dependencies]
-log = "0.4"
-thiserror = "1.0"
-presser = { version = "0.3" }
+log = { version = "0.4", default-features = false }
+thiserror = { version = "2.0", default-features = false }
+presser = { version = "0.3", default-features = false }
 # Only needed for Vulkan.  Disable all default features as good practice,
 # such as the ability to link/load a Vulkan library.
 ash = { version = "0.38", optional = true, default-features = false, features = ["debug"] }
 # Only needed for visualizer.
 egui = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 egui_extras = { version = ">=0.24, <=0.27", optional = true, default-features = false }
+hashbrown = { version = "0.15.2", optional = true }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 objc2 = { version = "0.6", default-features = false, optional = true }
@@ -88,9 +89,12 @@ name = "metal-buffer"
 required-features = ["metal"]
 
 [features]
+std = ["presser/std"]
 visualizer = ["dep:egui", "dep:egui_extras"]
 vulkan = ["dep:ash"]
 d3d12 = ["dep:windows"]
 metal = ["dep:objc2", "dep:objc2-metal", "dep:objc2-foundation"]
+# Enables the FreeListAllocator when `std` is not enabled by using the `hashbrown` crate
+hashbrown = ["dep:hashbrown"]
 
-default = ["d3d12", "vulkan", "metal"]
+default = ["std", "d3d12", "vulkan", "metal"]

@@ -1,10 +1,13 @@
-use std::{
-    backtrace::Backtrace,
+#[cfg(feature = "std")]
+use alloc::sync::Arc;
+use alloc::{boxed::Box, string::String, vec::Vec};
+use core::{
     fmt,
     // TODO: Remove when bumping MSRV to 1.80
     mem::size_of_val,
-    sync::Arc,
 };
+#[cfg(feature = "std")]
+use std::backtrace::Backtrace;
 
 use log::{debug, warn, Level};
 use windows::Win32::{
@@ -119,7 +122,7 @@ impl<'a> AllocationCreateDesc<'a> {
         // SAFETY: `device` is a valid device handle, and no arguments (like pointers) are passed
         // that could induce UB.
         let allocation_info =
-            unsafe { device.GetResourceAllocationInfo(0, std::slice::from_ref(desc)) };
+            unsafe { device.GetResourceAllocationInfo(0, core::slice::from_ref(desc)) };
         let resource_category: ResourceCategory = desc.into();
 
         AllocationCreateDesc {
@@ -144,7 +147,7 @@ pub enum ID3D12DeviceVersion {
     Device12(ID3D12Device12),
 }
 
-impl std::ops::Deref for ID3D12DeviceVersion {
+impl core::ops::Deref for ID3D12DeviceVersion {
     type Target = ID3D12Device;
 
     fn deref(&self) -> &Self::Target {
@@ -209,7 +212,7 @@ pub struct CommittedAllocationStatistics {
 
 #[derive(Debug)]
 pub struct Allocation {
-    chunk_id: Option<std::num::NonZeroU64>,
+    chunk_id: Option<core::num::NonZeroU64>,
     offset: u64,
     size: u64,
     memory_block_index: usize,
@@ -220,7 +223,7 @@ pub struct Allocation {
 }
 
 impl Allocation {
-    pub fn chunk_id(&self) -> Option<std::num::NonZeroU64> {
+    pub fn chunk_id(&self) -> Option<core::num::NonZeroU64> {
         self.chunk_id
     }
 
@@ -288,8 +291,7 @@ impl MemoryBlock {
             match hr {
                 Err(e) if e.code() == E_OUTOFMEMORY => Err(AllocationError::OutOfMemory),
                 Err(e) => Err(AllocationError::Internal(format!(
-                    "ID3D12Device::CreateHeap failed: {}",
-                    e
+                    "ID3D12Device::CreateHeap failed: {e}"
                 ))),
                 Ok(()) => heap.ok_or_else(|| {
                     AllocationError::Internal(
@@ -329,7 +331,7 @@ impl MemoryType {
         &mut self,
         device: &ID3D12DeviceVersion,
         desc: &AllocationCreateDesc<'_>,
-        backtrace: Arc<Backtrace>,
+        #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
     ) -> Result<Allocation> {
         let allocation_type = AllocationType::Linear;
@@ -372,6 +374,7 @@ impl MemoryType {
                 allocation_type,
                 1,
                 desc.name,
+                #[cfg(feature = "std")]
                 backtrace,
             )?;
 
@@ -395,6 +398,7 @@ impl MemoryType {
                     allocation_type,
                     1,
                     desc.name,
+                    #[cfg(feature = "std")]
                     backtrace.clone(),
                 );
 
@@ -445,6 +449,7 @@ impl MemoryType {
             allocation_type,
             1,
             desc.name,
+            #[cfg(feature = "std")]
             backtrace,
         );
         let (offset, chunk_id) = match allocation {
@@ -523,7 +528,7 @@ impl Allocator {
             )
         }
         .map_err(|e| {
-            AllocationError::Internal(format!("ID3D12Device::CheckFeatureSupport failed: {}", e))
+            AllocationError::Internal(format!("ID3D12Device::CheckFeatureSupport failed: {e}"))
         })?;
 
         let is_heap_tier1 = options.ResourceHeapTier == D3D12_RESOURCE_HEAP_TIER_1;
@@ -616,6 +621,7 @@ impl Allocator {
         let size = desc.size;
         let alignment = desc.alignment;
 
+        #[cfg(feature = "std")]
         let backtrace = Arc::new(if self.debug_settings.store_stack_traces {
             Backtrace::force_capture()
         } else {
@@ -627,9 +633,10 @@ impl Allocator {
                 "Allocating `{}` of {} bytes with an alignment of {}.",
                 &desc.name, size, alignment
             );
+            #[cfg(feature = "std")]
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
-                debug!("Allocation stack trace: {}", backtrace);
+                debug!("Allocation stack trace: {backtrace}");
             }
         }
 
@@ -652,16 +659,23 @@ impl Allocator {
             })
             .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
 
-        memory_type.allocate(&self.device, desc, backtrace, &self.allocation_sizes)
+        memory_type.allocate(
+            &self.device,
+            desc,
+            #[cfg(feature = "std")]
+            backtrace,
+            &self.allocation_sizes,
+        )
     }
 
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
         if self.debug_settings.log_frees {
             let name = allocation.name.as_deref().unwrap_or("<null>");
-            debug!("Freeing `{}`.", name);
+            debug!("Freeing `{name}`.");
+            #[cfg(feature = "std")]
             if self.debug_settings.log_stack_traces {
                 let backtrace = Backtrace::force_capture();
-                debug!("Free stack trace: {}", backtrace);
+                debug!("Free stack trace: {backtrace}");
             }
         }
 
@@ -845,8 +859,7 @@ impl Allocator {
                         )));
                     }
                     return Err(AllocationError::Internal(format!(
-                        "ID3D12Device::CreateCommittedResource failed: {}",
-                        e
+                        "ID3D12Device::CreateCommittedResource failed: {e}"
                     )));
                 }
 
@@ -961,8 +974,7 @@ impl Allocator {
                         )));
                     }
                     return Err(AllocationError::Internal(format!(
-                        "ID3D12Device::CreatePlacedResource failed: {}",
-                        e
+                        "ID3D12Device::CreatePlacedResource failed: {e}"
                     )));
                 }
 
