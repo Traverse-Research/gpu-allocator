@@ -392,12 +392,12 @@ impl MemoryBlock {
             };
 
             // On other platforms you can't create an external capable allocator, so this would be unreachable
-            #[cfg(any(windows, all(unix, not(target_vendor = "apple"))))]
-            let alloc_info = if desc.exportable {
-                alloc_info.push_next(&mut export_info)
-            } else {
-                alloc_info
-            };
+            let alloc_info =
+                if cfg!(any(windows, all(unix, not(target_vendor = "apple")))) && desc.exportable {
+                    alloc_info.push_next(&mut export_info)
+                } else {
+                    alloc_info
+                };
 
             // Flag the memory as dedicated if required.
             let mut dedicated_memory_info = vk::MemoryDedicatedAllocateInfo::default();
