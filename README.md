@@ -31,6 +31,7 @@ let mut allocator = Allocator::new(&AllocatorCreateDesc {
     debug_settings: Default::default(),
     buffer_device_address: true,  // Ideally, check the BufferDeviceAddressFeatures struct.
     allocation_sizes: Default::default(),
+    external_memory: false,
 });
 ```
 
@@ -55,6 +56,7 @@ let allocation = allocator
         location: MemoryLocation::CpuToGpu,
         linear: true, // Buffers are always linear
         allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+        external_use: false,
     }).unwrap();
 
 // Bind memory to the buffer

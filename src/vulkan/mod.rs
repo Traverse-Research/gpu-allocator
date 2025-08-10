@@ -45,6 +45,8 @@ pub struct AllocationCreateDesc<'a> {
     pub linear: bool,
     /// Determines how this allocation should be managed.
     pub allocation_scheme: AllocationScheme,
+    /// Determines whether the memory should be usable with `VK_KHR_external_memory_fd` or `VK_KHR_external_memory_win32`
+    pub external_use: bool,
 }
 
 /// Wrapper type to only mark a raw pointer [`Send`] + [`Sync`] without having to
@@ -67,6 +69,8 @@ pub struct AllocatorCreateDesc {
     pub debug_settings: AllocatorDebugSettings,
     pub buffer_device_address: bool,
     pub allocation_sizes: AllocationSizes,
+    /// Whether the device supports the proper external memory extension like `VK_KHR_external_memory_fd`
+    pub external_memory: bool,
 }
 
 /// A piece of allocated memory.
@@ -340,6 +344,17 @@ unsafe impl presser::Slab for Allocation {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct MemoryBlockCreateDesc {
+    pub size: u64,
+    pub mem_type_index: usize,
+    pub mapped: bool,
+    pub buffer_device_address: bool,
+    pub allocation_scheme: AllocationScheme,
+    pub requires_personal_block: bool,
+    pub exportable: bool,
+}
+
 #[derive(Debug)]
 pub(crate) struct MemoryBlock {
     pub(crate) device_memory: vk::DeviceMemory,
@@ -348,35 +363,45 @@ pub(crate) struct MemoryBlock {
     pub(crate) sub_allocator: Box<dyn SubAllocator>,
     #[cfg(feature = "visualizer")]
     pub(crate) dedicated_allocation: bool,
+    pub(crate) exportable: bool,
 }
 
 impl MemoryBlock {
-    fn new(
-        device: &ash::Device,
-        size: u64,
-        mem_type_index: usize,
-        mapped: bool,
-        buffer_device_address: bool,
-        allocation_scheme: AllocationScheme,
-        requires_personal_block: bool,
-    ) -> Result<Self> {
+    fn new(device: &ash::Device, desc: &MemoryBlockCreateDesc) -> Result<Self> {
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::default()
-                .allocation_size(size)
-                .memory_type_index(mem_type_index as u32);
+                .allocation_size(desc.size)
+                .memory_type_index(desc.mem_type_index as u32);
 
             let allocation_flags = vk::MemoryAllocateFlags::DEVICE_ADDRESS;
             let mut flags_info = vk::MemoryAllocateFlagsInfo::default().flags(allocation_flags);
             // TODO(manon): Test this based on if the device has this feature enabled or not
-            let alloc_info = if buffer_device_address {
+            let alloc_info = if desc.buffer_device_address {
                 alloc_info.push_next(&mut flags_info)
             } else {
                 alloc_info
             };
+            let mut export_info = if cfg!(windows) {
+                vk::ExportMemoryAllocateInfoKHR::default()
+                    .handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KHR)
+            } else if cfg!(all(unix, not(target_vendor = "apple"))) {
+                vk::ExportMemoryAllocateInfoKHR::default()
+                    .handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD_KHR)
+            } else {
+                vk::ExportMemoryAllocateInfoKHR::default()
+            };
+
+            // On other platforms you can't create an external capable allocator, so this would be unreachable
+            let alloc_info =
+                if cfg!(any(windows, all(unix, not(target_vendor = "apple")))) && desc.exportable {
+                    alloc_info.push_next(&mut export_info)
+                } else {
+                    alloc_info
+                };
 
             // Flag the memory as dedicated if required.
             let mut dedicated_memory_info = vk::MemoryDedicatedAllocateInfo::default();
-            let alloc_info = match allocation_scheme {
+            let alloc_info = match desc.allocation_scheme {
                 AllocationScheme::DedicatedBuffer(buffer) => {
                     dedicated_memory_info = dedicated_memory_info.buffer(buffer);
                     alloc_info.push_next(&mut dedicated_memory_info)
@@ -396,7 +421,8 @@ impl MemoryBlock {
             })?
         };
 
-        let mapped_ptr = mapped
+        let mapped_ptr = desc
+            .mapped
             .then(|| {
                 unsafe {
                     device.map_memory(
@@ -418,22 +444,23 @@ impl MemoryBlock {
             })
             .transpose()?;
 
-        let sub_allocator: Box<dyn SubAllocator> = if allocation_scheme
+        let sub_allocator: Box<dyn SubAllocator> = if desc.allocation_scheme
             != AllocationScheme::GpuAllocatorManaged
-            || requires_personal_block
+            || desc.requires_personal_block
         {
-            Box::new(DedicatedBlockAllocator::new(size))
+            Box::new(DedicatedBlockAllocator::new(desc.size))
         } else {
-            Box::new(FreeListAllocator::new(size))
+            Box::new(FreeListAllocator::new(desc.size))
         };
 
         Ok(Self {
             device_memory,
-            size,
+            size: desc.size,
             mapped_ptr,
             sub_allocator,
             #[cfg(feature = "visualizer")]
-            dedicated_allocation: allocation_scheme != AllocationScheme::GpuAllocatorManaged,
+            dedicated_allocation: desc.allocation_scheme != AllocationScheme::GpuAllocatorManaged,
+            exportable: desc.exportable,
         })
     }
 
@@ -488,12 +515,15 @@ impl MemoryType {
         if dedicated_allocation || requires_personal_block {
             let mem_block = MemoryBlock::new(
                 device,
-                size,
-                self.memory_type_index,
-                self.mappable,
-                self.buffer_device_address,
-                desc.allocation_scheme,
-                requires_personal_block,
+                &MemoryBlockCreateDesc {
+                    size,
+                    mem_type_index: self.memory_type_index,
+                    mapped: self.mappable,
+                    allocation_scheme: desc.allocation_scheme,
+                    requires_personal_block,
+                    exportable: desc.external_use,
+                    buffer_device_address: self.buffer_device_address,
+                },
             )?;
 
             let mut block_index = None;
@@ -546,6 +576,9 @@ impl MemoryType {
         let mut empty_block_index = None;
         for (mem_block_i, mem_block) in self.memory_blocks.iter_mut().enumerate().rev() {
             if let Some(mem_block) = mem_block {
+                if mem_block.exportable != desc.external_use {
+                    continue;
+                }
                 let allocation = mem_block.sub_allocator.allocate(
                     size,
                     alignment,
@@ -590,12 +623,15 @@ impl MemoryType {
 
         let new_memory_block = MemoryBlock::new(
             device,
-            memblock_size,
-            self.memory_type_index,
-            self.mappable,
-            self.buffer_device_address,
-            desc.allocation_scheme,
-            false,
+            &MemoryBlockCreateDesc {
+                size: memblock_size,
+                mem_type_index: self.memory_type_index,
+                mapped: self.mappable,
+                buffer_device_address: self.buffer_device_address,
+                allocation_scheme: desc.allocation_scheme,
+                requires_personal_block: false,
+                exportable: desc.external_use,
+            },
         )?;
 
         let new_block_index = if let Some(block_index) = empty_block_index {
@@ -691,6 +727,7 @@ pub struct Allocator {
     pub(crate) memory_heaps: Vec<vk::MemoryHeap>,
     device: ash::Device,
     pub(crate) buffer_image_granularity: u64,
+    pub(crate) external_memory_support: bool,
     pub(crate) debug_settings: AllocatorDebugSettings,
     allocation_sizes: AllocationSizes,
 }
@@ -706,6 +743,12 @@ impl Allocator {
         if desc.physical_device == vk::PhysicalDevice::null() {
             return Err(AllocationError::InvalidAllocatorCreateDesc(
                 "AllocatorCreateDesc field `physical_device` is null.".into(),
+            ));
+        }
+        #[cfg(not(any(windows, all(unix, not(target_vendor = "apple")))))]
+        if desc.external_memory {
+            return Err(AllocationError::InvalidAllocatorCreateDesc(
+                "External memory is enabled but currently only supported on windows and non-apple unix platforms".into(),
             ));
         }
 
@@ -770,6 +813,7 @@ impl Allocator {
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
             allocation_sizes: desc.allocation_sizes,
+            external_memory_support: desc.external_memory,
         })
     }
 
@@ -798,6 +842,9 @@ impl Allocator {
 
         if size == 0 || !alignment.is_power_of_two() {
             return Err(AllocationError::InvalidAllocationCreateDesc);
+        }
+        if desc.external_use && !self.external_memory_support {
+            return Err(AllocationError::ExternalMemoryUnsupported);
         }
 
         let mem_loc_preferred_bits = match desc.location {
