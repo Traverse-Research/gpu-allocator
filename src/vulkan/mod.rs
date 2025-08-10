@@ -381,12 +381,15 @@ impl MemoryBlock {
             } else {
                 alloc_info
             };
-            #[cfg(windows)]
-            let mut export_info = vk::ExportMemoryAllocateInfoKHR::default()
-                .handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KHR);
-            #[cfg(all(unix, not(target_vendor = "apple")))]
-            let mut export_info = vk::ExportMemoryAllocateInfoKHR::default()
-                .handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD_KHR);
+            let mut export_info = if cfg!(windows) {
+                vk::ExportMemoryAllocateInfoKHR::default()
+                    .handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KHR)
+            } else if cfg!(all(unix, not(target_vendor = "apple"))) {
+                vk::ExportMemoryAllocateInfoKHR::default()
+                    .handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD_KHR)
+            } else {
+                vk::ExportMemoryAllocateInfoKHR::default()
+            };
 
             // On other platforms you can't create an external capable allocator, so this would be unreachable
             #[cfg(any(windows, all(unix, not(target_vendor = "apple"))))]
