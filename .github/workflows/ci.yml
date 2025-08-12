@@ -21,7 +21,7 @@ jobs:
             features: hashbrown
     runs-on: ${{ matrix.target.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@nightly
       - name: Generate lockfile with minimal dependency versions
         run: cargo +nightly generate-lockfile -Zminimal-versions
@@ -49,7 +49,7 @@ jobs:
           - visualizer,std
     runs-on: ${{ matrix.target.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cargo test all targets
         run: cargo test --workspace --all-targets --no-default-features --features ${{ matrix.target.backend }},${{ matrix.features }}
       - name: Cargo test docs
@@ -59,7 +59,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cargo fmt
         run: cargo fmt --all -- --check
 
@@ -81,7 +81,7 @@ jobs:
           - visualizer,std
     runs-on: ${{ matrix.target.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cargo clippy
         run: cargo clippy --workspace --all-targets --no-default-features --features ${{ matrix.target.backend }},${{ matrix.features }} -- -D warnings
 
@@ -95,14 +95,14 @@ jobs:
     env:
       RUSTDOCFLAGS: -Dwarnings
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build documentation
         run: cargo doc --no-deps --workspace --all-features --document-private-items
 
   readme:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Use cached cargo-readme
         uses: actions/cache@v4
         id: cargo-readme-cache
