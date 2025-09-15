@@ -50,7 +50,7 @@ objc2-metal = { version = "0.3", default-features = false, features = [
 ], optional = true }
 
 [target.'cfg(windows)'.dependencies.windows]
-version = ">=0.53, <=0.61"
+version = ">=0.53, <=0.62"
 features = [
     "Win32_Graphics_Direct3D12",
     "Win32_Graphics_Dxgi_Common",
