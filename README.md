@@ -12,7 +12,7 @@
 
 ```toml
 [dependencies]
-gpu-allocator = "0.27.0"
+gpu-allocator = "0.28.0"
 ```
 
 ![Visualizer](visualizer.png)
@@ -168,7 +168,7 @@ allocator.free(&allocation).unwrap();
 
 ```toml
 [dependencies]
-gpu-allocator = { version = "0.27.0", default-features = false, features = ["hashbrown", "other features"] }
+gpu-allocator = { version = "0.28.0", default-features = false, features = ["hashbrown", "other features"] }
 ```
 
 To support both `std` and `no_std` builds in your project, use the following in your `Cargo.toml`:
@@ -182,7 +182,7 @@ hashbrown = ["gpu-allocator/hashbrown"]
 other_features = []
 
 [dependencies]
-gpu-allocator = { version = "0.27.0", default-features = false }
+gpu-allocator = { version = "0.28.0", default-features = false }
 ```
 
 ## Minimum Supported Rust Version
