@@ -22,6 +22,9 @@ pub enum AllocationError {
     CastableFormatsRequiresEnhancedBarriers,
     #[error("Castable formats require at least `Device12`")]
     CastableFormatsRequiresAtLeastDevice12,
+
+    #[error("Allocating exportable memory requires the allocator be created with external memory support")]
+    ExternalMemoryUnsupported,
 }
 
 pub type Result<V, E = AllocationError> = ::core::result::Result<V, E>;

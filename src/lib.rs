@@ -18,6 +18,7 @@
 //!     debug_settings: Default::default(),
 //!     buffer_device_address: true,  // Ideally, check the BufferDeviceAddressFeatures struct.
 //!     allocation_sizes: Default::default(),
+//!     external_memory: false,
 //! });
 //! # }
 //! # #[cfg(not(feature = "vulkan"))]
@@ -42,6 +43,7 @@
 //! #     debug_settings: Default::default(),
 //! #     buffer_device_address: true,  // Ideally, check the BufferDeviceAddressFeatures struct.
 //! #     allocation_sizes: Default::default(),
+//! #     external_memory: false,
 //! # }).unwrap();
 //!
 //! // Setup vulkan info
@@ -59,6 +61,7 @@
 //!         location: MemoryLocation::CpuToGpu,
 //!         linear: true, // Buffers are always linear
 //!         allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+//!         external_use: false,
 //!     }).unwrap();
 //!
 //! // Bind memory to the buffer
