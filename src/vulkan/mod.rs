@@ -819,11 +819,12 @@ impl Allocator {
 
         if memory_type_index_opt.is_none() {
             let mem_loc_required_bits = match desc.location {
-                MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
                 MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => {
                     vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
                 }
-                MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
+                MemoryLocation::GpuOnly | MemoryLocation::Unknown => {
+                    return Err(AllocationError::NoCompatibleMemoryTypeFound);
+                }
             };
 
             memory_type_index_opt =
