@@ -261,7 +261,7 @@ impl MemoryType {
             )?;
 
             if let Some(rs) = &self.global_residency_set {
-                unsafe { rs.addAllocation(mem_block.heap.as_ref()) }
+                rs.addAllocation(mem_block.heap.as_ref())
             }
 
             let block_index = self.memory_blocks.iter().position(|block| block.is_none());
@@ -343,7 +343,7 @@ impl MemoryType {
         )?;
 
         if let Some(rs) = &self.global_residency_set {
-            unsafe { rs.addAllocation(mem_block.heap.as_ref()) }
+            rs.addAllocation(mem_block.heap.as_ref())
         }
 
         let new_block_index = if let Some(block_index) = empty_block_index {
@@ -411,7 +411,7 @@ impl MemoryType {
             }
 
             if let Some(rs) = &self.global_residency_set {
-                unsafe { rs.removeAllocation(block.heap.as_ref()) }
+                rs.removeAllocation(block.heap.as_ref())
             }
 
             // Note that `block` will be destroyed on `drop` here
@@ -425,21 +425,21 @@ impl Allocator {
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
         let heap_types = [
             (MemoryLocation::GpuOnly, {
-                let heap_desc = unsafe { MTLHeapDescriptor::new() };
+                let heap_desc = MTLHeapDescriptor::new();
                 heap_desc.setCpuCacheMode(MTLCPUCacheMode::DefaultCache);
                 heap_desc.setStorageMode(MTLStorageMode::Private);
                 heap_desc.setType(MTLHeapType::Placement);
                 heap_desc
             }),
             (MemoryLocation::CpuToGpu, {
-                let heap_desc = unsafe { MTLHeapDescriptor::new() };
+                let heap_desc = MTLHeapDescriptor::new();
                 heap_desc.setCpuCacheMode(MTLCPUCacheMode::WriteCombined);
                 heap_desc.setStorageMode(MTLStorageMode::Shared);
                 heap_desc.setType(MTLHeapType::Placement);
                 heap_desc
             }),
             (MemoryLocation::GpuToCpu, {
-                let heap_desc = unsafe { MTLHeapDescriptor::new() };
+                let heap_desc = MTLHeapDescriptor::new();
                 heap_desc.setCpuCacheMode(MTLCPUCacheMode::DefaultCache);
                 heap_desc.setStorageMode(MTLStorageMode::Shared);
                 heap_desc.setType(MTLHeapType::Placement);
@@ -448,13 +448,13 @@ impl Allocator {
         ];
 
         let global_residency_set = if desc.create_residency_set {
-            Some(unsafe {
-                let rs_desc = objc2_metal::MTLResidencySetDescriptor::new();
-                rs_desc.setLabel(Some(ns_string!("gpu-allocator global residency set")));
+            let rs_desc = objc2_metal::MTLResidencySetDescriptor::new();
+            rs_desc.setLabel(Some(ns_string!("gpu-allocator global residency set")));
+            Some(
                 desc.device
                     .newResidencySetWithDescriptor_error(&rs_desc)
-                    .expect("Failed to create MTLResidencySet.  Unsupported MacOS/iOS version?")
-            })
+                    .expect("Failed to create MTLResidencySet.  Unsupported MacOS/iOS version?"),
+            )
         } else {
             None
         };

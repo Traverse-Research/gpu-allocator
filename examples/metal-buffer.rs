@@ -99,7 +99,7 @@ fn main() {
 
     // Test allocating texture
     {
-        let texture_desc = unsafe { MTLTextureDescriptor::new() };
+        let texture_desc = MTLTextureDescriptor::new();
         texture_desc.setPixelFormat(MTLPixelFormat::RGBA8Unorm);
         unsafe { texture_desc.setWidth(64) };
         unsafe { texture_desc.setHeight(64) };
