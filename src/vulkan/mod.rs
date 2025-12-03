@@ -5,7 +5,7 @@ use core::{fmt, marker::PhantomData};
 #[cfg(feature = "std")]
 use std::backtrace::Backtrace;
 
-use ash::vk;
+use ash::vk::{self, TaggedStructure as _};
 use log::{debug, Level};
 
 #[cfg(feature = "visualizer")]
@@ -369,7 +369,7 @@ impl MemoryBlock {
             let mut flags_info = vk::MemoryAllocateFlagsInfo::default().flags(allocation_flags);
             // TODO(manon): Test this based on if the device has this feature enabled or not
             let alloc_info = if buffer_device_address {
-                alloc_info.push_next(&mut flags_info)
+                alloc_info.push(&mut flags_info)
             } else {
                 alloc_info
             };
@@ -379,11 +379,11 @@ impl MemoryBlock {
             let alloc_info = match allocation_scheme {
                 AllocationScheme::DedicatedBuffer(buffer) => {
                     dedicated_memory_info = dedicated_memory_info.buffer(buffer);
-                    alloc_info.push_next(&mut dedicated_memory_info)
+                    alloc_info.push(&mut dedicated_memory_info)
                 }
                 AllocationScheme::DedicatedImage(image) => {
                     dedicated_memory_info = dedicated_memory_info.image(image);
-                    alloc_info.push_next(&mut dedicated_memory_info)
+                    alloc_info.push(&mut dedicated_memory_info)
                 }
                 AllocationScheme::GpuAllocatorManaged => alloc_info,
             };
