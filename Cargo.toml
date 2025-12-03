@@ -98,3 +98,7 @@ metal = ["dep:objc2", "dep:objc2-metal", "dep:objc2-foundation"]
 hashbrown = ["dep:hashbrown"]
 
 default = ["std", "d3d12", "vulkan", "metal"]
+
+[patch.crates-io]
+# https://github.com/ash-rs/ash/pull/951
+ash = { git = "https://github.com/Traverse-Research/ash", rev = "e589cf77" }
