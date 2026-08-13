@@ -178,6 +178,20 @@ pub enum ResourceType<'a> {
     ///
     /// [`PlacedResource`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createplacedresource
     Placed,
+    /// Create a resource whose memory another device or API can open, through
+    /// [`ID3D12Device::CreateSharedHandle`] on the returned [`Resource::resource()`].
+    ///
+    /// This is [`Self::Committed`] with `D3D12_HEAP_FLAG_SHARED`, and committed is
+    /// not a detail the caller may vary: a placed resource would sit on a pool heap
+    /// created without that flag, and sharing that heap would hand the importer
+    /// every other resource on it as well.
+    ///
+    /// [`ID3D12Device::CreateSharedHandle`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createsharedhandle
+    Shared {
+        heap_properties: &'a D3D12_HEAP_PROPERTIES,
+        /// Flags to share the resource with, on top of `D3D12_HEAP_FLAG_SHARED`.
+        heap_flags: D3D12_HEAP_FLAGS,
+    },
 }
 
 #[derive(Debug)]
@@ -786,7 +800,16 @@ impl Allocator {
             ResourceType::Committed {
                 heap_properties,
                 heap_flags,
+            }
+            | ResourceType::Shared {
+                heap_properties,
+                heap_flags,
             } => {
+                let heap_flags = if matches!(desc.resource_type, ResourceType::Shared { .. }) {
+                    *heap_flags | D3D12_HEAP_FLAG_SHARED
+                } else {
+                    *heap_flags
+                };
                 let mut result: Option<ID3D12Resource> = None;
 
                 let clear_value: Option<*const D3D12_CLEAR_VALUE> =
@@ -806,7 +829,7 @@ impl Allocator {
                             let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
                             device.CreateCommittedResource3(
                                 *heap_properties,
-                                *heap_flags,
+                                heap_flags,
                                 &resource_desc1,
                                 initial_layout,
                                 clear_value,
@@ -828,7 +851,7 @@ impl Allocator {
 
                             device.CreateCommittedResource3(
                                 *heap_properties,
-                                *heap_flags,
+                                heap_flags,
                                 &resource_desc1,
                                 initial_layout,
                                 clear_value,
@@ -843,7 +866,7 @@ impl Allocator {
                         (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
                             device.CreateCommittedResource(
                                 *heap_properties,
-                                *heap_flags,
+                                heap_flags,
                                 desc.resource_desc,
                                 initial_state,
                                 clear_value,
