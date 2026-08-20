@@ -449,7 +449,7 @@ impl MemoryBlock {
                     let alloc_info = alloc_info.push(&mut export_info);
 
                     if handle_types.intersects(NT_HANDLE_TYPES) {
-                        export_win32_info = export_win32_info.dw_access(GENERIC_ALL);
+                        export_win32_info = export_win32_info.dw_access(GENERIC_ALL.into());
                         alloc_info.push(&mut export_win32_info)
                     } else {
                         alloc_info
