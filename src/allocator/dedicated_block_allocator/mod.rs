@@ -18,7 +18,7 @@ use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
 
 #[derive(Debug)]
-pub(crate) struct DedicatedBlockAllocator {
+pub struct DedicatedBlockAllocator {
     size: u64,
     allocated: u64,
     /// Only used if [`crate::AllocatorDebugSettings::store_stack_traces`] is [`true`]
@@ -28,7 +28,7 @@ pub(crate) struct DedicatedBlockAllocator {
 }
 
 impl DedicatedBlockAllocator {
-    pub(crate) fn new(size: u64) -> Self {
+    pub fn new(size: u64) -> Self {
         Self {
             size,
             allocated: 0,
