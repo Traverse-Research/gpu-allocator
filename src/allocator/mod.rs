@@ -9,15 +9,15 @@ use log::*;
 
 use crate::result::*;
 
-pub(crate) mod dedicated_block_allocator;
-pub(crate) use dedicated_block_allocator::DedicatedBlockAllocator;
+pub mod dedicated_block_allocator;
+pub use dedicated_block_allocator::DedicatedBlockAllocator;
 
-pub(crate) mod free_list_allocator;
-pub(crate) use free_list_allocator::FreeListAllocator;
+pub mod free_list_allocator;
+pub use free_list_allocator::FreeListAllocator;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 #[repr(u8)]
-pub(crate) enum AllocationType {
+pub enum AllocationType {
     Free,
     Linear,
     NonLinear,
@@ -106,11 +106,11 @@ impl fmt::Debug for AllocatorReport {
 }
 
 #[cfg(feature = "visualizer")]
-pub(crate) trait SubAllocatorBase: crate::visualizer::SubAllocatorVisualizer {}
+pub trait SubAllocatorBase: crate::visualizer::SubAllocatorVisualizer {}
 #[cfg(not(feature = "visualizer"))]
-pub(crate) trait SubAllocatorBase {}
+pub trait SubAllocatorBase {}
 
-pub(crate) trait SubAllocator: SubAllocatorBase + fmt::Debug + Sync + Send {
+pub trait SubAllocator: SubAllocatorBase + fmt::Debug + Sync + Send {
     fn allocate(
         &mut self,
         size: u64,

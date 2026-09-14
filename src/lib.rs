@@ -227,9 +227,12 @@ compile_error!("Either `std` or `hashbrown` feature must be enabled");
 mod result;
 pub use result::*;
 
-pub(crate) mod allocator;
+pub mod allocator;
 
-pub use allocator::{AllocationReport, AllocatorReport, MemoryBlockReport};
+pub use allocator::{
+    AllocationReport, AllocatorReport, DedicatedBlockAllocator, FreeListAllocator,
+    MemoryBlockReport,
+};
 
 #[cfg(feature = "visualizer")]
 pub mod visualizer;
@@ -421,7 +424,7 @@ impl AllocationSizes {
     /// (where the requested allocation didn't fit), the larger
     /// the returned memory block size is going to be (up to
     /// `max_*_memblock_size`).
-    pub(crate) fn get_memblock_size(&self, is_host: bool, count: usize) -> u64 {
+    pub fn get_memblock_size(&self, is_host: bool, count: usize) -> u64 {
         let (min_size, max_size) = if is_host {
             (self.min_host_memblock_size, self.max_host_memblock_size)
         } else {
