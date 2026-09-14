@@ -5,7 +5,7 @@ use egui::{Color32, DragValue, Rect, ScrollArea, Sense, Ui, Vec2};
 use super::ColorScheme;
 use crate::allocator::free_list_allocator::MemoryChunk;
 
-pub(crate) struct MemoryChunksVisualizationSettings {
+pub struct MemoryChunksVisualizationSettings {
     pub width_in_bytes: u64,
     pub show_backtraces: bool,
 }
@@ -98,7 +98,7 @@ pub(crate) fn render_memory_chunks_ui<'a>(
                             egui::Rounding::ZERO,
                             color_scheme
                                 .get_allocation_type_color(data[cursor_idx].allocation_type),
-                            egui::Stroke::new(1.0, Color32::BLACK),
+                            egui::Stroke::new(1.0_f32, Color32::BLACK),
                         );
 
                         resp.on_hover_ui_at_pointer(|ui| {
