@@ -93,6 +93,7 @@ fn main() -> Result<()> {
         device: ID3D12DeviceVersion::Device(device.clone()),
         debug_settings: Default::default(),
         allocation_sizes: Default::default(),
+        stomp: None,
     })
     .unwrap();
 

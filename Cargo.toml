@@ -85,6 +85,10 @@ name = "d3d12-buffer-winrs"
 required-features = ["d3d12"]
 
 [[example]]
+name = "d3d12-stomp"
+required-features = ["d3d12"]
+
+[[example]]
 name = "metal-buffer"
 required-features = ["metal"]
 

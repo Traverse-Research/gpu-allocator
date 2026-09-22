@@ -18,6 +18,10 @@ use windows::Win32::{
     },
 };
 
+mod stomp;
+use stomp::StompState;
+pub use stomp::{StompLayout, StompMode, StompSettings, StompStatistics};
+
 #[cfg(feature = "visualizer")]
 mod visualizer;
 #[cfg(feature = "visualizer")]
@@ -56,6 +60,10 @@ pub struct ResourceCreateDesc<'a> {
     pub clear_value: Option<&'a D3D12_CLEAR_VALUE>,
     pub initial_state_or_layout: ResourceStateOrBarrierLayout,
     pub resource_type: &'a ResourceType<'a>,
+    /// Per-resource stomp override. `Some(true)` forces a guard, `Some(false)` never guards,
+    /// `None` defers to [`StompSettings::mode`]. Ignored when the allocator was created without
+    /// [`AllocatorCreateDesc::stomp`].
+    pub stomp: Option<bool>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -164,6 +172,8 @@ pub struct AllocatorCreateDesc {
     pub device: ID3D12DeviceVersion,
     pub debug_settings: AllocatorDebugSettings,
     pub allocation_sizes: AllocationSizes,
+    /// Debug-only stomp detection, see [`StompSettings`]. `None` disables it at zero cost.
+    pub stomp: Option<StompSettings>,
 }
 
 pub enum ResourceType<'a> {
@@ -188,11 +198,30 @@ pub struct Resource {
     pub memory_location: MemoryLocation,
     memory_type_index: Option<usize>,
     pub size: u64,
+    stomp: Option<StompLayout>,
+    offset: u64,
 }
 
 impl Resource {
     pub fn resource(&self) -> &ID3D12Resource {
         self.resource.as_ref().expect("Resource was already freed.")
+    }
+
+    /// Byte offset of the payload inside [`Self::resource()`]. Always `0` except for stomp
+    /// buffers with [`StompSettings::payload_alignment`] set, see the offset contract there.
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
+
+    /// `true` when this resource was created by stomp mode with at least one guard tile.
+    /// `false` for normal resources and for stomp textures, which only get quarantine.
+    pub fn is_stomp_guarded(&self) -> bool {
+        self.stomp.is_some_and(|s| s.head_guard || s.tail_guard)
+    }
+
+    /// Tile layout when this resource was created by stomp mode.
+    pub fn stomp_layout(&self) -> Option<StompLayout> {
+        self.stomp
     }
 }
 
@@ -258,6 +287,41 @@ impl Allocation {
     }
 }
 
+fn heap_flags(heap_category: HeapCategory) -> D3D12_HEAP_FLAGS {
+    match heap_category {
+        HeapCategory::All => D3D12_HEAP_FLAG_NONE,
+        HeapCategory::Buffer => D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
+        HeapCategory::RtvDsvTexture => D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES,
+        HeapCategory::OtherTexture => D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
+    }
+}
+
+fn create_heap(
+    device: &ID3D12Device,
+    size: u64,
+    heap_properties: &D3D12_HEAP_PROPERTIES,
+    flags: D3D12_HEAP_FLAGS,
+    alignment: u64,
+) -> Result<ID3D12Heap> {
+    let desc = D3D12_HEAP_DESC {
+        SizeInBytes: size,
+        Properties: *heap_properties,
+        Alignment: alignment,
+        Flags: flags,
+    };
+
+    let mut heap = None;
+    match unsafe { device.CreateHeap(&desc, &mut heap) } {
+        Err(e) if e.code() == E_OUTOFMEMORY => Err(AllocationError::OutOfMemory),
+        Err(e) => Err(AllocationError::Internal(format!(
+            "ID3D12Device::CreateHeap failed: {e}"
+        ))),
+        Ok(()) => heap.ok_or_else(|| {
+            AllocationError::Internal("ID3D12Heap pointer is null, but should not be.".into())
+        }),
+    }
+}
+
 #[derive(Debug)]
 struct MemoryBlock {
     heap: ID3D12Heap,
@@ -272,34 +336,13 @@ impl MemoryBlock {
         heap_category: HeapCategory,
         dedicated: bool,
     ) -> Result<Self> {
-        let heap = {
-            let mut desc = D3D12_HEAP_DESC {
-                SizeInBytes: size,
-                Properties: *heap_properties,
-                Alignment: D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as u64,
-                ..Default::default()
-            };
-            desc.Flags = match heap_category {
-                HeapCategory::All => D3D12_HEAP_FLAG_NONE,
-                HeapCategory::Buffer => D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
-                HeapCategory::RtvDsvTexture => D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES,
-                HeapCategory::OtherTexture => D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
-            };
-
-            let mut heap = None;
-            let hr = unsafe { device.CreateHeap(&desc, &mut heap) };
-            match hr {
-                Err(e) if e.code() == E_OUTOFMEMORY => Err(AllocationError::OutOfMemory),
-                Err(e) => Err(AllocationError::Internal(format!(
-                    "ID3D12Device::CreateHeap failed: {e}"
-                ))),
-                Ok(()) => heap.ok_or_else(|| {
-                    AllocationError::Internal(
-                        "ID3D12Heap pointer is null, but should not be.".into(),
-                    )
-                }),
-            }?
-        };
+        let heap = create_heap(
+            device,
+            size,
+            heap_properties,
+            heap_flags(heap_category),
+            D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as u64,
+        )?;
 
         let sub_allocator: Box<dyn SubAllocator> = if dedicated {
             Box::new(DedicatedBlockAllocator::new(size))
@@ -324,6 +367,8 @@ struct MemoryType {
     heap_properties: D3D12_HEAP_PROPERTIES,
     memory_type_index: usize,
     active_general_blocks: usize,
+    /// Stomp guard: one tile, never resident. Created on first use.
+    guard_heap: Option<ID3D12Heap>,
 }
 
 impl MemoryType {
@@ -507,11 +552,17 @@ pub struct Allocator {
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
     allocation_sizes: AllocationSizes,
+    stomp: Option<StompState>,
 }
 
 impl Allocator {
     pub fn device(&self) -> &ID3D12DeviceVersion {
         &self.device
+    }
+
+    /// Committed resource statistics, one per memory type.
+    pub fn committed_statistics(&self) -> impl Iterator<Item = &CommittedAllocationStatistics> {
+        self.memory_types.iter().map(|m| &m.committed_allocations)
     }
 
     pub fn new(desc: &AllocatorCreateDesc) -> Result<Self> {
@@ -532,6 +583,15 @@ impl Allocator {
         })?;
 
         let is_heap_tier1 = options.ResourceHeapTier == D3D12_RESOURCE_HEAP_TIER_1;
+
+        let stomp = match &desc.stomp {
+            None => None,
+            Some(settings) => Some(StompState::new(
+                settings,
+                options.TiledResourcesTier,
+                &device,
+            )?),
+        };
 
         let heap_types = [
             (
@@ -605,6 +665,7 @@ impl Allocator {
                         num_allocations: 0,
                         total_size: 0,
                     },
+                    guard_heap: None,
                 },
             )
             .collect::<Vec<_>>();
@@ -614,7 +675,27 @@ impl Allocator {
             device,
             debug_settings: desc.debug_settings,
             allocation_sizes: desc.allocation_sizes,
+            stomp,
         })
+    }
+
+    fn find_memory_type_index(
+        &self,
+        location: MemoryLocation,
+        resource_category: ResourceCategory,
+    ) -> Result<usize> {
+        self.memory_types
+            .iter()
+            .position(|memory_type| {
+                let is_location_compatible =
+                    location == MemoryLocation::Unknown || location == memory_type.memory_location;
+
+                let is_category_compatible = memory_type.heap_category == HeapCategory::All
+                    || memory_type.heap_category == resource_category.into();
+
+                is_location_compatible && is_category_compatible
+            })
+            .ok_or(AllocationError::NoCompatibleMemoryTypeFound)
     }
 
     pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
@@ -644,20 +725,9 @@ impl Allocator {
             return Err(AllocationError::InvalidAllocationCreateDesc);
         }
 
-        // Find memory type
-        let memory_type = self
-            .memory_types
-            .iter_mut()
-            .find(|memory_type| {
-                let is_location_compatible = desc.location == MemoryLocation::Unknown
-                    || desc.location == memory_type.memory_location;
-
-                let is_category_compatible = memory_type.heap_category == HeapCategory::All
-                    || memory_type.heap_category == desc.resource_category.into();
-
-                is_location_compatible && is_category_compatible
-            })
-            .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
+        let memory_type_index =
+            self.find_memory_type_index(desc.location, desc.resource_category)?;
+        let memory_type = &mut self.memory_types[memory_type_index];
 
         memory_type.allocate(
             &self.device,
@@ -779,9 +849,91 @@ impl Allocator {
         }
     }
 
+    fn create_placed(
+        &self,
+        heap: &ID3D12Heap,
+        offset: u64,
+        resource_desc: &D3D12_RESOURCE_DESC,
+        desc: &ResourceCreateDesc<'_>,
+    ) -> Result<ID3D12Resource> {
+        let mut result: Option<ID3D12Resource> = None;
+        if let Err(e) = unsafe {
+            match (&self.device, desc.initial_state_or_layout) {
+                (_, ResourceStateOrBarrierLayout::ResourceState(_))
+                    if !desc.castable_formats.is_empty() =>
+                {
+                    return Err(AllocationError::CastableFormatsRequiresEnhancedBarriers)
+                }
+                (
+                    ID3D12DeviceVersion::Device12(device),
+                    ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                ) => {
+                    let resource_desc1 = Self::d3d12_resource_desc_1(resource_desc);
+                    device.CreatePlacedResource2(
+                        heap,
+                        offset,
+                        &resource_desc1,
+                        initial_layout,
+                        None,
+                        Some(desc.castable_formats),
+                        &mut result,
+                    )
+                }
+                (_, ResourceStateOrBarrierLayout::BarrierLayout(_))
+                    if !desc.castable_formats.is_empty() =>
+                {
+                    return Err(AllocationError::CastableFormatsRequiresAtLeastDevice12)
+                }
+                (
+                    ID3D12DeviceVersion::Device10(device),
+                    ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                ) => {
+                    let resource_desc1 = Self::d3d12_resource_desc_1(resource_desc);
+                    device.CreatePlacedResource2(
+                        heap,
+                        offset,
+                        &resource_desc1,
+                        initial_layout,
+                        None,
+                        None,
+                        &mut result,
+                    )
+                }
+                (_, ResourceStateOrBarrierLayout::BarrierLayout(_)) => {
+                    return Err(AllocationError::BarrierLayoutNeedsDevice10)
+                }
+                (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => device
+                    .CreatePlacedResource(
+                        heap,
+                        offset,
+                        resource_desc,
+                        initial_state,
+                        None,
+                        &mut result,
+                    ),
+            }
+        } {
+            if e.code() == DXGI_ERROR_DEVICE_REMOVED {
+                return Err(AllocationError::Internal(format!(
+                    "ID3D12Device::CreatePlacedResource DEVICE_REMOVED: {:?}",
+                    unsafe { self.device.GetDeviceRemovedReason() }
+                )));
+            }
+            return Err(AllocationError::Internal(format!(
+                "ID3D12Device::CreatePlacedResource failed: {e}"
+            )));
+        }
+
+        Ok(result.expect("Allocation succeeded but no resource was returned?"))
+    }
+
     /// Create a resource according to the provided parameters.
     /// Created resources should be freed at the end of their lifetime by calling [`Self::free_resource()`].
     pub fn create_resource(&mut self, desc: &ResourceCreateDesc<'_>) -> Result<Resource> {
+        if let Some(result) = self.try_create_resource_stomp(desc) {
+            return result;
+        }
+
         match desc.resource_type {
             ResourceType::Committed {
                 heap_properties,
@@ -867,20 +1019,9 @@ impl Allocator {
 
                 let allocation_info = Self::resource_allocation_info(&self.device, desc);
 
-                let memory_type = self
-                    .memory_types
-                    .iter_mut()
-                    .find(|memory_type| {
-                        let is_location_compatible = desc.memory_location
-                            == MemoryLocation::Unknown
-                            || desc.memory_location == memory_type.memory_location;
-
-                        let is_category_compatible = memory_type.heap_category == HeapCategory::All
-                            || memory_type.heap_category == desc.resource_category.into();
-
-                        is_location_compatible && is_category_compatible
-                    })
-                    .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
+                let memory_type_index =
+                    self.find_memory_type_index(desc.memory_location, desc.resource_category)?;
+                let memory_type = &mut self.memory_types[memory_type_index];
 
                 memory_type.committed_allocations.num_allocations += 1;
                 memory_type.committed_allocations.total_size += allocation_info.SizeInBytes;
@@ -891,7 +1032,9 @@ impl Allocator {
                     resource: Some(resource),
                     size: allocation_info.SizeInBytes,
                     memory_location: desc.memory_location,
-                    memory_type_index: Some(memory_type.memory_type_index),
+                    memory_type_index: Some(memory_type_index),
+                    stomp: None,
+                    offset: 0,
                 })
             }
             ResourceType::Placed => {
@@ -909,76 +1052,12 @@ impl Allocator {
 
                 let allocation = self.allocate(&allocation_desc)?;
 
-                let mut result: Option<ID3D12Resource> = None;
-                if let Err(e) = unsafe {
-                    match (&self.device, desc.initial_state_or_layout) {
-                        (_, ResourceStateOrBarrierLayout::ResourceState(_))
-                            if !desc.castable_formats.is_empty() =>
-                        {
-                            return Err(AllocationError::CastableFormatsRequiresEnhancedBarriers)
-                        }
-                        (
-                            ID3D12DeviceVersion::Device12(device),
-                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
-                        ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
-                            device.CreatePlacedResource2(
-                                allocation.heap(),
-                                allocation.offset(),
-                                &resource_desc1,
-                                initial_layout,
-                                None,
-                                Some(desc.castable_formats),
-                                &mut result,
-                            )
-                        }
-                        (_, ResourceStateOrBarrierLayout::BarrierLayout(_))
-                            if !desc.castable_formats.is_empty() =>
-                        {
-                            return Err(AllocationError::CastableFormatsRequiresAtLeastDevice12)
-                        }
-                        (
-                            ID3D12DeviceVersion::Device10(device),
-                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
-                        ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
-                            device.CreatePlacedResource2(
-                                allocation.heap(),
-                                allocation.offset(),
-                                &resource_desc1,
-                                initial_layout,
-                                None,
-                                None,
-                                &mut result,
-                            )
-                        }
-                        (_, ResourceStateOrBarrierLayout::BarrierLayout(_)) => {
-                            return Err(AllocationError::BarrierLayoutNeedsDevice10)
-                        }
-                        (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
-                            device.CreatePlacedResource(
-                                allocation.heap(),
-                                allocation.offset(),
-                                desc.resource_desc,
-                                initial_state,
-                                None,
-                                &mut result,
-                            )
-                        }
-                    }
-                } {
-                    if e.code() == DXGI_ERROR_DEVICE_REMOVED {
-                        return Err(AllocationError::Internal(format!(
-                            "ID3D12Device::CreatePlacedResource DEVICE_REMOVED: {:?}",
-                            unsafe { self.device.GetDeviceRemovedReason() }
-                        )));
-                    }
-                    return Err(AllocationError::Internal(format!(
-                        "ID3D12Device::CreatePlacedResource failed: {e}"
-                    )));
-                }
-
-                let resource = result.expect("Allocation succeeded but no resource was returned?");
+                let resource = self.create_placed(
+                    unsafe { allocation.heap() },
+                    allocation.offset(),
+                    desc.resource_desc,
+                    desc,
+                )?;
                 let size = allocation.size();
                 Ok(Resource {
                     name: desc.name.into(),
@@ -987,6 +1066,8 @@ impl Allocator {
                     size,
                     memory_location: desc.memory_location,
                     memory_type_index: None,
+                    stomp: None,
+                    offset: 0,
                 })
             }
         }
@@ -996,10 +1077,12 @@ impl Allocator {
     pub fn free_resource(&mut self, mut resource: Resource) -> Result<()> {
         // Explicitly drop the resource (which is backed by a refcounted COM object)
         // before freeing allocated memory. Windows-rs performs a Release() on drop().
-        let _ = resource
+        let d3d12_resource = resource
             .resource
             .take()
             .expect("Resource was already freed.");
+
+        self.release_resource(&resource, d3d12_resource);
 
         if let Some(allocation) = resource.allocation.take() {
             self.free(allocation)
@@ -1071,9 +1154,14 @@ impl Drop for Allocator {
 
         // Because Rust drop rules drop members in source-code order (that would be the
         // ID3D12Device before the ID3D12Heaps nested in these memory blocks), free
-        // all remaining memory blocks manually first by dropping.
+        // all remaining memory blocks manually first by dropping. Quarantined reserved
+        // resources still map into the guard heaps, so they go first.
+        if let Some(stomp) = &mut self.stomp {
+            stomp.quarantine.clear();
+        }
         for mem_type in self.memory_types.iter_mut() {
             mem_type.memory_blocks.clear();
+            mem_type.guard_heap = None;
         }
     }
 }
