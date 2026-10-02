@@ -39,7 +39,7 @@ impl ColorScheme {
     }
 }
 
-pub(crate) trait SubAllocatorVisualizer {
+pub trait SubAllocatorVisualizer {
     fn supports_visualization(&self) -> bool {
         false
     }

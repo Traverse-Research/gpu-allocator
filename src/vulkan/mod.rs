@@ -796,7 +796,7 @@ impl Allocator {
         if self.debug_settings.log_allocations {
             debug!(
                 "Allocating `{}` of {} bytes with an alignment of {}.",
-                &desc.name, size, alignment
+                desc.name, size, alignment
             );
             #[cfg(feature = "std")]
             if self.debug_settings.log_stack_traces {

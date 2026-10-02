@@ -81,7 +81,7 @@ impl AllocatorVisualizer {
                                         "allocated: {} KiB",
                                         block.sub_allocator.allocated() / 1024
                                     ));
-                                    ui.label(format!("Heap: {:?}", &block.heap));
+                                    ui.label(format!("Heap: {:?}", block.heap));
 
                                     block.sub_allocator.draw_base_info(ui);
 

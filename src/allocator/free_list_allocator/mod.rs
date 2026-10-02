@@ -46,7 +46,7 @@ pub(crate) struct MemoryChunk {
 }
 
 #[derive(Debug)]
-pub(crate) struct FreeListAllocator {
+pub struct FreeListAllocator {
     size: u64,
     allocated: u64,
     pub(crate) chunk_id_counter: u64,
@@ -74,7 +74,7 @@ fn has_granularity_conflict(type0: AllocationType, type1: AllocationType) -> boo
 }
 
 impl FreeListAllocator {
-    pub(crate) fn new(size: u64) -> Self {
+    pub fn new(size: u64) -> Self {
         #[allow(clippy::unwrap_used)]
         let initial_chunk_id = core::num::NonZeroU64::new(1).unwrap();
 
