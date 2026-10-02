@@ -814,8 +814,26 @@ impl Allocator {
             }
             MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
         };
-        let mut memory_type_index_opt =
-            self.find_memorytype_index(&desc.requirements, mem_loc_preferred_bits);
+        let mut memory_type_index_opt = self
+            .find_memorytype_index(&desc.requirements, mem_loc_preferred_bits)
+            .filter(|&i| {
+                !(desc.location == MemoryLocation::CpuToGpu && self.is_small_bar(i as usize))
+            });
+
+        if memory_type_index_opt.is_none() && desc.location == MemoryLocation::CpuToGpu {
+            memory_type_index_opt = self
+                .memory_types
+                .iter()
+                .find(|t| {
+                    (1 << t.memory_type_index) & desc.requirements.memory_type_bits != 0
+                        && t.memory_properties.contains(
+                            vk::MemoryPropertyFlags::HOST_VISIBLE
+                                | vk::MemoryPropertyFlags::HOST_COHERENT,
+                        )
+                        && !self.is_small_bar(t.memory_type_index)
+                })
+                .map(|t| t.memory_type_index as _);
+        }
 
         if memory_type_index_opt.is_none() {
             let mem_loc_required_bits = match desc.location {
@@ -928,6 +946,14 @@ impl Allocator {
                 }
             }
         }
+    }
+
+    /// A host-visible VRAM type on a BAR heap without Resizable BAR (256 MiB, shared by all apps).
+    fn is_small_bar(&self, index: usize) -> bool {
+        let t = &self.memory_types[index];
+        t.memory_properties
+            .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL | vk::MemoryPropertyFlags::HOST_VISIBLE)
+            && self.memory_heaps[t.heap_index].size <= 512 * 1024 * 1024
     }
 
     fn find_memorytype_index(
