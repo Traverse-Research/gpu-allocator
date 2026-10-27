@@ -451,12 +451,12 @@ impl MemoryBlock {
             let alloc_info = match external {
                 Some(ExternalMemory::Export { handle_types }) => {
                     export_info = export_info.handle_types(handle_types);
-                    let alloc_info = alloc_info.push_next(&mut export_info);
+                    let alloc_info = alloc_info.push(&mut export_info);
 
                     // VUID-VkExportMemoryWin32HandleInfoKHR-handleTypes-00657
                     if handle_types.contains(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32) {
                         export_win32_info = export_win32_info.dw_access(GENERIC_ALL);
-                        alloc_info.push_next(&mut export_win32_info)
+                        alloc_info.push(&mut export_win32_info)
                     } else {
                         alloc_info
                     }
@@ -466,14 +466,14 @@ impl MemoryBlock {
                     handle,
                 }) => {
                     import_win32_info = import_win32_info.handle_type(handle_type).handle(handle);
-                    alloc_info.push_next(&mut import_win32_info)
+                    alloc_info.push(&mut import_win32_info)
                 }
                 #[cfg(all(unix, feature = "std"))]
                 Some(ExternalMemory::ImportFd { handle_type, fd }) => {
                     use std::os::fd::AsRawFd;
                     import_fd_info = import_fd_info.handle_type(handle_type).fd(fd.as_raw_fd());
                     imported_fd = Some(fd);
-                    alloc_info.push_next(&mut import_fd_info)
+                    alloc_info.push(&mut import_fd_info)
                 }
                 None => alloc_info,
             };
