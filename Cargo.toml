@@ -10,7 +10,7 @@ homepage = "https://github.com/Traverse-Research/gpu-allocator"
 repository = "https://github.com/Traverse-Research/gpu-allocator"
 keywords = ["vulkan", "memory", "allocator"]
 documentation = "https://docs.rs/gpu-allocator/"
-rust-version = "1.71"
+rust-version = "1.95"
 
 include = [
     "/README.md",
@@ -49,27 +49,15 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "std",
 ], optional = true }
 
-[target.'cfg(windows)'.dependencies.windows]
-version = ">=0.53, <=0.62"
-features = [
-    "Win32_Graphics_Direct3D12",
-    "Win32_Graphics_Dxgi_Common",
-]
-optional = true
+[target.'cfg(windows)'.dependencies]
+# Only needed for D3D12, and requires Rust 1.95.
+d3d12-agility = { git = "https://github.com/Traverse-Research/d3d12-agility-rs", rev = "873651e", optional = true }
+windows-core = { version = "0.100", default-features = false, optional = true }
 
 [dev-dependencies]
 # Enable the "loaded" feature to be able to access the Vulkan entrypoint.
 ash = { version = "0.38", default-features = false, features = ["debug", "loaded"] }
 env_logger = "0.11"
-
-[target.'cfg(windows)'.dev-dependencies.windows]
-# API-breaks since Windows 0.58 only affect our examples
-version = ">=0.58, <=0.62"
-features = [
-    "Win32_Graphics_Direct3D",
-    "Win32_Graphics_Direct3D12",
-    "Win32_Graphics_Dxgi_Common",
-]
 
 [target.'cfg(target_vendor = "apple")'.dev-dependencies]
 objc2-metal = { version = "0.3.2", default-features = false, features = [
@@ -92,7 +80,7 @@ required-features = ["metal"]
 std = ["presser/std"]
 visualizer = ["dep:egui", "dep:egui_extras"]
 vulkan = ["dep:ash"]
-d3d12 = ["dep:windows"]
+d3d12 = ["dep:d3d12-agility", "dep:windows-core"]
 metal = ["dep:objc2", "dep:objc2-metal", "dep:objc2-foundation"]
 # Enables the FreeListAllocator when `std` is not enabled by using the `hashbrown` crate
 hashbrown = ["dep:hashbrown"]

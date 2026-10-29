@@ -6,7 +6,7 @@
 [![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![LICENSE](https://img.shields.io/badge/license-apache-blue.svg?logo=apache)](LICENSE-APACHE)
 [![Contributor Covenant](https://img.shields.io/badge/contributor%20covenant-v1.4%20adopted-ff69b4.svg)](../main/CODE_OF_CONDUCT.md)
-[![MSRV](https://img.shields.io/badge/rustc-1.71.0+-ab6000.svg)](https://blog.rust-lang.org/2023/07/13/Rust-1.71.0.html)
+[![MSRV](https://img.shields.io/badge/rustc-1.95.0+-ab6000.svg)](https://blog.rust-lang.org/)
 
 [![Banner](banner.png)](https://traverseresearch.nl)
 
@@ -44,9 +44,7 @@ gpu-allocator = { version = "0.28.0", default-features = false }
 
 ## Minimum Supported Rust Version
 
-The MSRV for this crate and the `vulkan`, `d3d12` and `metal` features is Rust **1.71**.
-
-The `no_std` support requires Rust **1.81** or higher because `no_std` support of dependency `thiserror` requires `core::error::Error` which is stabilized in **1.81**.
+The MSRV for this crate and the `vulkan`, `d3d12` and `metal` features is Rust **1.95**, as required by the [`d3d12-agility`](https://github.com/Traverse-Research/d3d12-agility-rs) dependency of the `d3d12` feature. Because it is a git dependency, Cargo needs to parse its manifest (which uses `edition = "2024"`) even when the `d3d12` feature is disabled or when building for non-Windows targets.
 
 Any other features such as the `visualizer` (with all the `egui` dependencies) may have a higher requirement and are not tested in our CI.
 
