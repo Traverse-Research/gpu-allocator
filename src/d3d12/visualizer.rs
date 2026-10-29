@@ -1,6 +1,6 @@
 #![allow(clippy::new_without_default)]
 
-use windows::Win32::Graphics::Direct3D12::*;
+use d3d12_agility::*;
 
 use super::Allocator;
 use crate::visualizer::{
@@ -39,7 +39,7 @@ fn format_heap_type(heap_type: D3D12_HEAP_TYPE) -> &'static str {
         "D3D12_HEAP_TYPE_CUSTOM",
     ];
 
-    names[heap_type.0 as usize]
+    names[heap_type as usize]
 }
 
 fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> &'static str {
@@ -50,7 +50,7 @@ fn format_cpu_page_property(prop: D3D12_CPU_PAGE_PROPERTY) -> &'static str {
         "D3D12_CPU_PAGE_PROPERTY_WRITE_BACK",
     ];
 
-    names[prop.0 as usize]
+    names[prop as usize]
 }
 
 fn format_memory_pool(pool: D3D12_MEMORY_POOL) -> &'static str {
@@ -60,7 +60,7 @@ fn format_memory_pool(pool: D3D12_MEMORY_POOL) -> &'static str {
         "D3D12_MEMORY_POOL_L1",
     ];
 
-    names[pool.0 as usize]
+    names[pool as usize]
 }
 
 impl AllocatorVisualizer {
@@ -106,17 +106,17 @@ impl AllocatorVisualizer {
                             ui.label(format!(
                                 "Heap Type: {} ({})",
                                 format_heap_type(mem_type.heap_properties.Type),
-                                mem_type.heap_properties.Type.0
+                                mem_type.heap_properties.Type
                             ));
                             ui.label(format!(
                                 "CpuPageProperty: {} ({})",
                                 format_cpu_page_property(mem_type.heap_properties.CPUPageProperty),
-                                mem_type.heap_properties.CPUPageProperty.0
+                                mem_type.heap_properties.CPUPageProperty
                             ));
                             ui.label(format!(
                                 "MemoryPoolPreference: {} ({})",
                                 format_memory_pool(mem_type.heap_properties.MemoryPoolPreference),
-                                mem_type.heap_properties.MemoryPoolPreference.0
+                                mem_type.heap_properties.MemoryPoolPreference
                             ));
                             ui.label(format!("total block size: {} KiB", total_block_size / 1024));
                             ui.label(format!("total allocated:  {} KiB", total_allocated / 1024));

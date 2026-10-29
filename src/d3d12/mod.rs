@@ -1,22 +1,17 @@
 #[cfg(feature = "std")]
 use alloc::sync::Arc;
 use alloc::{boxed::Box, string::String, vec::Vec};
-use core::{
-    fmt,
-    // TODO: Remove when bumping MSRV to 1.80
-    mem::size_of_val,
-};
+use core::fmt;
 #[cfg(feature = "std")]
 use std::backtrace::Backtrace;
 
+use d3d12_agility::*;
 use log::{debug, warn, Level};
-use windows::Win32::{
-    Foundation::E_OUTOFMEMORY,
-    Graphics::{
-        Direct3D12::*,
-        Dxgi::{Common::DXGI_FORMAT, DXGI_ERROR_DEVICE_REMOVED},
-    },
-};
+use windows_core::HRESULT;
+
+// `d3d12-agility` does not carry the generic Win32/DXGI error codes.
+const E_OUTOFMEMORY: HRESULT = HRESULT(0x8007_000E_u32 as i32);
+const DXGI_ERROR_DEVICE_REMOVED: HRESULT = HRESULT(0x887A_0005_u32 as i32);
 
 #[cfg(feature = "visualizer")]
 mod visualizer;
@@ -527,6 +522,7 @@ impl Allocator {
                 size_of_val(&options) as u32,
             )
         }
+        .ok()
         .map_err(|e| {
             AllocationError::Internal(format!("ID3D12Device::CheckFeatureSupport failed: {e}"))
         })?;
@@ -760,11 +756,11 @@ impl Allocator {
 
                 let (num_castable_formats_opt, castable_formats_opt) = if num_castable_formats > 0 {
                     (
-                        Some(num_castable_formats_array.as_ptr()),
-                        Some(castable_formats_array.as_ptr()),
+                        num_castable_formats_array.as_ptr(),
+                        castable_formats_array.as_ptr(),
                     )
                 } else {
-                    (None, None)
+                    (core::ptr::null(), core::ptr::null())
                 };
 
                 device.GetResourceAllocationInfo3(
@@ -811,7 +807,8 @@ impl Allocator {
                                 initial_layout,
                                 clear_value,
                                 None, // TODO
-                                Some(desc.castable_formats),
+                                desc.castable_formats.len() as u32,
+                                desc.castable_formats.as_ptr(),
                                 &mut result,
                             )
                         }
@@ -833,7 +830,8 @@ impl Allocator {
                                 initial_layout,
                                 clear_value,
                                 None, // TODO
-                                None,
+                                0,
+                                core::ptr::null(),
                                 &mut result,
                             )
                         }
@@ -928,7 +926,8 @@ impl Allocator {
                                 &resource_desc1,
                                 initial_layout,
                                 None,
-                                Some(desc.castable_formats),
+                                desc.castable_formats.len() as u32,
+                                desc.castable_formats.as_ptr(),
                                 &mut result,
                             )
                         }
@@ -948,7 +947,8 @@ impl Allocator {
                                 &resource_desc1,
                                 initial_layout,
                                 None,
-                                None,
+                                0,
+                                core::ptr::null(),
                                 &mut result,
                             )
                         }

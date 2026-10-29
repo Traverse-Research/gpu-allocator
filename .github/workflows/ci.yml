@@ -15,9 +15,9 @@ jobs:
           - os: macos-latest
             backend: vulkan,metal
         version:
-          - msrv: 1.71.0
+          - msrv: 1.95.0
             features: std
-          - msrv: 1.81.0
+          - msrv: 1.95.0
             features: hashbrown
     runs-on: ${{ matrix.target.os }}
     steps:
