@@ -3,16 +3,17 @@
 use alloc::sync::Arc;
 use alloc::{
     borrow::ToOwned,
+    collections::BTreeSet,
     string::{String, ToString},
     vec::Vec,
 };
 #[cfg(feature = "std")]
 use std::backtrace::Backtrace;
 #[cfg(all(feature = "std", not(feature = "hashbrown")))]
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[cfg(feature = "hashbrown")]
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use log::{log, Level};
 
 #[cfg(feature = "visualizer")]
@@ -20,8 +21,6 @@ pub(crate) mod visualizer;
 
 use super::{AllocationReport, AllocationType, SubAllocator, SubAllocatorBase};
 use crate::{AllocationError, Result};
-
-const USE_BEST_FIT: bool = true;
 
 fn align_down(val: u64, alignment: u64) -> u64 {
     val & !(alignment - 1u64)
@@ -51,7 +50,9 @@ pub struct FreeListAllocator {
     allocated: u64,
     pub(crate) chunk_id_counter: u64,
     pub(crate) chunks: HashMap<core::num::NonZeroU64, MemoryChunk>,
-    free_chunks: HashSet<core::num::NonZeroU64>,
+    /// Free chunks as `(size, chunk_id)`, ordered by size so that allocating only visits chunks
+    /// that are large enough, smallest first.
+    free_chunks: BTreeSet<(u64, core::num::NonZeroU64)>,
 }
 
 /// Test if two suballocations will overlap the same page.
@@ -94,8 +95,8 @@ impl FreeListAllocator {
             },
         );
 
-        let mut free_chunks = HashSet::default();
-        free_chunks.insert(initial_chunk_id);
+        let mut free_chunks = BTreeSet::new();
+        free_chunks.insert((size, initial_chunk_id));
 
         Self {
             size,
@@ -121,9 +122,9 @@ impl FreeListAllocator {
             AllocationError::Internal("New chunk id was 0, which is not allowed.".into())
         })
     }
-    /// Finds the specified `chunk_id` in the list of free chunks and removes if from the list
-    fn remove_id_from_free_list(&mut self, chunk_id: core::num::NonZeroU64) {
-        self.free_chunks.remove(&chunk_id);
+    /// Removes the free chunk `chunk_id`, whose size is `size`, from the list of free chunks
+    fn remove_id_from_free_list(&mut self, chunk_id: core::num::NonZeroU64, size: u64) {
+        self.free_chunks.remove(&(size, chunk_id));
     }
     /// Merges two adjacent chunks. Right chunk will be merged into the left chunk
     fn merge_free_chunks(
@@ -136,19 +137,24 @@ impl FreeListAllocator {
             let chunk = self.chunks.remove(&chunk_right).ok_or_else(|| {
                 AllocationError::Internal("Chunk ID not present in chunk list.".into())
             })?;
-            self.remove_id_from_free_list(chunk.chunk_id);
+            self.remove_id_from_free_list(chunk.chunk_id, chunk.size);
 
             (chunk.size, chunk.next)
         };
 
         // Merge into left chunk
-        {
+        let left_size = {
             let chunk = self.chunks.get_mut(&chunk_left).ok_or_else(|| {
                 AllocationError::Internal("Chunk ID not present in chunk list.".into())
             })?;
             chunk.next = right_next;
+            let left_size = chunk.size;
             chunk.size += right_size;
-        }
+            left_size
+        };
+        self.remove_id_from_free_list(chunk_left, left_size);
+        self.free_chunks
+            .insert((left_size + right_size, chunk_left));
 
         // Patch pointers
         if let Some(right_next) = right_next {
@@ -183,16 +189,15 @@ impl SubAllocator for FreeListAllocator {
         let mut best_aligned_size = 0u64;
         let mut best_chunk_size = 0u64;
 
-        for current_chunk_id in self.free_chunks.iter() {
-            let current_chunk = self.chunks.get(current_chunk_id).ok_or_else(|| {
+        // Visit free chunks smallest first, starting at the requested size. The first chunk that
+        // fits after alignment and granularity padding is the best fit.
+        let candidates = self.free_chunks.range((size, core::num::NonZeroU64::MIN)..);
+        for &(_, current_chunk_id) in candidates {
+            let current_chunk = self.chunks.get(&current_chunk_id).ok_or_else(|| {
                 AllocationError::Internal(
                     "Chunk ID in free list is not present in chunk list.".into(),
                 )
             })?;
-
-            if current_chunk.size < size {
-                continue;
-            }
 
             let mut offset = align_up(current_chunk.offset, alignment);
 
@@ -225,22 +230,12 @@ impl SubAllocator for FreeListAllocator {
                 }
             }
 
-            if USE_BEST_FIT {
-                if best_fit_id.is_none() || current_chunk.size < best_chunk_size {
-                    best_fit_id = Some(*current_chunk_id);
-                    best_aligned_size = aligned_size;
-                    best_offset = offset;
+            best_fit_id = Some(current_chunk_id);
+            best_aligned_size = aligned_size;
+            best_offset = offset;
 
-                    best_chunk_size = current_chunk.size;
-                };
-            } else {
-                best_fit_id = Some(*current_chunk_id);
-                best_aligned_size = aligned_size;
-                best_offset = offset;
-
-                best_chunk_size = current_chunk.size;
-                break;
-            }
+            best_chunk_size = current_chunk.size;
+            break;
         }
 
         let first_fit_id = best_fit_id.ok_or(AllocationError::OutOfMemory)?;
@@ -269,6 +264,9 @@ impl SubAllocator for FreeListAllocator {
                 free_chunk.size -= best_aligned_size;
                 new_chunk
             };
+            self.remove_id_from_free_list(first_fit_id, best_chunk_size);
+            self.free_chunks
+                .insert((best_chunk_size - best_aligned_size, first_fit_id));
 
             if let Some(prev_id) = new_chunk.prev {
                 let prev_chunk = self.chunks.get_mut(&prev_id).ok_or_else(|| {
@@ -293,7 +291,7 @@ impl SubAllocator for FreeListAllocator {
                 chunk.backtrace = backtrace;
             }
 
-            self.remove_id_from_free_list(first_fit_id);
+            self.remove_id_from_free_list(first_fit_id, best_chunk_size);
 
             first_fit_id
         };
@@ -322,7 +320,7 @@ impl SubAllocator for FreeListAllocator {
 
             self.allocated -= chunk.size;
 
-            self.free_chunks.insert(chunk.chunk_id);
+            self.free_chunks.insert((chunk.size, chunk.chunk_id));
 
             (chunk.next, chunk.prev)
         };
