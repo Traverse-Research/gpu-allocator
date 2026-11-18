@@ -129,7 +129,7 @@ impl<'a> AllocationCreateDesc<'a> {
             name,
             location,
             size: allocation_info.SizeInBytes,
-            alignment: allocation_info.Alignment,
+            alignment: allocation_info.Alignment.max(desc.Alignment),
             resource_category,
         }
     }
@@ -925,7 +925,7 @@ impl Allocator {
                         name: desc.name,
                         location: desc.memory_location,
                         size: allocation_info.SizeInBytes,
-                        alignment: allocation_info.Alignment,
+                        alignment: allocation_info.Alignment.max(desc.resource_desc.Alignment),
                         resource_category: desc.resource_category,
                     }
                 };
