@@ -817,6 +817,20 @@ impl Allocator {
         let mut memory_type_index_opt =
             self.find_memorytype_index(&desc.requirements, mem_loc_preferred_bits);
 
+        // A GpuToCpu allocation exists to be read by the CPU, so being cached
+        // matters more than being coherent. Some adapters -- Intel's ANV on
+        // parts whose GPU does not share the CPU's last level cache -- expose
+        // cached memory and coherent memory but never both, and reading the
+        // uncached (write-combined) type is about two orders of magnitude
+        // slower. Callers must flush and invalidate non-coherent ranges
+        // regardless, so prefer cached before giving that up.
+        if memory_type_index_opt.is_none() && desc.location == MemoryLocation::GpuToCpu {
+            memory_type_index_opt = self.find_memorytype_index(
+                &desc.requirements,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_CACHED,
+            );
+        }
+
         if memory_type_index_opt.is_none() {
             let mem_loc_required_bits = match desc.location {
                 MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
