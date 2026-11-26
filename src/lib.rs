@@ -94,10 +94,9 @@
 //!
 //! ```no_run
 //! # #[cfg(feature = "d3d12")]
-//! # fn main() -> windows::core::Result<()> {
+//! # fn main() -> windows_core::Result<()> {
 //! use gpu_allocator::d3d12::*;
 //! use gpu_allocator::MemoryLocation;
-//! # use windows::Win32::Graphics::{Dxgi, Direct3D12};
 //! # let device = todo!();
 //!
 //! # let mut allocator = Allocator::new(&AllocatorCreateDesc {
@@ -106,20 +105,20 @@
 //! #     allocation_sizes: Default::default(),
 //! # }).unwrap();
 //!
-//! let buffer_desc = Direct3D12::D3D12_RESOURCE_DESC {
-//!     Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
+//! let buffer_desc = d3d12_agility::D3D12_RESOURCE_DESC {
+//!     Dimension: d3d12_agility::D3D12_RESOURCE_DIMENSION_BUFFER,
 //!     Alignment: 0,
 //!     Width: 512,
 //!     Height: 1,
 //!     DepthOrArraySize: 1,
 //!     MipLevels: 1,
-//!     Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
-//!     SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
+//!     Format: d3d12_agility::DXGI_FORMAT_UNKNOWN,
+//!     SampleDesc: d3d12_agility::DXGI_SAMPLE_DESC {
 //!         Count: 1,
 //!         Quality: 0,
 //!     },
-//!     Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-//!     Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
+//!     Layout: d3d12_agility::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+//!     Flags: d3d12_agility::D3D12_RESOURCE_FLAG_NONE,
 //! };
 //! let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
 //!     &allocator.device(),
@@ -128,13 +127,13 @@
 //!     MemoryLocation::GpuOnly,
 //! );
 //! let allocation = allocator.allocate(&allocation_desc).unwrap();
-//! let mut resource: Option<Direct3D12::ID3D12Resource> = None;
+//! let mut resource: Option<d3d12_agility::ID3D12Resource> = None;
 //! let hr = unsafe {
 //!     device.CreatePlacedResource(
 //!         allocation.heap(),
 //!         allocation.offset(),
 //!         &buffer_desc,
-//!         Direct3D12::D3D12_RESOURCE_STATE_COMMON,
+//!         d3d12_agility::D3D12_RESOURCE_STATE_COMMON,
 //!         None,
 //!         &mut resource,
 //!     )
@@ -404,7 +403,7 @@ impl AllocationSizes {
 
         let size = size.clamp(4 * MB, 256 * MB);
 
-        if size % (4 * MB) == 0 {
+        if size.is_multiple_of(4 * MB) {
             return size;
         }
 

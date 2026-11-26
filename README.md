@@ -6,7 +6,7 @@
 [![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![LICENSE](https://img.shields.io/badge/license-apache-blue.svg?logo=apache)](LICENSE-APACHE)
 [![Contributor Covenant](https://img.shields.io/badge/contributor%20covenant-v1.4%20adopted-ff69b4.svg)](../main/CODE_OF_CONDUCT.md)
-[![MSRV](https://img.shields.io/badge/rustc-1.71.0+-ab6000.svg)](https://blog.rust-lang.org/2023/07/13/Rust-1.71.0.html)
+[![MSRV](https://img.shields.io/badge/rustc-1.95.0+-ab6000.svg)](https://blog.rust-lang.org/)
 
 [![Banner](banner.png)](https://traverseresearch.nl)
 
@@ -84,20 +84,20 @@ use gpu_allocator::d3d12::*;
 use gpu_allocator::MemoryLocation;
 
 
-let buffer_desc = Direct3D12::D3D12_RESOURCE_DESC {
-    Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
+let buffer_desc = d3d12_agility::D3D12_RESOURCE_DESC {
+    Dimension: d3d12_agility::D3D12_RESOURCE_DIMENSION_BUFFER,
     Alignment: 0,
     Width: 512,
     Height: 1,
     DepthOrArraySize: 1,
     MipLevels: 1,
-    Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
-    SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
+    Format: d3d12_agility::DXGI_FORMAT_UNKNOWN,
+    SampleDesc: d3d12_agility::DXGI_SAMPLE_DESC {
         Count: 1,
         Quality: 0,
     },
-    Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-    Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
+    Layout: d3d12_agility::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+    Flags: d3d12_agility::D3D12_RESOURCE_FLAG_NONE,
 };
 let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
     &allocator.device(),
@@ -106,13 +106,13 @@ let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
     MemoryLocation::GpuOnly,
 );
 let allocation = allocator.allocate(&allocation_desc).unwrap();
-let mut resource: Option<Direct3D12::ID3D12Resource> = None;
+let mut resource: Option<d3d12_agility::ID3D12Resource> = None;
 let hr = unsafe {
     device.CreatePlacedResource(
         allocation.heap(),
         allocation.offset(),
         &buffer_desc,
-        Direct3D12::D3D12_RESOURCE_STATE_COMMON,
+        d3d12_agility::D3D12_RESOURCE_STATE_COMMON,
         None,
         &mut resource,
     )
@@ -187,9 +187,7 @@ gpu-allocator = { version = "0.28.0", default-features = false }
 
 ## Minimum Supported Rust Version
 
-The MSRV for this crate and the `vulkan`, `d3d12` and `metal` features is Rust **1.71**.
-
-The `no_std` support requires Rust **1.81** or higher because `no_std` support of dependency `thiserror` requires `core::error::Error` which is stabilized in **1.81**.
+The MSRV for this crate and the `vulkan`, `d3d12` and `metal` features is Rust **1.95**, as required by the [`d3d12-agility`](https://github.com/Traverse-Research/d3d12-agility-rs) dependency of the `d3d12` feature. Because it is a git dependency, Cargo needs to parse its manifest (which uses `edition = "2024"`) even when the `d3d12` feature is disabled or when building for non-Windows targets.
 
 Any other features such as the `visualizer` (with all the `egui` dependencies) may have a higher requirement and are not tested in our CI.
 
