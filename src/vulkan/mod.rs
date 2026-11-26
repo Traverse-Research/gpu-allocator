@@ -33,6 +33,54 @@ pub enum AllocationScheme {
     GpuAllocatorManaged,
 }
 
+/// `GENERIC_ALL`, the access rights given to an exported `OPAQUE_WIN32` handle.
+const GENERIC_ALL: vk::DWORD = 0x1000_0000;
+
+/// Ties an allocation to memory shared with another device or API, for
+/// [`Allocator::allocate_external()`].
+///
+/// The resource bound to it has to agree: it must be created with a
+/// [`vk::ExternalMemoryImageCreateInfo`] (or its buffer equivalent) naming the
+/// same handle types.
+#[derive(Debug)]
+pub enum ExternalMemory {
+    /// Allocate memory another device can import as any of `handle_types`. Pull
+    /// the handle out afterwards with `vkGetMemory{Win32Handle,Fd}KHR` on
+    /// [`Allocation::memory()`], which needs the matching device extension.
+    ///
+    /// `OPAQUE_WIN32` handles are exported with a default security descriptor
+    /// and `GENERIC_ALL` access.
+    Export {
+        handle_types: vk::ExternalMemoryHandleTypeFlags,
+    },
+    /// Import memory another device exported as a Win32 handle.
+    ///
+    /// Importing takes its own reference on an NT handle, so the caller keeps
+    /// owning `handle` and has to close it afterwards.
+    ///
+    /// For `OPAQUE_WIN32` the import must use the exporter's exact memory type
+    /// and allocation size (VUID-VkMemoryAllocateInfo-allocationSize-01742):
+    /// narrow `requirements.memory_type_bits` to that one type and pass the
+    /// exporter's size in `requirements.size`.
+    ImportWin32 {
+        handle_type: vk::ExternalMemoryHandleTypeFlags,
+        handle: vk::HANDLE,
+    },
+    /// Import memory another device exported as a file descriptor.
+    ///
+    /// The allocator takes `fd`: a successful `vkAllocateMemory` hands it to the
+    /// Vulkan implementation, and on every other path it is closed here, so it
+    /// is never closed twice.
+    ///
+    /// For `OPAQUE_FD` the same memory type and size rule as for
+    /// [`Self::ImportWin32`] applies.
+    #[cfg(all(unix, feature = "std"))]
+    ImportFd {
+        handle_type: vk::ExternalMemoryHandleTypeFlags,
+        fd: std::os::fd::OwnedFd,
+    },
+}
+
 #[derive(Clone, Debug)]
 pub struct AllocationCreateDesc<'a> {
     /// Name of the allocation, for tracking and debugging purposes
@@ -351,6 +399,8 @@ pub(crate) struct MemoryBlock {
 }
 
 impl MemoryBlock {
+    // `external` is only consumed by the unix-only fd import.
+    #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
     fn new(
         device: &ash::Device,
         size: u64,
@@ -359,6 +409,7 @@ impl MemoryBlock {
         buffer_device_address: bool,
         allocation_scheme: AllocationScheme,
         requires_personal_block: bool,
+        external: Option<ExternalMemory>,
     ) -> Result<Self> {
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::default()
@@ -388,7 +439,56 @@ impl MemoryBlock {
                 AllocationScheme::GpuAllocatorManaged => alloc_info,
             };
 
-            unsafe { device.allocate_memory(&alloc_info, None) }.map_err(|e| match e {
+            // Shared memory: which handle types it can be exported as, or the handle
+            // it is imported from.
+            let mut export_info = vk::ExportMemoryAllocateInfo::default();
+            let mut export_win32_info = vk::ExportMemoryWin32HandleInfoKHR::default();
+            let mut import_win32_info = vk::ImportMemoryWin32HandleInfoKHR::default();
+            #[cfg(all(unix, feature = "std"))]
+            let mut import_fd_info = vk::ImportMemoryFdInfoKHR::default();
+            #[cfg(all(unix, feature = "std"))]
+            let mut imported_fd = None;
+            let alloc_info = match external {
+                Some(ExternalMemory::Export { handle_types }) => {
+                    export_info = export_info.handle_types(handle_types);
+                    let alloc_info = alloc_info.push_next(&mut export_info);
+
+                    // VUID-VkExportMemoryWin32HandleInfoKHR-handleTypes-00657
+                    if handle_types.contains(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32) {
+                        export_win32_info = export_win32_info.dw_access(GENERIC_ALL);
+                        alloc_info.push_next(&mut export_win32_info)
+                    } else {
+                        alloc_info
+                    }
+                }
+                Some(ExternalMemory::ImportWin32 {
+                    handle_type,
+                    handle,
+                }) => {
+                    import_win32_info = import_win32_info.handle_type(handle_type).handle(handle);
+                    alloc_info.push_next(&mut import_win32_info)
+                }
+                #[cfg(all(unix, feature = "std"))]
+                Some(ExternalMemory::ImportFd { handle_type, fd }) => {
+                    use std::os::fd::AsRawFd;
+                    import_fd_info = import_fd_info.handle_type(handle_type).fd(fd.as_raw_fd());
+                    imported_fd = Some(fd);
+                    alloc_info.push_next(&mut import_fd_info)
+                }
+                None => alloc_info,
+            };
+
+            let device_memory = unsafe { device.allocate_memory(&alloc_info, None) };
+            // Only a successful import transfers ownership of the fd to the
+            // implementation; on failure it is dropped (closed) here instead.
+            #[cfg(all(unix, feature = "std"))]
+            if device_memory.is_ok() {
+                if let Some(fd) = imported_fd {
+                    use std::os::fd::IntoRawFd;
+                    let _ = fd.into_raw_fd();
+                }
+            }
+            device_memory.map_err(|e| match e {
                 vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => AllocationError::OutOfMemory,
                 e => AllocationError::Internal(format!(
                     "Unexpected error in vkAllocateMemory: {e:?}"
@@ -465,6 +565,7 @@ impl MemoryType {
         granularity: u64,
         #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
+        external: Option<ExternalMemory>,
     ) -> Result<Allocation> {
         let allocation_type = if desc.linear {
             AllocationType::Linear
@@ -494,6 +595,7 @@ impl MemoryType {
                 self.buffer_device_address,
                 desc.allocation_scheme,
                 requires_personal_block,
+                external,
             )?;
 
             let mut block_index = None;
@@ -596,6 +698,9 @@ impl MemoryType {
             self.buffer_device_address,
             desc.allocation_scheme,
             false,
+            // General blocks are sub-allocated and so are never shared: an external
+            // allocation demands a dedicated scheme and takes the branch above.
+            None,
         )?;
 
         let new_block_index = if let Some(block_index) = empty_block_index {
@@ -774,6 +879,33 @@ impl Allocator {
     }
 
     pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
+        self.allocate_impl(desc, None)
+    }
+
+    /// Allocates memory that is shared with another device or API, either exporting
+    /// an OS handle to it or importing one, as described by `external`.
+    ///
+    /// Shared memory is never sub-allocated — an importer would receive the whole
+    /// allocation, including whatever else was placed in it — so `desc` must ask for
+    /// a dedicated [`AllocationScheme`], and the resource bound to the result must be
+    /// created with an external-memory create info naming the same handle types.
+    pub fn allocate_external(
+        &mut self,
+        desc: &AllocationCreateDesc<'_>,
+        external: ExternalMemory,
+    ) -> Result<Allocation> {
+        if desc.allocation_scheme == AllocationScheme::GpuAllocatorManaged {
+            return Err(AllocationError::InvalidAllocationCreateDesc);
+        }
+
+        self.allocate_impl(desc, Some(external))
+    }
+
+    fn allocate_impl(
+        &mut self,
+        desc: &AllocationCreateDesc<'_>,
+        external: Option<ExternalMemory>,
+    ) -> Result<Allocation> {
         let size = desc.requirements.size;
         let alignment = desc.requirements.alignment;
 
@@ -835,6 +967,10 @@ impl Allocator {
             None => return Err(AllocationError::NoCompatibleMemoryTypeFound),
         };
 
+        // Retrying would import the same handle twice, and importing a file descriptor
+        // consumes it.
+        let may_retry = external.is_none();
+
         //Do not try to create a block if the heap is smaller than the required size (avoids validation warnings).
         let memory_type = &mut self.memory_types[memory_type_index];
         let allocation = if size > self.memory_heaps[memory_type.heap_index].size {
@@ -847,10 +983,11 @@ impl Allocator {
                 #[cfg(feature = "std")]
                 backtrace.clone(),
                 &self.allocation_sizes,
+                external,
             )
         };
 
-        if desc.location == MemoryLocation::CpuToGpu {
+        if desc.location == MemoryLocation::CpuToGpu && may_retry {
             if allocation.is_err() {
                 let mem_loc_preferred_bits =
                     vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
@@ -870,6 +1007,7 @@ impl Allocator {
                     #[cfg(feature = "std")]
                     backtrace,
                     &self.allocation_sizes,
+                    None,
                 )
             } else {
                 allocation
