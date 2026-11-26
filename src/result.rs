@@ -22,6 +22,8 @@ pub enum AllocationError {
     CastableFormatsRequiresEnhancedBarriers,
     #[error("Castable formats require at least `Device12`")]
     CastableFormatsRequiresAtLeastDevice12,
+    #[error("Invalid StompSettings: {0}")]
+    InvalidStompSettings(String),
 }
 
 pub type Result<V, E = AllocationError> = ::core::result::Result<V, E>;

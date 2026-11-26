@@ -84,11 +84,17 @@
 //!     device: ID3D12DeviceVersion::Device(device),
 //!     debug_settings: Default::default(),
 //!     allocation_sizes: Default::default(),
+//!     stomp: None,
 //! });
 //! # }
 //! # #[cfg(not(feature = "d3d12"))]
 //! # fn main() {}
 //! ```
+//!
+//! For development builds, `stomp: Some(StompSettings::default())` turns on stomp detection
+//! for resources created with `Allocator::create_resource()`: each resource is packed against
+//! a never-resident guard page so that a GPU write past its end page-faults and DRED names the
+//! resource. See `d3d12::StompSettings` for modes and limitations.
 //!
 //! # Simple d3d12 allocation example
 //!
@@ -104,6 +110,7 @@
 //! #     device: ID3D12DeviceVersion::Device(device),
 //! #     debug_settings: Default::default(),
 //! #     allocation_sizes: Default::default(),
+//! #     stomp: None,
 //! # }).unwrap();
 //!
 //! let buffer_desc = Direct3D12::D3D12_RESOURCE_DESC {
