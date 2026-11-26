@@ -208,6 +208,15 @@ impl Allocation {
         self.chunk_id
     }
 
+    /// Returns the index into the `memory_types` array of
+    /// `vk::PhysicalDeviceMemoryProperties` of the memory type that this
+    /// allocation is using.
+    /// This can be useful when trying to bind this allocation to a resource
+    /// with specific memory requirements.
+    pub fn memory_type_index(&self) -> usize {
+        self.memory_type_index
+    }
+
     ///Returns the [`vk::MemoryPropertyFlags`] of this allocation.
     pub fn memory_properties(&self) -> vk::MemoryPropertyFlags {
         self.memory_properties
