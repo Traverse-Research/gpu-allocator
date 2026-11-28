@@ -19,7 +19,7 @@ use crate::{
         MemoryBlockReport, SubAllocator,
     },
     AllocationError, AllocationFailure, AllocationResult, AllocationSizes, AllocatorDebugSettings,
-    MemoryLocation, Result,
+    MemoryBlockSizes, MemoryLocation, Result,
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -484,21 +484,65 @@ pub(crate) struct MemoryType {
     pub(crate) memory_properties: vk::MemoryPropertyFlags,
     pub(crate) memory_type_index: usize,
     pub(crate) heap_index: usize,
-    heap_size: u64,
-    active_blocks: usize,
+    pub(crate) heap_size: u64,
     pub(crate) mappable: bool,
     pub(crate) active_general_blocks: usize,
+    active_blocks: usize,
+    pub(crate) empty_block_index: Option<usize>,
+    pub(crate) block_sizes: MemoryBlockSizes,
     pub(crate) buffer_device_address: bool,
 }
 
 impl MemoryType {
+    fn block_size(&self, desc: &AllocationCreateDesc<'_>) -> u64 {
+        let size = desc.requirements.size;
+        if desc.allocation_scheme != AllocationScheme::GpuAllocatorManaged
+            || size > self.block_sizes.dedicated_threshold()
+        {
+            return size;
+        }
+        let occupied = self.active_general_blocks - usize::from(self.empty_block_index.is_some());
+        self.block_sizes.shared_block_size(occupied, size)
+    }
+
+    fn cached_size(&self) -> u64 {
+        self.empty_block_index
+            .and_then(|i| self.memory_blocks.get(i))
+            .and_then(Option::as_ref)
+            .filter(|block| block.sub_allocator.is_empty())
+            .map_or(0, |block| block.size)
+    }
+
+    fn release_cached(&mut self, device: &ash::Device) -> u64 {
+        let Some(index) = self.empty_block_index.take() else {
+            return 0;
+        };
+        let Some(slot) = self.memory_blocks.get_mut(index) else {
+            return 0;
+        };
+        if !slot.as_ref().is_some_and(|block| {
+            block.sub_allocator.is_empty() && block.sub_allocator.supports_general_allocations()
+        }) {
+            return 0;
+        }
+        if let Some(block) = slot.take() {
+            let bytes = block.size;
+            self.active_general_blocks -= 1;
+            self.active_blocks -= 1;
+            block.destroy(device);
+            bytes
+        } else {
+            0
+        }
+    }
+
     fn allocate(
         &mut self,
         device: &ash::Device,
         desc: &AllocationCreateDesc<'_>,
         granularity: u64,
         #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
-        allocation_sizes: &AllocationSizes,
+        new_block_size: Option<u64>,
         allocation_limit_reached: bool,
     ) -> AllocationResult<Allocation> {
         let size = desc.requirements.size;
@@ -512,10 +556,7 @@ impl MemoryType {
             AllocationType::NonLinear
         };
         let dedicated_allocation = desc.allocation_scheme != AllocationScheme::GpuAllocatorManaged;
-        let block_size = allocation_sizes
-            .get_memblock_size(self.mappable, self.active_general_blocks)
-            .min(self.heap_size);
-        let dedicated = dedicated_allocation || size > block_size;
+        let dedicated = dedicated_allocation || size > self.block_sizes.dedicated_threshold();
         let mut vacant = None;
         if !dedicated {
             for (index, slot) in self.memory_blocks.iter_mut().enumerate().rev() {
@@ -535,6 +576,9 @@ impl MemoryType {
                     backtrace.clone(),
                 ) {
                     Ok((offset, chunk_id)) => {
+                        if self.empty_block_index == Some(index) {
+                            self.empty_block_index = None;
+                        }
                         let mapped_ptr = block.mapped_ptr.and_then(|SendSyncPtr(ptr)| {
                             core::ptr::NonNull::new(unsafe { ptr.as_ptr().add(offset as usize) })
                                 .map(SendSyncPtr)
@@ -557,6 +601,9 @@ impl MemoryType {
                 }
             }
         }
+        let Some(block_size) = new_block_size else {
+            return Err(AllocationError::OutOfMemory.into());
+        };
         if allocation_limit_reached {
             return Err(AllocationFailure::allocation_limit(
                 AllocationError::Internal("Allocator reached maxMemoryAllocationCount".into()),
@@ -636,13 +683,30 @@ impl MemoryType {
 
         mem_block.sub_allocator.free(allocation.chunk_id)?;
 
-        // We only want to destroy this now-empty block if it is either a dedicated/personal
-        // allocation, or a block supporting sub-allocations that is not the last one (ensuring
-        // there's always at least one block/allocator readily available).
-        let is_dedicated_or_not_last_general_block =
-            !mem_block.sub_allocator.supports_general_allocations()
-                || self.active_general_blocks > 1;
-        if mem_block.sub_allocator.is_empty() && is_dedicated_or_not_last_general_block {
+        if !mem_block.sub_allocator.is_empty() {
+            return Ok(());
+        }
+        let mut block_idx = block_idx;
+        let general = mem_block.sub_allocator.supports_general_allocations();
+        let block_size = mem_block.size;
+        if general {
+            let cached_size = self
+                .empty_block_index
+                .and_then(|i| self.memory_blocks[i].as_ref())
+                .map(|block| block.size);
+            if self
+                .block_sizes
+                .should_cache_empty_block(block_size, cached_size)
+            {
+                let previous = self.empty_block_index.replace(block_idx);
+                if let Some(previous) = previous {
+                    block_idx = previous;
+                } else {
+                    return Ok(());
+                }
+            }
+        }
+        {
             let block = self.memory_blocks[block_idx]
                 .take()
                 .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
@@ -663,10 +727,9 @@ pub struct Allocator {
     pub(crate) memory_types: Vec<MemoryType>,
     pub(crate) memory_heaps: Vec<vk::MemoryHeap>,
     device: ash::Device,
+    max_memory_allocation_count: usize,
     pub(crate) buffer_image_granularity: u64,
     pub(crate) debug_settings: AllocatorDebugSettings,
-    allocation_sizes: AllocationSizes,
-    max_memory_allocation_count: usize,
 }
 
 impl fmt::Debug for Allocator {
@@ -717,18 +780,27 @@ impl Allocator {
         let memory_types = memory_types
             .iter()
             .enumerate()
-            .map(|(i, mem_type)| MemoryType {
-                memory_blocks: Vec::default(),
-                memory_properties: mem_type.property_flags,
-                memory_type_index: i,
-                heap_index: mem_type.heap_index as usize,
-                heap_size: memory_heaps[mem_type.heap_index as usize].size,
-                active_blocks: 0,
-                mappable: mem_type
+            .map(|(i, mem_type)| {
+                let mappable = mem_type
                     .property_flags
-                    .contains(vk::MemoryPropertyFlags::HOST_VISIBLE),
-                active_general_blocks: 0,
-                buffer_device_address: desc.buffer_device_address,
+                    .contains(vk::MemoryPropertyFlags::HOST_VISIBLE);
+                let heap_size = memory_heaps[mem_type.heap_index as usize].size;
+                MemoryType {
+                    memory_blocks: Vec::default(),
+                    memory_properties: mem_type.property_flags,
+                    memory_type_index: i,
+                    heap_index: mem_type.heap_index as usize,
+                    heap_size,
+                    mappable,
+                    active_general_blocks: 0,
+                    active_blocks: 0,
+                    empty_block_index: None,
+                    block_sizes: desc
+                        .allocation_sizes
+                        .block_sizes_for(mappable)
+                        .capped_to_heap(heap_size),
+                    buffer_device_address: desc.buffer_device_address,
+                }
             })
             .collect::<Vec<_>>();
 
@@ -743,13 +815,37 @@ impl Allocator {
             memory_types,
             memory_heaps,
             device: desc.device.clone(),
-            buffer_image_granularity: granularity,
-            debug_settings: desc.debug_settings,
-            allocation_sizes: desc.allocation_sizes,
             max_memory_allocation_count: physical_device_properties
                 .limits
                 .max_memory_allocation_count as usize,
+            buffer_image_granularity: granularity,
+            debug_settings: desc.debug_settings,
         })
+    }
+
+    fn allocate_type(
+        &mut self,
+        index: usize,
+        desc: &AllocationCreateDesc<'_>,
+        #[cfg(feature = "std")] backtrace: &Arc<Backtrace>,
+        block_size: Option<u64>,
+    ) -> AllocationResult<Allocation> {
+        // Other users of this VkDevice remain responsible for their own allocations.
+        let limit_reached = self
+            .memory_types
+            .iter()
+            .map(|ty| ty.active_blocks)
+            .sum::<usize>()
+            >= self.max_memory_allocation_count;
+        self.memory_types[index].allocate(
+            &self.device,
+            desc,
+            self.buffer_image_granularity,
+            #[cfg(feature = "std")]
+            backtrace.clone(),
+            block_size,
+            limit_reached,
+        )
     }
 
     pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
@@ -799,14 +895,13 @@ impl Allocator {
             for (index, ty) in self.memory_types.iter().enumerate() {
                 if desc.requirements.memory_type_bits & (1 << index) == 0
                     || !ty.memory_properties.contains(required)
-                    // This allocator has no deviceCoherentMemory enablement input.
-                    // Such types remain enumerated even when using them is illegal.
+                    // No deviceCoherentMemory enablement input is available.
                     || ty.memory_properties.contains(vk::MemoryPropertyFlags::DEVICE_COHERENT_AMD)
                 {
                     continue;
                 }
                 compatible = true;
-                if size > self.memory_heaps[ty.heap_index].size
+                if self.memory_heaps[ty.heap_index].size < size
                     || ty.memory_properties.contains(preferred) != prefer
                 {
                     continue;
@@ -822,36 +917,122 @@ impl Allocator {
                 AllocationError::NoCompatibleMemoryTypeFound
             });
         }
-        let mut first_error = None;
-        let mut count_limit_seen = false;
-        for &index in &indices[..count] {
-            let count_limit = count_limit_seen
-                || self
-                    .memory_types
-                    .iter()
-                    .map(|ty| ty.active_blocks)
-                    .sum::<usize>()
-                    >= self.max_memory_allocation_count;
-            match self.memory_types[index].allocate(
-                &self.device,
+        let first = indices[0];
+        let mut attempted_size = self.memory_types[first].block_size(desc);
+        let first_error = match self.allocate_type(
+            first,
+            desc,
+            #[cfg(feature = "std")]
+            &backtrace,
+            Some(attempted_size),
+        ) {
+            Ok(allocation) => return Ok(allocation),
+            Err(error) if error.is_memory_pressure() => error,
+            Err(error) => return Err(error.error),
+        };
+        let mut can_shrink = first_error.may_shrink();
+        // Preserve usable blocks in another compatible type before reclaiming caches.
+        for &index in &indices[1..count] {
+            match self.allocate_type(
+                index,
                 desc,
-                self.buffer_image_granularity,
                 #[cfg(feature = "std")]
-                backtrace.clone(),
-                &self.allocation_sizes,
-                count_limit,
+                &backtrace,
+                None,
             ) {
                 Ok(allocation) => return Ok(allocation),
-                Err(error) if error.is_memory_pressure() => {
-                    count_limit_seen |= error.is_allocation_limit();
-                    if first_error.is_none() {
-                        first_error = Some(error.error);
-                    }
-                }
+                Err(error) if matches!(&error.error, AllocationError::OutOfMemory) => {}
                 Err(error) => return Err(error.error),
             }
         }
-        Err(first_error.unwrap_or(AllocationError::OutOfMemory))
+        let released = self.trim();
+        if released == 0 && first_error.is_allocation_limit() {
+            return Err(first_error.error);
+        }
+        for (position, &index) in indices[..count].iter().enumerate() {
+            if position != 0 || released != 0 {
+                attempted_size = self.memory_types[index].block_size(desc);
+                match self.allocate_type(
+                    index,
+                    desc,
+                    #[cfg(feature = "std")]
+                    &backtrace,
+                    Some(attempted_size),
+                ) {
+                    Ok(allocation) => return Ok(allocation),
+                    Err(error) if error.is_memory_pressure() => {
+                        if error.is_allocation_limit() {
+                            return Err(error.error);
+                        }
+                        can_shrink = error.may_shrink();
+                    }
+                    Err(error) => return Err(error.error),
+                }
+            }
+            while can_shrink && desc.allocation_scheme == AllocationScheme::GpuAllocatorManaged {
+                let Some(next) = crate::smaller_block_size(attempted_size, size, 1) else {
+                    break;
+                };
+                attempted_size = next;
+                match self.allocate_type(
+                    index,
+                    desc,
+                    #[cfg(feature = "std")]
+                    &backtrace,
+                    Some(attempted_size),
+                ) {
+                    Ok(allocation) => return Ok(allocation),
+                    Err(error) if error.is_memory_pressure() => {
+                        if error.is_allocation_limit() {
+                            return Err(error.error);
+                        }
+                        can_shrink = error.may_shrink();
+                    }
+                    Err(error) => return Err(error.error),
+                }
+            }
+        }
+        Err(first_error.error)
+    }
+
+    /// Returns the allocator capacity held by cached empty blocks.
+    pub fn cached_capacity(&self) -> u64 {
+        self.memory_types.iter().map(MemoryType::cached_size).sum()
+    }
+
+    /// Releases cached empty blocks and returns bytes removed from allocator capacity.
+    /// Live indices remain valid. This does not wait for GPU work or release external references.
+    pub fn trim(&mut self) -> u64 {
+        self.memory_types
+            .iter_mut()
+            .map(|ty| ty.release_cached(&self.device))
+            .sum()
+    }
+
+    /// Releases largest cached blocks until their total capacity is at most `bytes`.
+    /// The target applies to empty cached capacity, not live allocations or an OS memory budget.
+    pub fn trim_to(&mut self, bytes: u64) -> u64 {
+        let mut cached = self.cached_capacity();
+        let before = cached;
+        while cached > bytes {
+            let Some((index, size)) = self
+                .memory_types
+                .iter()
+                .enumerate()
+                .map(|(index, ty)| (index, ty.cached_size()))
+                .max_by_key(|(_, size)| *size)
+                .filter(|(_, size)| *size != 0)
+            else {
+                break;
+            };
+            let released = self.memory_types[index].release_cached(&self.device);
+            debug_assert_eq!(released, size);
+            if released == 0 {
+                break;
+            }
+            cached -= released;
+        }
+        before - cached
     }
 
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
@@ -869,7 +1050,38 @@ impl Allocator {
             return Ok(());
         }
 
-        self.memory_types[allocation.memory_type_index].free(allocation, &self.device)?;
+        let index = allocation.memory_type_index;
+        let before = self.memory_types[index].cached_size();
+        self.memory_types[index].free(allocation, &self.device)?;
+        if self.memory_types[index].cached_size() > before {
+            let heap = self.memory_types[index].heap_index;
+            let mut cached: u64 = self
+                .memory_types
+                .iter()
+                .filter(|ty| ty.heap_index == heap)
+                .map(MemoryType::cached_size)
+                .sum();
+            // Overallocation may be supported, but retaining more empty memory than
+            // the entire physical heap serves no useful working-set purpose.
+            while cached > self.memory_heaps[heap].size {
+                let Some((index, size)) = self
+                    .memory_types
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, ty)| ty.heap_index == heap)
+                    .map(|(index, ty)| (index, ty.cached_size()))
+                    .max_by_key(|(_, size)| *size)
+                else {
+                    break;
+                };
+                let released = self.memory_types[index].release_cached(&self.device);
+                debug_assert_eq!(released, size);
+                if released == 0 {
+                    break;
+                }
+                cached -= released;
+            }
+        }
 
         Ok(())
     }
@@ -965,6 +1177,9 @@ impl Drop for Allocator {
 }
 
 #[cfg(all(test, feature = "std"))]
-mod contract_tests;
+mod capacity_tests;
+
+#[cfg(all(test, feature = "std"))]
+mod resource_contract_tests;
 #[cfg(all(test, feature = "std"))]
 mod test_support;
