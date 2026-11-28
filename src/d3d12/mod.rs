@@ -28,8 +28,27 @@ use crate::{
         AllocationType, AllocatorReport, DedicatedBlockAllocator, FreeListAllocator,
         MemoryBlockReport, SubAllocator,
     },
-    AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
+    AllocationError, AllocationFailure, AllocationResult, AllocationSizes, AllocatorDebugSettings,
+    MemoryBlockSizes, MemoryLocation, Result,
 };
+
+/// Whether the shared blocks of a heap with these properties use the host (CPU-visible) block
+/// size range of [`AllocationSizes`] rather than the device range.
+///
+/// A heap uses the host range when the CPU can map it. `DEFAULT` heaps, and `CUSTOM` heaps with
+/// [`D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE`], cannot be mapped. `UPLOAD`, `READBACK` and
+/// `GPU_UPLOAD` heaps always resolve to a CPU-visible page property
+/// (`ID3D12Device::GetCustomHeapProperties`), whichever memory pool they use.
+fn uses_host_block_sizes(heap_properties: &D3D12_HEAP_PROPERTIES) -> bool {
+    match heap_properties.Type {
+        D3D12_HEAP_TYPE_UPLOAD | D3D12_HEAP_TYPE_READBACK | D3D12_HEAP_TYPE_GPU_UPLOAD => true,
+        D3D12_HEAP_TYPE_CUSTOM => matches!(
+            heap_properties.CPUPageProperty,
+            D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE | D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
+        ),
+        _ => false,
+    }
+}
 
 /// [`ResourceCategory`] is used for supporting [`D3D12_RESOURCE_HEAP_TIER_1`].
 /// [`ResourceCategory`] will be ignored if device supports [`D3D12_RESOURCE_HEAP_TIER_2`].
@@ -271,7 +290,7 @@ impl MemoryBlock {
         heap_properties: &D3D12_HEAP_PROPERTIES,
         heap_category: HeapCategory,
         dedicated: bool,
-    ) -> Result<Self> {
+    ) -> AllocationResult<Self> {
         let heap = {
             let mut desc = D3D12_HEAP_DESC {
                 SizeInBytes: size,
@@ -324,75 +343,74 @@ struct MemoryType {
     heap_properties: D3D12_HEAP_PROPERTIES,
     memory_type_index: usize,
     active_general_blocks: usize,
+    empty_block_index: Option<usize>,
+    block_sizes: MemoryBlockSizes,
 }
 
 impl MemoryType {
+    fn block_size(&self, desc: &AllocationCreateDesc<'_>) -> u64 {
+        let size = desc.size;
+        if size > self.block_sizes.dedicated_threshold() {
+            return size;
+        }
+        let occupied = self.active_general_blocks - usize::from(self.empty_block_index.is_some());
+        self.block_sizes.shared_block_size(occupied, size)
+    }
+
+    fn cached_size(&self) -> u64 {
+        self.empty_block_index
+            .and_then(|i| self.memory_blocks.get(i))
+            .and_then(Option::as_ref)
+            .filter(|block| block.sub_allocator.is_empty())
+            .map_or(0, |block| block.size)
+    }
+
+    fn release_cached(&mut self) -> u64 {
+        let Some(index) = self.empty_block_index.take() else {
+            return 0;
+        };
+        let Some(slot) = self.memory_blocks.get_mut(index) else {
+            return 0;
+        };
+        if !slot.as_ref().is_some_and(|block| {
+            block.sub_allocator.is_empty() && block.sub_allocator.supports_general_allocations()
+        }) {
+            return 0;
+        }
+        if let Some(block) = slot.take() {
+            let bytes = block.size;
+            self.active_general_blocks -= 1;
+            drop(block);
+            bytes
+        } else {
+            0
+        }
+    }
+
     fn allocate(
         &mut self,
         device: &ID3D12DeviceVersion,
         desc: &AllocationCreateDesc<'_>,
+
         #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
-        allocation_sizes: &AllocationSizes,
-    ) -> Result<Allocation> {
-        let allocation_type = AllocationType::Linear;
-
-        let is_host = self.heap_properties.Type != D3D12_HEAP_TYPE_DEFAULT;
-        let memblock_size = allocation_sizes.get_memblock_size(is_host, self.active_general_blocks);
-
+        new_block_size: Option<u64>,
+    ) -> AllocationResult<Allocation> {
         let size = desc.size;
         let alignment = desc.alignment;
 
-        // Create a dedicated block for large memory allocations
-        if size > memblock_size {
-            let mem_block = MemoryBlock::new(
-                device,
-                size,
-                &self.heap_properties,
-                self.heap_category,
-                true,
-            )?;
-
-            let block_index = self.memory_blocks.iter().position(|block| block.is_none());
-            let block_index = match block_index {
-                Some(i) => {
-                    self.memory_blocks[i].replace(mem_block);
-                    i
-                }
-                None => {
-                    self.memory_blocks.push(Some(mem_block));
-                    self.memory_blocks.len() - 1
-                }
-            };
-
-            let mem_block = self.memory_blocks[block_index]
-                .as_mut()
-                .ok_or_else(|| AllocationError::Internal("Memory block must be Some".into()))?;
-
-            let (offset, chunk_id) = mem_block.sub_allocator.allocate(
-                size,
-                alignment,
-                allocation_type,
-                1,
-                desc.name,
-                #[cfg(feature = "std")]
-                backtrace,
-            )?;
-
-            return Ok(Allocation {
-                chunk_id: Some(chunk_id),
-                size,
-                offset,
-                memory_block_index: block_index,
-                memory_type_index: self.memory_type_index,
-                heap: mem_block.heap.clone(),
-                name: Some(desc.name.into()),
-            });
-        }
-
-        let mut empty_block_index = None;
-        for (mem_block_i, mem_block) in self.memory_blocks.iter_mut().enumerate().rev() {
-            if let Some(mem_block) = mem_block {
-                let allocation = mem_block.sub_allocator.allocate(
+        let allocation_type = AllocationType::Linear;
+        let dedicated_allocation = false;
+        let dedicated = dedicated_allocation || size > self.block_sizes.dedicated_threshold();
+        let mut vacant = None;
+        if !dedicated {
+            for (index, slot) in self.memory_blocks.iter_mut().enumerate().rev() {
+                let Some(block) = slot else {
+                    if vacant.is_none() {
+                        vacant = Some(index);
+                    }
+                    continue;
+                };
+                match block.sub_allocator.allocate(
                     size,
                     alignment,
                     allocation_type,
@@ -400,50 +418,38 @@ impl MemoryType {
                     desc.name,
                     #[cfg(feature = "std")]
                     backtrace.clone(),
-                );
-
-                match allocation {
+                ) {
                     Ok((offset, chunk_id)) => {
+                        if self.empty_block_index == Some(index) {
+                            self.empty_block_index = None;
+                        }
+
                         return Ok(Allocation {
                             chunk_id: Some(chunk_id),
-                            offset,
                             size,
-                            memory_block_index: mem_block_i,
+                            offset,
+                            memory_block_index: index,
                             memory_type_index: self.memory_type_index,
-                            heap: mem_block.heap.clone(),
                             name: Some(desc.name.into()),
+                            heap: block.heap.clone(),
                         });
                     }
-                    Err(AllocationError::OutOfMemory) => {} // Block is full, continue search.
-                    Err(err) => return Err(err),            // Unhandled error, return.
+                    Err(AllocationError::OutOfMemory) => {}
+                    Err(error) => return Err(error.into()),
                 }
-            } else if empty_block_index.is_none() {
-                empty_block_index = Some(mem_block_i);
             }
         }
-
-        let new_memory_block = MemoryBlock::new(
+        let Some(block_size) = new_block_size else {
+            return Err(AllocationError::OutOfMemory.into());
+        };
+        let mut block = MemoryBlock::new(
             device,
-            memblock_size,
+            if dedicated { size } else { block_size },
             &self.heap_properties,
             self.heap_category,
-            false,
+            dedicated,
         )?;
-
-        let new_block_index = if let Some(block_index) = empty_block_index {
-            self.memory_blocks[block_index] = Some(new_memory_block);
-            block_index
-        } else {
-            self.memory_blocks.push(Some(new_memory_block));
-            self.memory_blocks.len() - 1
-        };
-
-        self.active_general_blocks += 1;
-
-        let mem_block = self.memory_blocks[new_block_index]
-            .as_mut()
-            .ok_or_else(|| AllocationError::Internal("Memory block must be Some".into()))?;
-        let allocation = mem_block.sub_allocator.allocate(
+        let (offset, chunk_id) = match block.sub_allocator.allocate(
             size,
             alignment,
             allocation_type,
@@ -451,22 +457,44 @@ impl MemoryType {
             desc.name,
             #[cfg(feature = "std")]
             backtrace,
-        );
-        let (offset, chunk_id) = match allocation {
-            Err(AllocationError::OutOfMemory) => Err(AllocationError::Internal(
-                "Allocation that must succeed failed. This is a bug in the allocator.".into(),
-            )),
-            a => a,
-        }?;
+        ) {
+            Ok(value) => value,
+            Err(error) => {
+                drop(block);
+                return Err(AllocationFailure::fatal(error));
+            }
+        };
+
+        let index = if dedicated {
+            self.memory_blocks.iter().position(Option::is_none)
+        } else {
+            vacant
+        };
+        let index = match index {
+            Some(index) => {
+                self.memory_blocks[index] = Some(block);
+                index
+            }
+            None => {
+                self.memory_blocks.push(Some(block));
+                self.memory_blocks.len() - 1
+            }
+        };
+        if !dedicated {
+            self.active_general_blocks += 1;
+        }
+        let block = self.memory_blocks[index]
+            .as_ref()
+            .ok_or_else(|| AllocationError::Internal("Published memory block is missing".into()))?;
 
         Ok(Allocation {
             chunk_id: Some(chunk_id),
-            offset,
             size,
-            memory_block_index: new_block_index,
+            offset,
+            memory_block_index: index,
             memory_type_index: self.memory_type_index,
-            heap: mem_block.heap.clone(),
             name: Some(desc.name.into()),
+            heap: block.heap.clone(),
         })
     }
 
@@ -480,13 +508,30 @@ impl MemoryType {
 
         mem_block.sub_allocator.free(allocation.chunk_id)?;
 
-        // We only want to destroy this now-empty block if it is either a dedicated/personal
-        // allocation, or a block supporting sub-allocations that is not the last one (ensuring
-        // there's always at least one block/allocator readily available).
-        let is_dedicated_or_not_last_general_block =
-            !mem_block.sub_allocator.supports_general_allocations()
-                || self.active_general_blocks > 1;
-        if mem_block.sub_allocator.is_empty() && is_dedicated_or_not_last_general_block {
+        if !mem_block.sub_allocator.is_empty() {
+            return Ok(());
+        }
+        let mut block_idx = block_idx;
+        let general = mem_block.sub_allocator.supports_general_allocations();
+        let block_size = mem_block.size;
+        if general {
+            let cached_size = self
+                .empty_block_index
+                .and_then(|i| self.memory_blocks[i].as_ref())
+                .map(|block| block.size);
+            if self
+                .block_sizes
+                .should_cache_empty_block(block_size, cached_size)
+            {
+                let previous = self.empty_block_index.replace(block_idx);
+                if let Some(previous) = previous {
+                    block_idx = previous;
+                } else {
+                    return Ok(());
+                }
+            }
+        }
+        {
             let block = self.memory_blocks[block_idx]
                 .take()
                 .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
@@ -506,7 +551,6 @@ pub struct Allocator {
     device: ID3D12DeviceVersion,
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
-    allocation_sizes: AllocationSizes,
 }
 
 impl Allocator {
@@ -601,6 +645,10 @@ impl Allocator {
                     heap_properties,
                     memory_type_index: i,
                     active_general_blocks: 0,
+                    empty_block_index: None,
+                    block_sizes: desc
+                        .allocation_sizes
+                        .block_sizes_for(uses_host_block_sizes(&heap_properties)),
                     committed_allocations: CommittedAllocationStatistics {
                         num_allocations: 0,
                         total_size: 0,
@@ -613,8 +661,23 @@ impl Allocator {
             memory_types,
             device,
             debug_settings: desc.debug_settings,
-            allocation_sizes: desc.allocation_sizes,
         })
+    }
+
+    fn allocate_type(
+        &mut self,
+        index: usize,
+        desc: &AllocationCreateDesc<'_>,
+        #[cfg(feature = "std")] backtrace: &Arc<Backtrace>,
+        block_size: Option<u64>,
+    ) -> AllocationResult<Allocation> {
+        self.memory_types[index].allocate(
+            &self.device,
+            desc,
+            #[cfg(feature = "std")]
+            backtrace.clone(),
+            block_size,
+        )
     }
 
     pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
@@ -644,28 +707,121 @@ impl Allocator {
             return Err(AllocationError::InvalidAllocationCreateDesc);
         }
 
-        // Find memory type
-        let memory_type = self
+        let index = self
             .memory_types
-            .iter_mut()
-            .find(|memory_type| {
-                let is_location_compatible = desc.location == MemoryLocation::Unknown
-                    || desc.location == memory_type.memory_location;
-
-                let is_category_compatible = memory_type.heap_category == HeapCategory::All
-                    || memory_type.heap_category == desc.resource_category.into();
-
-                is_location_compatible && is_category_compatible
+            .iter()
+            .position(|ty| {
+                let location =
+                    desc.location == MemoryLocation::Unknown || desc.location == ty.memory_location;
+                let category = ty.heap_category == HeapCategory::All
+                    || ty.heap_category == desc.resource_category.into();
+                location && category
             })
             .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
-
-        memory_type.allocate(
-            &self.device,
+        let mut attempted_size = self.memory_types[index].block_size(desc);
+        let first_error = match self.allocate_type(
+            index,
             desc,
             #[cfg(feature = "std")]
-            backtrace,
-            &self.allocation_sizes,
-        )
+            &backtrace,
+            Some(attempted_size),
+        ) {
+            Ok(allocation) => return Ok(allocation),
+            Err(error) if error.is_memory_pressure() => error,
+            Err(error) => return Err(error.error),
+        };
+        let mut can_shrink = first_error.may_shrink();
+        if self.trim() != 0 {
+            attempted_size = self.memory_types[index].block_size(desc);
+            match self.allocate_type(
+                index,
+                desc,
+                #[cfg(feature = "std")]
+                &backtrace,
+                Some(attempted_size),
+            ) {
+                Ok(allocation) => return Ok(allocation),
+                Err(error) if error.is_memory_pressure() => {
+                    if error.is_allocation_limit() {
+                        return Err(error.error);
+                    }
+                    can_shrink = error.may_shrink();
+                }
+                Err(error) => return Err(error.error),
+            }
+        }
+        let minimum = size
+            .checked_add(D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as u64 - 1)
+            .map_or(size, |size| {
+                size & !(D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as u64 - 1)
+            });
+        while can_shrink && size <= self.memory_types[index].block_sizes.max {
+            let Some(next) = crate::smaller_block_size(
+                attempted_size,
+                minimum,
+                D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as u64,
+            ) else {
+                break;
+            };
+            attempted_size = next;
+            match self.allocate_type(
+                index,
+                desc,
+                #[cfg(feature = "std")]
+                &backtrace,
+                Some(attempted_size),
+            ) {
+                Ok(allocation) => return Ok(allocation),
+                Err(error) if error.is_memory_pressure() => {
+                    if error.is_allocation_limit() {
+                        return Err(error.error);
+                    }
+                    can_shrink = error.may_shrink();
+                }
+                Err(error) => return Err(error.error),
+            }
+        }
+        Err(first_error.error)
+    }
+
+    /// Returns the allocator capacity held by cached empty blocks.
+    pub fn cached_capacity(&self) -> u64 {
+        self.memory_types.iter().map(MemoryType::cached_size).sum()
+    }
+
+    /// Releases cached empty blocks and returns bytes removed from allocator capacity.
+    /// Live indices remain valid. This does not wait for GPU work or release external references.
+    pub fn trim(&mut self) -> u64 {
+        self.memory_types
+            .iter_mut()
+            .map(|ty| ty.release_cached())
+            .sum()
+    }
+
+    /// Releases largest cached blocks until their total capacity is at most `bytes`.
+    /// The target applies to empty cached capacity, not live allocations or an OS memory budget.
+    pub fn trim_to(&mut self, bytes: u64) -> u64 {
+        let mut cached = self.cached_capacity();
+        let before = cached;
+        while cached > bytes {
+            let Some((index, size)) = self
+                .memory_types
+                .iter()
+                .enumerate()
+                .map(|(index, ty)| (index, ty.cached_size()))
+                .max_by_key(|(_, size)| *size)
+                .filter(|(_, size)| *size != 0)
+            else {
+                break;
+            };
+            let released = self.memory_types[index].release_cached();
+            debug_assert_eq!(released, size);
+            if released == 0 {
+                break;
+            }
+            cached -= released;
+        }
+        before - cached
     }
 
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
@@ -863,7 +1019,11 @@ impl Allocator {
                     )));
                 }
 
-                let resource = result.expect("Allocation succeeded but no resource was returned?");
+                let resource = result.ok_or_else(|| {
+                    AllocationError::Internal(
+                        "CreateCommittedResource succeeded without returning a resource".into(),
+                    )
+                })?;
 
                 let allocation_info = Self::resource_allocation_info(&self.device, desc);
 
@@ -909,76 +1069,96 @@ impl Allocator {
 
                 let allocation = self.allocate(&allocation_desc)?;
 
-                let mut result: Option<ID3D12Resource> = None;
-                if let Err(e) = unsafe {
-                    match (&self.device, desc.initial_state_or_layout) {
-                        (_, ResourceStateOrBarrierLayout::ResourceState(_))
-                            if !desc.castable_formats.is_empty() =>
-                        {
-                            return Err(AllocationError::CastableFormatsRequiresEnhancedBarriers)
-                        }
-                        (
-                            ID3D12DeviceVersion::Device12(device),
-                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
-                        ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
-                            device.CreatePlacedResource2(
-                                allocation.heap(),
-                                allocation.offset(),
-                                &resource_desc1,
-                                initial_layout,
-                                None,
-                                Some(desc.castable_formats),
-                                &mut result,
-                            )
-                        }
-                        (_, ResourceStateOrBarrierLayout::BarrierLayout(_))
-                            if !desc.castable_formats.is_empty() =>
-                        {
-                            return Err(AllocationError::CastableFormatsRequiresAtLeastDevice12)
-                        }
-                        (
-                            ID3D12DeviceVersion::Device10(device),
-                            ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
-                        ) => {
-                            let resource_desc1 = Self::d3d12_resource_desc_1(desc.resource_desc);
-                            device.CreatePlacedResource2(
-                                allocation.heap(),
-                                allocation.offset(),
-                                &resource_desc1,
-                                initial_layout,
-                                None,
-                                None,
-                                &mut result,
-                            )
-                        }
-                        (_, ResourceStateOrBarrierLayout::BarrierLayout(_)) => {
-                            return Err(AllocationError::BarrierLayoutNeedsDevice10)
-                        }
-                        (device, ResourceStateOrBarrierLayout::ResourceState(initial_state)) => {
-                            device.CreatePlacedResource(
+                // Keep native output local so a partially returned resource is dropped
+                // before its backing allocation is returned to the pool on every error.
+                let created = (|| {
+                    let mut result: Option<ID3D12Resource> = None;
+                    if let Err(e) = unsafe {
+                        match (&self.device, desc.initial_state_or_layout) {
+                            (_, ResourceStateOrBarrierLayout::ResourceState(_))
+                                if !desc.castable_formats.is_empty() =>
+                            {
+                                return Err(
+                                    AllocationError::CastableFormatsRequiresEnhancedBarriers,
+                                )
+                            }
+                            (
+                                ID3D12DeviceVersion::Device12(device),
+                                ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                            ) => {
+                                let resource_desc1 =
+                                    Self::d3d12_resource_desc_1(desc.resource_desc);
+                                device.CreatePlacedResource2(
+                                    allocation.heap(),
+                                    allocation.offset(),
+                                    &resource_desc1,
+                                    initial_layout,
+                                    None,
+                                    Some(desc.castable_formats),
+                                    &mut result,
+                                )
+                            }
+                            (_, ResourceStateOrBarrierLayout::BarrierLayout(_))
+                                if !desc.castable_formats.is_empty() =>
+                            {
+                                return Err(AllocationError::CastableFormatsRequiresAtLeastDevice12)
+                            }
+                            (
+                                ID3D12DeviceVersion::Device10(device),
+                                ResourceStateOrBarrierLayout::BarrierLayout(initial_layout),
+                            ) => {
+                                let resource_desc1 =
+                                    Self::d3d12_resource_desc_1(desc.resource_desc);
+                                device.CreatePlacedResource2(
+                                    allocation.heap(),
+                                    allocation.offset(),
+                                    &resource_desc1,
+                                    initial_layout,
+                                    None,
+                                    None,
+                                    &mut result,
+                                )
+                            }
+                            (_, ResourceStateOrBarrierLayout::BarrierLayout(_)) => {
+                                return Err(AllocationError::BarrierLayoutNeedsDevice10)
+                            }
+                            (
+                                device,
+                                ResourceStateOrBarrierLayout::ResourceState(initial_state),
+                            ) => device.CreatePlacedResource(
                                 allocation.heap(),
                                 allocation.offset(),
                                 desc.resource_desc,
                                 initial_state,
                                 None,
                                 &mut result,
-                            )
+                            ),
                         }
-                    }
-                } {
-                    if e.code() == DXGI_ERROR_DEVICE_REMOVED {
+                    } {
+                        if e.code() == DXGI_ERROR_DEVICE_REMOVED {
+                            return Err(AllocationError::Internal(format!(
+                                "ID3D12Device::CreatePlacedResource DEVICE_REMOVED: {:?}",
+                                unsafe { self.device.GetDeviceRemovedReason() }
+                            )));
+                        }
                         return Err(AllocationError::Internal(format!(
-                            "ID3D12Device::CreatePlacedResource DEVICE_REMOVED: {:?}",
-                            unsafe { self.device.GetDeviceRemovedReason() }
+                            "ID3D12Device::CreatePlacedResource failed: {e}"
                         )));
                     }
-                    return Err(AllocationError::Internal(format!(
-                        "ID3D12Device::CreatePlacedResource failed: {e}"
-                    )));
-                }
 
-                let resource = result.expect("Allocation succeeded but no resource was returned?");
+                    result.ok_or_else(|| {
+                        AllocationError::Internal(
+                            "CreatePlacedResource succeeded without returning a resource".into(),
+                        )
+                    })
+                })();
+                let resource = match created {
+                    Ok(resource) => resource,
+                    Err(error) => {
+                        self.free(allocation)?;
+                        return Err(error);
+                    }
+                };
                 let size = allocation.size();
                 Ok(Resource {
                     name: desc.name.into(),
@@ -1077,3 +1257,112 @@ impl Drop for Allocator {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn props(
+        ty: D3D12_HEAP_TYPE,
+        page: D3D12_CPU_PAGE_PROPERTY,
+        pool: D3D12_MEMORY_POOL,
+    ) -> D3D12_HEAP_PROPERTIES {
+        D3D12_HEAP_PROPERTIES {
+            Type: ty,
+            CPUPageProperty: page,
+            MemoryPoolPreference: pool,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn host_block_sizes_follow_cpu_visibility() {
+        let unknown = (D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN);
+        // Heaps gpu-allocator creates.
+        assert!(!uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE_DEFAULT,
+            unknown.0,
+            unknown.1
+        )));
+        assert!(uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE_CUSTOM,
+            D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
+            D3D12_MEMORY_POOL_L0
+        )));
+        assert!(uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE_CUSTOM,
+            D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+            D3D12_MEMORY_POOL_L0
+        )));
+        // Abstract CPU-visible heap types (incl. GPU_UPLOAD = 5, CPU-visible VRAM).
+        assert!(uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE_UPLOAD,
+            unknown.0,
+            unknown.1
+        )));
+        assert!(uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE_READBACK,
+            unknown.0,
+            unknown.1
+        )));
+        assert!(uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE_GPU_UPLOAD,
+            unknown.0,
+            unknown.1
+        )));
+        // GPU-only custom heaps (what wgpu uses for committed GPU-only resources).
+        assert!(!uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE_CUSTOM,
+            D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+            D3D12_MEMORY_POOL_L1
+        )));
+        assert!(!uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE_CUSTOM,
+            D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+            D3D12_MEMORY_POOL_L0
+        )));
+        // CPU-visible VRAM through a custom heap (equivalent to GPU_UPLOAD).
+        assert!(uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE_CUSTOM,
+            D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
+            D3D12_MEMORY_POOL_L1
+        )));
+    }
+
+    #[test]
+    fn previous_rule_differs_only_for_gpu_only_custom_heaps() {
+        // The rule this replaces, kept here only to document where the two differ.
+        let previous = |p: &D3D12_HEAP_PROPERTIES| p.Type != D3D12_HEAP_TYPE_DEFAULT;
+        let gpu_only_custom = props(
+            D3D12_HEAP_TYPE_CUSTOM,
+            D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+            D3D12_MEMORY_POOL_L1,
+        );
+        assert!(previous(&gpu_only_custom));
+        assert!(!uses_host_block_sizes(&gpu_only_custom));
+    }
+    #[test]
+    fn unknown_heap_and_page_properties_are_not_assumed_mappable() {
+        assert!(!uses_host_block_sizes(&props(
+            D3D12_HEAP_TYPE(1234),
+            D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+            D3D12_MEMORY_POOL_L0,
+        )));
+        for page in [
+            D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+            D3D12_CPU_PAGE_PROPERTY(1234),
+        ] {
+            assert!(!uses_host_block_sizes(&props(
+                D3D12_HEAP_TYPE_CUSTOM,
+                page,
+                D3D12_MEMORY_POOL_L0
+            )));
+        }
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod pressure_tests;
+
+#[cfg(all(test, feature = "std"))]
+mod resource_tests;

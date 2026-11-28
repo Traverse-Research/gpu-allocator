@@ -1,6 +1,6 @@
 #[cfg(feature = "std")]
 use alloc::sync::Arc;
-use alloc::{boxed::Box, string::ToString, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use std::backtrace::Backtrace;
 
@@ -24,8 +24,14 @@ use crate::{
         AllocationType, AllocatorReport, DedicatedBlockAllocator, FreeListAllocator,
         MemoryBlockReport, SubAllocator,
     },
-    AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
+    AllocationError, AllocationFailure, AllocationResult, AllocationSizes, AllocatorDebugSettings,
+    MemoryBlockSizes, MemoryLocation, Result,
 };
+
+/// Shared placement heaps use the CPU-visible range; Private heaps use the GPU-only range.
+fn uses_host_block_sizes(storage_mode: MTLStorageMode) -> bool {
+    storage_mode == MTLStorageMode::Shared
+}
 
 fn memory_location_to_metal(location: MemoryLocation) -> MTLResourceOptions {
     match location {
@@ -159,7 +165,6 @@ pub struct Allocator {
     global_residency_set: Option<Retained<ProtocolObject<dyn MTLResidencySet>>>,
     debug_settings: AllocatorDebugSettings,
     memory_types: Vec<MemoryType>,
-    allocation_sizes: AllocationSizes,
 }
 
 impl core::fmt::Debug for Allocator {
@@ -198,12 +203,16 @@ impl MemoryBlock {
         heap_descriptor: &MTLHeapDescriptor,
         dedicated: bool,
         memory_location: MemoryLocation,
-    ) -> Result<Self> {
+    ) -> AllocationResult<Self> {
         heap_descriptor.setSize(size as usize);
 
         let heap = device
             .newHeapWithDescriptor(heap_descriptor)
-            .ok_or_else(|| AllocationError::Internal("No MTLHeap was returned".to_string()))?;
+            .ok_or_else(|| {
+                AllocationFailure::memory(AllocationError::Internal(
+                    "No MTLHeap could be created with the given size".into(),
+                ))
+            })?;
 
         heap.setLabel(Some(&NSString::from_str(&format!(
             "MemoryBlock {memory_location:?}"
@@ -232,79 +241,79 @@ struct MemoryType {
     heap_properties: Retained<MTLHeapDescriptor>,
     memory_type_index: usize,
     active_general_blocks: usize,
+    empty_block_index: Option<usize>,
+    pending_residency_removals: bool,
+    block_sizes: MemoryBlockSizes,
 }
 
 impl MemoryType {
+    fn block_size(&self, desc: &AllocationCreateDesc<'_>) -> u64 {
+        let size = desc.size;
+        if size > self.block_sizes.dedicated_threshold() {
+            return size;
+        }
+        let occupied = self.active_general_blocks - usize::from(self.empty_block_index.is_some());
+        self.block_sizes.shared_block_size(occupied, size)
+    }
+
+    fn cached_size(&self) -> u64 {
+        self.empty_block_index
+            .and_then(|i| self.memory_blocks.get(i))
+            .and_then(Option::as_ref)
+            .filter(|block| block.sub_allocator.is_empty())
+            .map_or(0, |block| block.size)
+    }
+
+    fn release_cached(&mut self) -> u64 {
+        let Some(index) = self.empty_block_index.take() else {
+            return 0;
+        };
+        let Some(slot) = self.memory_blocks.get_mut(index) else {
+            return 0;
+        };
+        if !slot.as_ref().is_some_and(|block| {
+            block.sub_allocator.is_empty() && block.sub_allocator.supports_general_allocations()
+        }) {
+            return 0;
+        }
+        if let Some(block) = slot.take() {
+            let bytes = block.size;
+            self.active_general_blocks -= 1;
+            if let Some(rs) = &self.global_residency_set {
+                rs.removeAllocation(block.heap.as_ref());
+                self.pending_residency_removals = true;
+            }
+            drop(block);
+            bytes
+        } else {
+            0
+        }
+    }
+
     fn allocate(
         &mut self,
         device: &ProtocolObject<dyn MTLDevice>,
         desc: &AllocationCreateDesc<'_>,
+
         #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
-        allocation_sizes: &AllocationSizes,
-    ) -> Result<Allocation> {
-        let allocation_type = AllocationType::Linear;
-
-        let is_host = self.heap_properties.storageMode() != MTLStorageMode::Private;
-        let memblock_size = allocation_sizes.get_memblock_size(is_host, self.active_general_blocks);
-
+        new_block_size: Option<u64>,
+    ) -> AllocationResult<Allocation> {
         let size = desc.size;
         let alignment = desc.alignment;
 
-        // Create a dedicated block for large memory allocations
-        if size > memblock_size {
-            let mem_block = MemoryBlock::new(
-                device,
-                size,
-                &self.heap_properties,
-                true,
-                self.memory_location,
-            )?;
-
-            if let Some(rs) = &self.global_residency_set {
-                rs.addAllocation(mem_block.heap.as_ref())
-            }
-
-            let block_index = self.memory_blocks.iter().position(|block| block.is_none());
-            let block_index = match block_index {
-                Some(i) => {
-                    self.memory_blocks[i].replace(mem_block);
-                    i
-                }
-                None => {
-                    self.memory_blocks.push(Some(mem_block));
-                    self.memory_blocks.len() - 1
-                }
-            };
-
-            let mem_block = self.memory_blocks[block_index]
-                .as_mut()
-                .ok_or_else(|| AllocationError::Internal("Memory block must be Some".into()))?;
-
-            let (offset, chunk_id) = mem_block.sub_allocator.allocate(
-                size,
-                alignment,
-                allocation_type,
-                1,
-                desc.name,
-                #[cfg(feature = "std")]
-                backtrace,
-            )?;
-
-            return Ok(Allocation {
-                chunk_id: Some(chunk_id),
-                size,
-                offset,
-                memory_block_index: block_index,
-                memory_type_index: self.memory_type_index,
-                heap: mem_block.heap.clone(),
-                name: Some(desc.name.into()),
-            });
-        }
-
-        let mut empty_block_index = None;
-        for (mem_block_i, mem_block) in self.memory_blocks.iter_mut().enumerate().rev() {
-            if let Some(mem_block) = mem_block {
-                let allocation = mem_block.sub_allocator.allocate(
+        let allocation_type = AllocationType::Linear;
+        let dedicated_allocation = false;
+        let dedicated = dedicated_allocation || size > self.block_sizes.dedicated_threshold();
+        let mut vacant = None;
+        if !dedicated {
+            for (index, slot) in self.memory_blocks.iter_mut().enumerate().rev() {
+                let Some(block) = slot else {
+                    if vacant.is_none() {
+                        vacant = Some(index);
+                    }
+                    continue;
+                };
+                match block.sub_allocator.allocate(
                     size,
                     alignment,
                     allocation_type,
@@ -312,54 +321,38 @@ impl MemoryType {
                     desc.name,
                     #[cfg(feature = "std")]
                     backtrace.clone(),
-                );
-
-                match allocation {
+                ) {
                     Ok((offset, chunk_id)) => {
+                        if self.empty_block_index == Some(index) {
+                            self.empty_block_index = None;
+                        }
+
                         return Ok(Allocation {
                             chunk_id: Some(chunk_id),
-                            offset,
                             size,
-                            memory_block_index: mem_block_i,
+                            offset,
+                            memory_block_index: index,
                             memory_type_index: self.memory_type_index,
-                            heap: mem_block.heap.clone(),
                             name: Some(desc.name.into()),
+                            heap: block.heap.clone(),
                         });
                     }
-                    Err(AllocationError::OutOfMemory) => {} // Block is full, continue search.
-                    Err(err) => return Err(err),            // Unhandled error, return.
+                    Err(AllocationError::OutOfMemory) => {}
+                    Err(error) => return Err(error.into()),
                 }
-            } else if empty_block_index.is_none() {
-                empty_block_index = Some(mem_block_i);
             }
         }
-
-        let mem_block = MemoryBlock::new(
+        let Some(block_size) = new_block_size else {
+            return Err(AllocationError::OutOfMemory.into());
+        };
+        let mut block = MemoryBlock::new(
             device,
-            memblock_size,
+            if dedicated { size } else { block_size },
             &self.heap_properties,
-            false,
+            dedicated,
             self.memory_location,
         )?;
-
-        if let Some(rs) = &self.global_residency_set {
-            rs.addAllocation(mem_block.heap.as_ref())
-        }
-
-        let new_block_index = if let Some(block_index) = empty_block_index {
-            self.memory_blocks[block_index] = Some(mem_block);
-            block_index
-        } else {
-            self.memory_blocks.push(Some(mem_block));
-            self.memory_blocks.len() - 1
-        };
-
-        self.active_general_blocks += 1;
-
-        let mem_block = self.memory_blocks[new_block_index]
-            .as_mut()
-            .ok_or_else(|| AllocationError::Internal("Memory block must be Some".into()))?;
-        let allocation = mem_block.sub_allocator.allocate(
+        let (offset, chunk_id) = match block.sub_allocator.allocate(
             size,
             alignment,
             allocation_type,
@@ -367,22 +360,46 @@ impl MemoryType {
             desc.name,
             #[cfg(feature = "std")]
             backtrace,
-        );
-        let (offset, chunk_id) = match allocation {
-            Err(AllocationError::OutOfMemory) => Err(AllocationError::Internal(
-                "Allocation that must succeed failed. This is a bug in the allocator.".into(),
-            )),
-            a => a,
-        }?;
+        ) {
+            Ok(value) => value,
+            Err(error) => {
+                drop(block);
+                return Err(AllocationFailure::fatal(error));
+            }
+        };
+        if let Some(rs) = &self.global_residency_set {
+            rs.addAllocation(block.heap.as_ref());
+        }
+        let index = if dedicated {
+            self.memory_blocks.iter().position(Option::is_none)
+        } else {
+            vacant
+        };
+        let index = match index {
+            Some(index) => {
+                self.memory_blocks[index] = Some(block);
+                index
+            }
+            None => {
+                self.memory_blocks.push(Some(block));
+                self.memory_blocks.len() - 1
+            }
+        };
+        if !dedicated {
+            self.active_general_blocks += 1;
+        }
+        let block = self.memory_blocks[index]
+            .as_ref()
+            .ok_or_else(|| AllocationError::Internal("Published memory block is missing".into()))?;
 
         Ok(Allocation {
             chunk_id: Some(chunk_id),
-            offset,
             size,
-            memory_block_index: new_block_index,
+            offset,
+            memory_block_index: index,
             memory_type_index: self.memory_type_index,
-            heap: mem_block.heap.clone(),
             name: Some(desc.name.into()),
+            heap: block.heap.clone(),
         })
     }
 
@@ -395,13 +412,30 @@ impl MemoryType {
 
         mem_block.sub_allocator.free(allocation.chunk_id)?;
 
-        // We only want to destroy this now-empty block if it is either a dedicated/personal
-        // allocation, or a block supporting sub-allocations that is not the last one (ensuring
-        // there's always at least one block/allocator readily available).
-        let is_dedicated_or_not_last_general_block =
-            !mem_block.sub_allocator.supports_general_allocations()
-                || self.active_general_blocks > 1;
-        if mem_block.sub_allocator.is_empty() && is_dedicated_or_not_last_general_block {
+        if !mem_block.sub_allocator.is_empty() {
+            return Ok(());
+        }
+        let mut block_idx = block_idx;
+        let general = mem_block.sub_allocator.supports_general_allocations();
+        let block_size = mem_block.size;
+        if general {
+            let cached_size = self
+                .empty_block_index
+                .and_then(|i| self.memory_blocks[i].as_ref())
+                .map(|block| block.size);
+            if self
+                .block_sizes
+                .should_cache_empty_block(block_size, cached_size)
+            {
+                let previous = self.empty_block_index.replace(block_idx);
+                if let Some(previous) = previous {
+                    block_idx = previous;
+                } else {
+                    return Ok(());
+                }
+            }
+        }
+        {
             let block = self.memory_blocks[block_idx]
                 .take()
                 .ok_or_else(|| AllocationError::Internal("Memory block must be Some.".into()))?;
@@ -411,7 +445,8 @@ impl MemoryType {
             }
 
             if let Some(rs) = &self.global_residency_set {
-                rs.removeAllocation(block.heap.as_ref())
+                rs.removeAllocation(block.heap.as_ref());
+                self.pending_residency_removals = true;
             }
 
             // Note that `block` will be destroyed on `drop` here
@@ -463,6 +498,9 @@ impl Allocator {
             .into_iter()
             .enumerate()
             .map(|(i, (memory_location, heap_descriptor))| MemoryType {
+                block_sizes: desc
+                    .allocation_sizes
+                    .block_sizes_for(uses_host_block_sizes(heap_descriptor.storageMode())),
                 global_residency_set: global_residency_set.clone(),
                 memory_blocks: vec![],
                 _committed_allocations: CommittedAllocationStatistics {
@@ -473,6 +511,8 @@ impl Allocator {
                 heap_properties: heap_descriptor,
                 memory_type_index: i,
                 active_general_blocks: 0,
+                empty_block_index: None,
+                pending_residency_removals: false,
             })
             .collect();
 
@@ -480,9 +520,24 @@ impl Allocator {
             device: desc.device.clone(),
             debug_settings: desc.debug_settings,
             memory_types,
-            allocation_sizes: desc.allocation_sizes,
             global_residency_set,
         })
+    }
+
+    fn allocate_type(
+        &mut self,
+        index: usize,
+        desc: &AllocationCreateDesc<'_>,
+        #[cfg(feature = "std")] backtrace: &Arc<Backtrace>,
+        block_size: Option<u64>,
+    ) -> AllocationResult<Allocation> {
+        self.memory_types[index].allocate(
+            &self.device,
+            desc,
+            #[cfg(feature = "std")]
+            backtrace.clone(),
+            block_size,
+        )
     }
 
     pub fn allocate(&mut self, desc: &AllocationCreateDesc<'_>) -> Result<Allocation> {
@@ -512,24 +567,132 @@ impl Allocator {
             return Err(AllocationError::InvalidAllocationCreateDesc);
         }
 
-        // Find memory type
-        let memory_type = self
+        let index = self
             .memory_types
-            .iter_mut()
-            .find(|memory_type| {
-                // Is location compatible
-                desc.location == MemoryLocation::Unknown
-                    || desc.location == memory_type.memory_location
+            .iter()
+            .position(|ty| {
+                desc.location == MemoryLocation::Unknown || desc.location == ty.memory_location
             })
             .ok_or(AllocationError::NoCompatibleMemoryTypeFound)?;
-
-        memory_type.allocate(
-            &self.device,
+        let mut attempted_size = self.memory_types[index].block_size(desc);
+        let first_error = match self.allocate_type(
+            index,
             desc,
             #[cfg(feature = "std")]
-            backtrace,
-            &self.allocation_sizes,
-        )
+            &backtrace,
+            Some(attempted_size),
+        ) {
+            Ok(allocation) => return Ok(allocation),
+            Err(error) if error.is_memory_pressure() => error,
+            Err(error) => return Err(error.error),
+        };
+        let mut can_shrink = first_error.may_shrink();
+        let pending_removals = self
+            .memory_types
+            .iter()
+            .any(|ty| ty.pending_residency_removals);
+        if self.trim() != 0 || pending_removals {
+            attempted_size = self.memory_types[index].block_size(desc);
+            match self.allocate_type(
+                index,
+                desc,
+                #[cfg(feature = "std")]
+                &backtrace,
+                Some(attempted_size),
+            ) {
+                Ok(allocation) => return Ok(allocation),
+                Err(error) if error.is_memory_pressure() => {
+                    if error.is_allocation_limit() {
+                        return Err(error.error);
+                    }
+                    can_shrink = error.may_shrink();
+                }
+                Err(error) => return Err(error.error),
+            }
+        }
+        let minimum = size;
+        if can_shrink
+            && size <= self.memory_types[index].block_sizes.max
+            && minimum < attempted_size
+        {
+            match self.allocate_type(
+                index,
+                desc,
+                #[cfg(feature = "std")]
+                &backtrace,
+                Some(minimum),
+            ) {
+                Ok(allocation) => return Ok(allocation),
+                Err(error) if error.is_memory_pressure() => {
+                    if error.is_allocation_limit() {
+                        return Err(error.error);
+                    }
+                }
+                Err(error) => return Err(error.error),
+            }
+        }
+        Err(first_error.error)
+    }
+
+    /// Returns the allocator capacity held by cached empty blocks.
+    pub fn cached_capacity(&self) -> u64 {
+        self.memory_types.iter().map(MemoryType::cached_size).sum()
+    }
+
+    fn commit_pending_removals(&mut self) {
+        if self
+            .memory_types
+            .iter()
+            .any(|ty| ty.pending_residency_removals)
+        {
+            if let Some(set) = &self.global_residency_set {
+                set.commit();
+            }
+            for ty in &mut self.memory_types {
+                ty.pending_residency_removals = false;
+            }
+        }
+    }
+
+    /// Releases cached empty blocks and returns bytes removed from allocator capacity.
+    /// Live indices remain valid. This does not wait for GPU work or release external references.
+    /// Applies pending changes to this allocator's residency set, including earlier removals.
+    pub fn trim(&mut self) -> u64 {
+        let released = self
+            .memory_types
+            .iter_mut()
+            .map(|ty| ty.release_cached())
+            .sum();
+        self.commit_pending_removals();
+        released
+    }
+
+    /// Releases largest cached blocks until their total capacity is at most `bytes`.
+    /// The target applies to empty cached capacity, not live allocations or an OS memory budget.
+    /// Applies pending changes to this allocator's residency set, including earlier removals.
+    pub fn trim_to(&mut self, bytes: u64) -> u64 {
+        let mut cached = self.cached_capacity();
+        let before = cached;
+        while cached > bytes {
+            let Some((index, size)) = self
+                .memory_types
+                .iter()
+                .enumerate()
+                .map(|(index, ty)| (index, ty.cached_size()))
+                .max_by_key(|(_, size)| *size)
+                .filter(|(_, size)| *size != 0)
+            else {
+                break;
+            };
+            let released = self.memory_types[index].release_cached();
+            debug_assert_eq!(released, size);
+            if released == 0 {
+                break;
+            }
+            cached -= released;
+        }
+        self.commit_pending_removals();
+        before - cached
     }
 
     pub fn free(&mut self, allocation: &Allocation) -> Result<()> {
