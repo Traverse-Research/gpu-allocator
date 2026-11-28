@@ -1,6 +1,6 @@
 #[cfg(feature = "std")]
 use alloc::sync::Arc;
-use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec::Vec};
+use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::{fmt, marker::PhantomData};
 #[cfg(feature = "std")]
 use std::backtrace::Backtrace;
@@ -18,7 +18,8 @@ use crate::{
         AllocationType, AllocatorReport, DedicatedBlockAllocator, FreeListAllocator,
         MemoryBlockReport, SubAllocator,
     },
-    AllocationError, AllocationSizes, AllocatorDebugSettings, MemoryLocation, Result,
+    AllocationError, AllocationFailure, AllocationResult, AllocationSizes, AllocatorDebugSettings,
+    MemoryLocation, Result,
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -351,6 +352,22 @@ pub(crate) struct MemoryBlock {
 }
 
 impl MemoryBlock {
+    fn allocation_error(error: vk::Result) -> AllocationFailure {
+        let public = match error {
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                AllocationError::OutOfMemory
+            }
+            other => AllocationError::Internal(format!(
+                "Unexpected error in vkAllocateMemory: {other:?}"
+            )),
+        };
+        if error == vk::Result::ERROR_TOO_MANY_OBJECTS {
+            AllocationFailure::allocation_limit(public)
+        } else {
+            public.into()
+        }
+    }
+
     fn new(
         device: &ash::Device,
         size: u64,
@@ -359,7 +376,7 @@ impl MemoryBlock {
         buffer_device_address: bool,
         allocation_scheme: AllocationScheme,
         requires_personal_block: bool,
-    ) -> Result<Self> {
+    ) -> AllocationResult<Self> {
         let device_memory = {
             let alloc_info = vk::MemoryAllocateInfo::default()
                 .allocation_size(size)
@@ -388,35 +405,50 @@ impl MemoryBlock {
                 AllocationScheme::GpuAllocatorManaged => alloc_info,
             };
 
-            unsafe { device.allocate_memory(&alloc_info, None) }.map_err(|e| match e {
-                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => AllocationError::OutOfMemory,
-                e => AllocationError::Internal(format!(
-                    "Unexpected error in vkAllocateMemory: {e:?}"
-                )),
-            })?
+            unsafe { device.allocate_memory(&alloc_info, None) }.map_err(Self::allocation_error)?
         };
 
-        let mapped_ptr = mapped
-            .then(|| {
-                unsafe {
-                    device.map_memory(
-                        device_memory,
-                        0,
-                        vk::WHOLE_SIZE,
-                        vk::MemoryMapFlags::empty(),
-                    )
-                }
-                .map_err(|e| {
+        let mapped_ptr = if mapped {
+            let pointer = match unsafe {
+                device.map_memory(
+                    device_memory,
+                    0,
+                    vk::WHOLE_SIZE,
+                    vk::MemoryMapFlags::empty(),
+                )
+            } {
+                Ok(pointer) => pointer,
+                Err(error) => {
                     unsafe { device.free_memory(device_memory, None) };
-                    AllocationError::FailedToMap(e.to_string())
-                })
-                .and_then(|p| {
-                    core::ptr::NonNull::new(p).map(SendSyncPtr).ok_or_else(|| {
-                        AllocationError::FailedToMap("Returned mapped pointer is null".to_owned())
-                    })
-                })
-            })
-            .transpose()?;
+                    return Err(match error {
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                        | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => AllocationError::OutOfMemory,
+                        vk::Result::ERROR_MEMORY_MAP_FAILED => {
+                            AllocationError::FailedToMap(error.to_string())
+                        }
+                        other => AllocationError::Internal(format!(
+                            "Unexpected error in vkMapMemory: {other:?}"
+                        )),
+                    }
+                    .into());
+                }
+            };
+            match core::ptr::NonNull::new(pointer) {
+                Some(pointer) => Some(SendSyncPtr(pointer)),
+                None => {
+                    unsafe {
+                        device.unmap_memory(device_memory);
+                        device.free_memory(device_memory, None);
+                    }
+                    return Err(AllocationError::Internal(
+                        "vkMapMemory returned a null pointer".into(),
+                    )
+                    .into());
+                }
+            }
+        } else {
+            None
+        };
 
         let sub_allocator: Box<dyn SubAllocator> = if allocation_scheme
             != AllocationScheme::GpuAllocatorManaged
@@ -452,6 +484,8 @@ pub(crate) struct MemoryType {
     pub(crate) memory_properties: vk::MemoryPropertyFlags,
     pub(crate) memory_type_index: usize,
     pub(crate) heap_index: usize,
+    heap_size: u64,
+    active_blocks: usize,
     pub(crate) mappable: bool,
     pub(crate) active_general_blocks: usize,
     pub(crate) buffer_device_address: bool,
@@ -465,88 +499,33 @@ impl MemoryType {
         granularity: u64,
         #[cfg(feature = "std")] backtrace: Arc<Backtrace>,
         allocation_sizes: &AllocationSizes,
-    ) -> Result<Allocation> {
+        allocation_limit_reached: bool,
+    ) -> AllocationResult<Allocation> {
+        let size = desc.requirements.size;
+        let alignment = desc.requirements.alignment;
+        if size > self.heap_size {
+            return Err(AllocationError::OutOfMemory.into());
+        }
         let allocation_type = if desc.linear {
             AllocationType::Linear
         } else {
             AllocationType::NonLinear
         };
-
-        let is_host = self
-            .memory_properties
-            .contains(vk::MemoryPropertyFlags::HOST_VISIBLE);
-
-        let memblock_size = allocation_sizes.get_memblock_size(is_host, self.active_general_blocks);
-
-        let size = desc.requirements.size;
-        let alignment = desc.requirements.alignment;
-
         let dedicated_allocation = desc.allocation_scheme != AllocationScheme::GpuAllocatorManaged;
-        let requires_personal_block = size > memblock_size;
-
-        // Create a dedicated block for large memory allocations or allocations that require dedicated memory allocations.
-        if dedicated_allocation || requires_personal_block {
-            let mem_block = MemoryBlock::new(
-                device,
-                size,
-                self.memory_type_index,
-                self.mappable,
-                self.buffer_device_address,
-                desc.allocation_scheme,
-                requires_personal_block,
-            )?;
-
-            let mut block_index = None;
-            for (i, block) in self.memory_blocks.iter().enumerate() {
-                if block.is_none() {
-                    block_index = Some(i);
-                    break;
-                }
-            }
-
-            let block_index = match block_index {
-                Some(i) => {
-                    self.memory_blocks[i].replace(mem_block);
-                    i
-                }
-                None => {
-                    self.memory_blocks.push(Some(mem_block));
-                    self.memory_blocks.len() - 1
-                }
-            };
-
-            let mem_block = self.memory_blocks[block_index]
-                .as_mut()
-                .ok_or_else(|| AllocationError::Internal("Memory block must be Some".into()))?;
-
-            let (offset, chunk_id) = mem_block.sub_allocator.allocate(
-                size,
-                alignment,
-                allocation_type,
-                granularity,
-                desc.name,
-                #[cfg(feature = "std")]
-                backtrace,
-            )?;
-
-            return Ok(Allocation {
-                chunk_id: Some(chunk_id),
-                offset,
-                size,
-                memory_block_index: block_index,
-                memory_type_index: self.memory_type_index,
-                device_memory: mem_block.device_memory,
-                mapped_ptr: mem_block.mapped_ptr,
-                memory_properties: self.memory_properties,
-                name: Some(desc.name.into()),
-                dedicated_allocation,
-            });
-        }
-
-        let mut empty_block_index = None;
-        for (mem_block_i, mem_block) in self.memory_blocks.iter_mut().enumerate().rev() {
-            if let Some(mem_block) = mem_block {
-                let allocation = mem_block.sub_allocator.allocate(
+        let block_size = allocation_sizes
+            .get_memblock_size(self.mappable, self.active_general_blocks)
+            .min(self.heap_size);
+        let dedicated = dedicated_allocation || size > block_size;
+        let mut vacant = None;
+        if !dedicated {
+            for (index, slot) in self.memory_blocks.iter_mut().enumerate().rev() {
+                let Some(block) = slot else {
+                    if vacant.is_none() {
+                        vacant = Some(index);
+                    }
+                    continue;
+                };
+                match block.sub_allocator.allocate(
                     size,
                     alignment,
                     allocation_type,
@@ -554,64 +533,45 @@ impl MemoryType {
                     desc.name,
                     #[cfg(feature = "std")]
                     backtrace.clone(),
-                );
-
-                match allocation {
+                ) {
                     Ok((offset, chunk_id)) => {
-                        let mapped_ptr = if let Some(SendSyncPtr(mapped_ptr)) = mem_block.mapped_ptr
-                        {
-                            let offset_ptr = unsafe { mapped_ptr.as_ptr().add(offset as usize) };
-                            core::ptr::NonNull::new(offset_ptr).map(SendSyncPtr)
-                        } else {
-                            None
-                        };
+                        let mapped_ptr = block.mapped_ptr.and_then(|SendSyncPtr(ptr)| {
+                            core::ptr::NonNull::new(unsafe { ptr.as_ptr().add(offset as usize) })
+                                .map(SendSyncPtr)
+                        });
                         return Ok(Allocation {
                             chunk_id: Some(chunk_id),
-                            offset,
                             size,
-                            memory_block_index: mem_block_i,
+                            offset,
+                            memory_block_index: index,
                             memory_type_index: self.memory_type_index,
-                            device_memory: mem_block.device_memory,
-                            memory_properties: self.memory_properties,
-                            mapped_ptr,
-                            dedicated_allocation: false,
                             name: Some(desc.name.into()),
+                            device_memory: block.device_memory,
+                            mapped_ptr,
+                            memory_properties: self.memory_properties,
+                            dedicated_allocation: false,
                         });
                     }
-                    Err(err) => match err {
-                        AllocationError::OutOfMemory => {} // Block is full, continue search.
-                        _ => return Err(err),              // Unhandled error, return.
-                    },
+                    Err(AllocationError::OutOfMemory) => {}
+                    Err(error) => return Err(error.into()),
                 }
-            } else if empty_block_index.is_none() {
-                empty_block_index = Some(mem_block_i);
             }
         }
-
-        let new_memory_block = MemoryBlock::new(
+        if allocation_limit_reached {
+            return Err(AllocationFailure::allocation_limit(
+                AllocationError::Internal("Allocator reached maxMemoryAllocationCount".into()),
+            ));
+        }
+        let mut block = MemoryBlock::new(
             device,
-            memblock_size,
+            if dedicated { size } else { block_size },
             self.memory_type_index,
             self.mappable,
             self.buffer_device_address,
             desc.allocation_scheme,
-            false,
+            dedicated,
         )?;
-
-        let new_block_index = if let Some(block_index) = empty_block_index {
-            self.memory_blocks[block_index] = Some(new_memory_block);
-            block_index
-        } else {
-            self.memory_blocks.push(Some(new_memory_block));
-            self.memory_blocks.len() - 1
-        };
-
-        self.active_general_blocks += 1;
-
-        let mem_block = self.memory_blocks[new_block_index]
-            .as_mut()
-            .ok_or_else(|| AllocationError::Internal("Memory block must be Some".into()))?;
-        let allocation = mem_block.sub_allocator.allocate(
+        let (offset, chunk_id) = match block.sub_allocator.allocate(
             size,
             alignment,
             allocation_type,
@@ -619,38 +579,50 @@ impl MemoryType {
             desc.name,
             #[cfg(feature = "std")]
             backtrace,
-        );
-        let (offset, chunk_id) = match allocation {
+        ) {
             Ok(value) => value,
-            Err(err) => match err {
-                AllocationError::OutOfMemory => {
-                    return Err(AllocationError::Internal(
-                        "Allocation that must succeed failed. This is a bug in the allocator."
-                            .into(),
-                    ))
-                }
-                _ => return Err(err),
-            },
+            Err(error) => {
+                block.destroy(device);
+                return Err(AllocationFailure::fatal(error));
+            }
         };
 
-        let mapped_ptr = if let Some(SendSyncPtr(mapped_ptr)) = mem_block.mapped_ptr {
-            let offset_ptr = unsafe { mapped_ptr.as_ptr().add(offset as usize) };
-            core::ptr::NonNull::new(offset_ptr).map(SendSyncPtr)
+        let index = if dedicated {
+            self.memory_blocks.iter().position(Option::is_none)
         } else {
-            None
+            vacant
         };
-
+        let index = match index {
+            Some(index) => {
+                self.memory_blocks[index] = Some(block);
+                index
+            }
+            None => {
+                self.memory_blocks.push(Some(block));
+                self.memory_blocks.len() - 1
+            }
+        };
+        self.active_blocks += 1;
+        if !dedicated {
+            self.active_general_blocks += 1;
+        }
+        let block = self.memory_blocks[index]
+            .as_ref()
+            .ok_or_else(|| AllocationError::Internal("Published memory block is missing".into()))?;
+        let mapped_ptr = block.mapped_ptr.and_then(|SendSyncPtr(ptr)| {
+            core::ptr::NonNull::new(unsafe { ptr.as_ptr().add(offset as usize) }).map(SendSyncPtr)
+        });
         Ok(Allocation {
             chunk_id: Some(chunk_id),
-            offset,
             size,
-            memory_block_index: new_block_index,
+            offset,
+            memory_block_index: index,
             memory_type_index: self.memory_type_index,
-            device_memory: mem_block.device_memory,
+            name: Some(desc.name.into()),
+            device_memory: block.device_memory,
             mapped_ptr,
             memory_properties: self.memory_properties,
-            name: Some(desc.name.into()),
-            dedicated_allocation: false,
+            dedicated_allocation,
         })
     }
 
@@ -679,6 +651,7 @@ impl MemoryType {
                 self.active_general_blocks -= 1;
             }
 
+            self.active_blocks -= 1;
             block.destroy(device);
         }
 
@@ -693,6 +666,7 @@ pub struct Allocator {
     pub(crate) buffer_image_granularity: u64,
     pub(crate) debug_settings: AllocatorDebugSettings,
     allocation_sizes: AllocationSizes,
+    max_memory_allocation_count: usize,
 }
 
 impl fmt::Debug for Allocator {
@@ -748,6 +722,8 @@ impl Allocator {
                 memory_properties: mem_type.property_flags,
                 memory_type_index: i,
                 heap_index: mem_type.heap_index as usize,
+                heap_size: memory_heaps[mem_type.heap_index as usize].size,
+                active_blocks: 0,
                 mappable: mem_type
                     .property_flags
                     .contains(vk::MemoryPropertyFlags::HOST_VISIBLE),
@@ -770,6 +746,9 @@ impl Allocator {
             buffer_image_granularity: granularity,
             debug_settings: desc.debug_settings,
             allocation_sizes: desc.allocation_sizes,
+            max_memory_allocation_count: physical_device_properties
+                .limits
+                .max_memory_allocation_count as usize,
         })
     }
 
@@ -800,83 +779,79 @@ impl Allocator {
             return Err(AllocationError::InvalidAllocationCreateDesc);
         }
 
-        let mem_loc_preferred_bits = match desc.location {
+        let required = match desc.location {
             MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            MemoryLocation::CpuToGpu => {
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL
-            }
-            MemoryLocation::GpuToCpu => {
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::HOST_CACHED
+            MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => {
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
             }
             MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
         };
-        let mut memory_type_index_opt =
-            self.find_memorytype_index(&desc.requirements, mem_loc_preferred_bits);
-
-        if memory_type_index_opt.is_none() {
-            let mem_loc_required_bits = match desc.location {
-                MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => {
-                    vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
-                }
-                MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
+        let preferred = required
+            | match desc.location {
+                MemoryLocation::CpuToGpu => vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                MemoryLocation::GpuToCpu => vk::MemoryPropertyFlags::HOST_CACHED,
+                _ => vk::MemoryPropertyFlags::empty(),
             };
-
-            memory_type_index_opt =
-                self.find_memorytype_index(&desc.requirements, mem_loc_required_bits);
+        let mut indices = [0usize; vk::MAX_MEMORY_TYPES];
+        let mut count = 0;
+        let mut compatible = false;
+        for prefer in [true, false] {
+            for (index, ty) in self.memory_types.iter().enumerate() {
+                if desc.requirements.memory_type_bits & (1 << index) == 0
+                    || !ty.memory_properties.contains(required)
+                    // This allocator has no deviceCoherentMemory enablement input.
+                    // Such types remain enumerated even when using them is illegal.
+                    || ty.memory_properties.contains(vk::MemoryPropertyFlags::DEVICE_COHERENT_AMD)
+                {
+                    continue;
+                }
+                compatible = true;
+                if size > self.memory_heaps[ty.heap_index].size
+                    || ty.memory_properties.contains(preferred) != prefer
+                {
+                    continue;
+                }
+                indices[count] = index;
+                count += 1;
+            }
         }
-
-        let memory_type_index = match memory_type_index_opt {
-            Some(x) => x as usize,
-            None => return Err(AllocationError::NoCompatibleMemoryTypeFound),
-        };
-
-        //Do not try to create a block if the heap is smaller than the required size (avoids validation warnings).
-        let memory_type = &mut self.memory_types[memory_type_index];
-        let allocation = if size > self.memory_heaps[memory_type.heap_index].size {
-            Err(AllocationError::OutOfMemory)
-        } else {
-            memory_type.allocate(
+        if count == 0 {
+            return Err(if compatible {
+                AllocationError::OutOfMemory
+            } else {
+                AllocationError::NoCompatibleMemoryTypeFound
+            });
+        }
+        let mut first_error = None;
+        let mut count_limit_seen = false;
+        for &index in &indices[..count] {
+            let count_limit = count_limit_seen
+                || self
+                    .memory_types
+                    .iter()
+                    .map(|ty| ty.active_blocks)
+                    .sum::<usize>()
+                    >= self.max_memory_allocation_count;
+            match self.memory_types[index].allocate(
                 &self.device,
                 desc,
                 self.buffer_image_granularity,
                 #[cfg(feature = "std")]
                 backtrace.clone(),
                 &self.allocation_sizes,
-            )
-        };
-
-        if desc.location == MemoryLocation::CpuToGpu {
-            if allocation.is_err() {
-                let mem_loc_preferred_bits =
-                    vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
-
-                let memory_type_index_opt =
-                    self.find_memorytype_index(&desc.requirements, mem_loc_preferred_bits);
-
-                let memory_type_index = match memory_type_index_opt {
-                    Some(x) => x as usize,
-                    None => return Err(AllocationError::NoCompatibleMemoryTypeFound),
-                };
-
-                self.memory_types[memory_type_index].allocate(
-                    &self.device,
-                    desc,
-                    self.buffer_image_granularity,
-                    #[cfg(feature = "std")]
-                    backtrace,
-                    &self.allocation_sizes,
-                )
-            } else {
-                allocation
+                count_limit,
+            ) {
+                Ok(allocation) => return Ok(allocation),
+                Err(error) if error.is_memory_pressure() => {
+                    count_limit_seen |= error.is_allocation_limit();
+                    if first_error.is_none() {
+                        first_error = Some(error.error);
+                    }
+                }
+                Err(error) => return Err(error.error),
             }
-        } else {
-            allocation
         }
+        Err(first_error.unwrap_or(AllocationError::OutOfMemory))
     }
 
     pub fn free(&mut self, allocation: Allocation) -> Result<()> {
@@ -928,20 +903,6 @@ impl Allocator {
                 }
             }
         }
-    }
-
-    fn find_memorytype_index(
-        &self,
-        memory_req: &vk::MemoryRequirements,
-        flags: vk::MemoryPropertyFlags,
-    ) -> Option<u32> {
-        self.memory_types
-            .iter()
-            .find(|memory_type| {
-                (1 << memory_type.memory_type_index) & memory_req.memory_type_bits != 0
-                    && memory_type.memory_properties.contains(flags)
-            })
-            .map(|memory_type| memory_type.memory_type_index as _)
     }
 
     pub fn generate_report(&self) -> AllocatorReport {
@@ -1002,3 +963,8 @@ impl Drop for Allocator {
         }
     }
 }
+
+#[cfg(all(test, feature = "std"))]
+mod contract_tests;
+#[cfg(all(test, feature = "std"))]
+mod test_support;
