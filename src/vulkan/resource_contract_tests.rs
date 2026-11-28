@@ -14,13 +14,20 @@ fn fallback_does_not_implicitly_enable_device_coherent_memory() {
             (16 * MIB, HOST),
             (
                 16 * MIB,
-                HOST | vk::MemoryPropertyFlags::DEVICE_COHERENT_AMD,
+                HOST | vk::MemoryPropertyFlags::DEVICE_LOCAL
+                    | vk::MemoryPropertyFlags::DEVICE_COHERENT_AMD,
             ),
         ],
-        true,
+        false,
     );
-    assert!(a.allocate(&request(MIB, MemoryLocation::CpuToGpu)).is_err());
-    assert!(DRIVER.with(|d| d.borrow().calls.iter().all(|&(index, _)| index == 0)));
+    // The feature-dependent type would otherwise win CpuToGpu's placement preference.
+    let allocation = a.allocate(&request(MIB, MemoryLocation::CpuToGpu)).unwrap();
+    assert_eq!(allocation.memory_type_index, 0);
+    assert_eq!(
+        DRIVER.with(|d| d.borrow().calls.iter().map(|r| r.0).collect::<Vec<_>>()),
+        vec![0]
+    );
+    a.free(allocation).unwrap();
 }
 
 #[test]
